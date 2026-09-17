@@ -3,8 +3,15 @@
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
-import { Role, InspectionStatus, TipoFotoInspeccion } from "@/generated/prisma/client";
+import { Role, InspectionStatus, Prisma, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
+
+// Mismo criterio que `esErrorPlacaDuplicada` en lib/admin/vehicle-actions.ts:
+// solo el código P2002 (violación de restricción única) de Prisma identifica
+// de forma confiable una carrera contra `@@unique([inspectionId, tipo])`.
+function esErrorFotoDuplicada(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+}
 
 // Server action de las fotos diarias obligatorias (Fase soporte-moto-carro,
 // Slice 3, A7). `FotoInspeccion` mirroa el patrón ya probado de `Firma`
@@ -57,11 +64,25 @@ export async function subirFotoInspeccion(
 
   try {
     await prisma.fotoInspeccion.create({ data: { inspectionId, tipo, s3Key: key } });
-  } catch {
+  } catch (err) {
     // Carrera entre el findUnique de arriba y este create: la restricción
     // @@unique([inspectionId, tipo]) del schema es la garantía real de
-    // inmutabilidad, este catch solo la traduce a un mensaje claro.
-    throw new Error("Ya existe una foto registrada para esta inspección: no se puede reemplazar.");
+    // inmutabilidad, este catch solo la traduce a un mensaje claro — pero
+    // SOLO cuando el error es realmente esa violación de unicidad (P2002).
+    // Cualquier otra falla (ej. corte de conectividad con la base justo
+    // después de subir la foto a S3) no debe enmascararse como "ya existe":
+    // se registra la causa real y se relanza el error original (mismo
+    // criterio que `crearVehiculo`/`actualizarVehiculo`,
+    // lib/admin/vehicle-actions.ts).
+    if (esErrorFotoDuplicada(err)) {
+      throw new Error("Ya existe una foto registrada para esta inspección: no se puede reemplazar.");
+    }
+    console.error("Fallo al crear el registro de FotoInspeccion tras subir la foto a S3.", {
+      inspectionId,
+      tipo,
+      err,
+    });
+    throw err;
   }
 
   await logAudit({
