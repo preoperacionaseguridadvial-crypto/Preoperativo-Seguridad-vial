@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/requireRole";
 import { Role, Prisma, TipoVehiculo } from "@/generated/prisma/client";
-import { uploadObject } from "@/lib/storage/s3";
+import { uploadObject, deleteObject } from "@/lib/storage/s3";
 
 // Server actions del panel de administración (Administrador): crear/editar
 // vehículos. Ningún vehículo se borra (mismo principio de inmutabilidad que
@@ -15,16 +15,37 @@ function esErrorPlacaDuplicada(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
 }
 
+// Allow-list de tipos MIME aceptados para la foto del vehículo (a
+// diferencia de `subirFotoNovedad`, lib/inspections/actions.ts:257, acá
+// nunca se admite un PDF — siempre es una foto). La extensión del key de
+// S3 se deriva de este MIME ya validado, nunca del nombre de archivo que
+// manda el cliente (`foto.name`), para no construir una key con datos no
+// confiables (ver fix de sanitización de key más abajo).
+const EXTENSION_POR_MIME_VEHICULO: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
 /**
  * Sube la foto de la hoja de vida a S3/MinIO (mismo patrón que
  * `subirFotoNovedad`, lib/inspections/actions.ts:268 — solo se guarda el
  * `s3Key`, nunca una URL pública permanente) y devuelve el key generado.
+ *
+ * `placa` se sanea a alfanumérico + guion antes de usarse en la key: ya
+ * llega `.trim().toUpperCase()`'da desde el caller, pero no filtrada de
+ * `/` ni `..`, y una placa/`foto.name` maliciosos no deberían poder escapar
+ * el prefijo `vehiculos/<placa>/` del bucket compartido.
  */
 async function subirFotoVehiculo(placa: string, foto: File): Promise<string> {
+  const extension = EXTENSION_POR_MIME_VEHICULO[foto.type];
+  if (!extension) {
+    throw new Error("La foto debe ser una imagen (JPG, PNG o WEBP).");
+  }
+  const placaSegura = placa.replace(/[^A-Za-z0-9-]/g, "");
   const buffer = Buffer.from(await foto.arrayBuffer());
-  const extension = foto.name.includes(".") ? foto.name.split(".").pop() : "jpg";
-  const key = `vehiculos/${placa}/${randomUUID()}.${extension}`;
-  await uploadObject({ key, body: buffer, contentType: foto.type || "image/jpeg" });
+  const key = `vehiculos/${placaSegura}/${randomUUID()}.${extension}`;
+  await uploadObject({ key, body: buffer, contentType: foto.type });
   return key;
 }
 
@@ -60,6 +81,34 @@ function validarHojaDeVida(data: {
   if (!data.numeroChasis?.trim()) {
     throw new Error("El número de chasis es obligatorio.");
   }
+}
+
+/**
+ * Indica si un vehículo YA tenía la hoja de vida completa (mismos campos
+ * que exige `validarHojaDeVida`, sin `tipoVehiculo` porque ese quedó
+ * backfilleado a MOTO para todo vehículo existente en la migración
+ * `20260917185725_tipo_vehiculo_hoja_de_vida`). Vehículos dados de alta
+ * antes de esa migración no tienen marca/modelo/color/motor/chasis — no se
+ * les exige completarlos retroactivamente solo por editarlos o
+ * desactivarlos (regla D4: nullable-first / validación en la capa de
+ * server action, nunca bloqueo de datos legacy). Mismo patrón que
+ * `actualizarUsuario` en lib/admin/user-actions.ts, que solo exige
+ * cédula/tipoVehiculo para TRABAJADOR y deja legacy sin tocar.
+ */
+function tieneHojaDeVidaCompleta(vehiculo: {
+  marca: string | null;
+  modelo: string | null;
+  color: string | null;
+  numeroMotor: string | null;
+  numeroChasis: string | null;
+}): boolean {
+  return Boolean(
+    vehiculo.marca?.trim() &&
+      vehiculo.modelo?.trim() &&
+      vehiculo.color?.trim() &&
+      vehiculo.numeroMotor?.trim() &&
+      vehiculo.numeroChasis?.trim(),
+  );
 }
 
 export async function crearVehiculo(data: {
@@ -110,6 +159,17 @@ export async function crearVehiculo(data: {
       },
     });
   } catch (err) {
+    // La foto ya se subió a S3 antes de este `create` — si la escritura en
+    // base de datos falla (ej. placa duplicada), el objeto queda huérfano
+    // en el bucket. Se borra como acción compensatoria; si ese borrado
+    // también falla, se registra pero no se lanza un segundo error (no
+    // debe enmascarar la falla original de la escritura).
+    await deleteObject(fotoS3Key).catch((cleanupErr) => {
+      console.error("No se pudo borrar la foto huérfana de S3 tras un error al crear el vehículo.", {
+        fotoS3Key,
+        cleanupErr,
+      });
+    });
     if (esErrorPlacaDuplicada(err)) {
       throw new Error("Ya existe un vehículo con esa placa.");
     }
@@ -153,10 +213,30 @@ export async function actualizarVehiculo(
     throw new Error("Placa y tipo son obligatorios.");
   }
 
-  // La hoja de vida ya existe desde el alta: acá se puede editar (incluida
-  // la foto, si se sube una nueva) pero NO se vuelve a exigir — a
-  // diferencia de `crearVehiculo`, que sí la requiere.
-  validarHojaDeVida(data);
+  const vehiculoActual = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+  if (!vehiculoActual) {
+    throw new Error("El vehículo no existe.");
+  }
+
+  // La hoja de vida ya existe desde el alta para vehículos dados de alta
+  // con ella completa: acá se puede editar (incluida la foto, si se sube
+  // una nueva) pero NO se vuelve a exigir. Vehículos legacy (backfill de la
+  // migración `20260917185725_tipo_vehiculo_hoja_de_vida`, sin
+  // marca/modelo/color/motor/chasis) siguen siendo editables/desactivables
+  // sin forzar a completarla en la misma solicitud — pero si el admin
+  // intenta cargar CUALQUIERA de esos campos, se exige que quede completa
+  // (no se acepta una hoja de vida a medias).
+  const intentaCargarHojaDeVida = [
+    data.marca,
+    data.modelo,
+    data.color,
+    data.numeroMotor,
+    data.numeroChasis,
+  ].some((valor) => valor?.trim());
+  if (tieneHojaDeVidaCompleta(vehiculoActual) || intentaCargarHojaDeVida) {
+    validarHojaDeVida(data);
+  }
+
   const fotoS3Key =
     data.foto && data.foto.size > 0 ? await subirFotoVehiculo(placaLimpia, data.foto) : undefined;
 
@@ -181,6 +261,18 @@ export async function actualizarVehiculo(
       },
     });
   } catch (err) {
+    // Mismo caso que en `crearVehiculo`: si se subió una foto nueva en esta
+    // misma solicitud (`fotoS3Key` truthy) y el `update` de Prisma falla
+    // después, el objeto queda huérfano en S3 — se borra como acción
+    // compensatoria sin enmascarar el error original si el borrado falla.
+    if (fotoS3Key) {
+      await deleteObject(fotoS3Key).catch((cleanupErr) => {
+        console.error(
+          "No se pudo borrar la foto huérfana de S3 tras un error al actualizar el vehículo.",
+          { fotoS3Key, cleanupErr },
+        );
+      });
+    }
     if (esErrorPlacaDuplicada(err)) {
       throw new Error("Ya existe un vehículo con esa placa.");
     }
