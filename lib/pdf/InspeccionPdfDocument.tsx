@@ -4,6 +4,7 @@ import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/render
 import type { Style } from "@react-pdf/types";
 import type { InspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
+import { categoriasGenericasPdf, clasificarInspeccionVisual, formatoValorItemPdf } from "@/lib/pdf/pdf-helpers";
 
 // Componente de presentación puro: recibe los datos ya resueltos por
 // `getInspeccionParaPdf` (lib/inspections/pdf-queries.ts). No accede a
@@ -155,6 +156,11 @@ const styles = StyleSheet.create({
   },
   itemNombre: { fontSize: 7.5, flexShrink: 1, paddingRight: 4 },
   itemValorOk: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
+  // Estado intermedio de los ítems TRIESTADO (fluidos en BAJO) — no es una
+  // falla (no crea Novedad, ver esNovedad() en lib/inspections/respuesta.ts)
+  // pero tampoco es un OK liso, por eso un color propio (ámbar) en vez de
+  // reusar itemValorOk/itemValorFalla.
+  itemValorWarn: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#B45309" },
   itemValorFalla: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
 
   // Novedades
@@ -247,14 +253,21 @@ function formatFechaHora(date: Date | null | undefined) {
   return new Intl.DateTimeFormat("es-CO", { dateStyle: "short", timeStyle: "short" }).format(date);
 }
 
+const ESTILO_VALOR_ITEM: Record<ReturnType<typeof formatoValorItemPdf>["estilo"], Style> = {
+  ok: styles.itemValorOk,
+  warn: styles.itemValorWarn,
+  falla: styles.itemValorFalla,
+};
+
 function ChecklistItemRow({ respuesta }: { respuesta: Respuesta }) {
-  const esOk = respuesta.valor === "OK";
+  // Cubre tanto BINARIO (OK/FALLA) como TRIESTADO (BUENO/BAJO/MALO, ítems de
+  // fluidos) — antes solo distinguía OK de "todo lo demás", ver
+  // lib/pdf/pdf-helpers.ts (hallazgo CRITICAL #2/#3 de la corrección Slice 2).
+  const { texto, estilo } = formatoValorItemPdf(respuesta.valor);
   return (
     <View style={styles.itemRow}>
       <Text style={styles.itemNombre}>{respuesta.checklistItem.nombre}</Text>
-      <Text style={esOk ? styles.itemValorOk : styles.itemValorFalla}>
-        {esOk ? "✓ OK." : "X FALLA, DAÑO, FALTANTE"}
-      </Text>
+      <Text style={ESTILO_VALOR_ITEM[estilo]}>{texto}</Text>
     </View>
   );
 }
@@ -302,20 +315,30 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
       .sort((a, b) => a.checklistItem.orden - b.checklistItem.orden),
   }));
 
-  // "Inspección Visual": los primeros 3 ítems (Luces Altas y Bajas,
-  // Direccionales y Estacionarias, Luz de Reversa) van bajo el subtítulo
-  // "ENCIENDA LAS LUCES...", los siguientes 4 (Espejos, Llantas, Latonería,
-  // Rayones) bajo "ESTADO GENERAL DEL VEHICULO" — split verificado contra
-  // el Excel oficial (fila 30 vs fila 34 de la columna MOTOS). Se busca por
-  // nombre exacto de categoría (fijo en prisma/seed.ts) en vez de por
-  // posición, para no romper si algún día cambia el `orden` en la base.
+  // "Inspección Visual" se subdivide en dos subtítulos del formato oficial:
+  // "ENCIENDA LAS LUCES..." (ítems que mencionan luces) y "ESTADO GENERAL
+  // DEL VEHICULO" (el resto). Antes esto se partía por posición fija
+  // (`.slice(0,3)`/`.slice(3)`), asumiendo el orden MOTO-only del Slice 1 —
+  // el catálogo actual branchea por tipo de vehículo (MOTO 5 ítems / CARRO 6
+  // ítems, distinto orden, ver prisma/seed.ts) así que la clasificación
+  // ahora es por nombre, no por posición (hallazgo CRITICAL #3 de la
+  // corrección Slice 2, ver lib/pdf/pdf-helpers.ts). Se busca la categoría
+  // por nombre exacto (fijo en prisma/seed.ts) en vez de por posición, para
+  // no romper si algún día cambia el `orden` en la base.
   const visual = respuestasPorCategoria.find((c) => c.categoria.nombre === "Inspección Visual");
   const documentacion = respuestasPorCategoria.find((c) => c.categoria.nombre === "Documentación");
 
-  const visualItems = visual?.items ?? [];
-  const lucesItems = visualItems.slice(0, 3);
-  const estadoGeneralItems = visualItems.slice(3);
+  const { luces: lucesItems, estadoGeneral: estadoGeneralItems } = clasificarInspeccionVisual(
+    visual?.items ?? [],
+  );
   const documentoItems = documentacion?.items ?? [];
+  // Corrección Slice 2 (hallazgo CRITICAL #2): antes solo se renderizaban
+  // "Inspección Visual" y "Documentación" — "Fluidos" y "Equipo de
+  // prevención" quedaban afuera del PDF aunque `data.respuestas` sí las
+  // trajera. `categoriasGenericasPdf` devuelve cualquier categoría sin
+  // sección fija propia (genérico: no se hardcodea a esos dos nombres, para
+  // no volver a romperse si se agrega una categoría nueva).
+  const categoriasGenericas = categoriasGenericasPdf(respuestasPorCategoria);
 
   const novedades: Novedad[] = data.novedades;
   const novedadesConFotos = novedades.filter((n) => n.photos.length > 0);
@@ -434,6 +457,14 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
             <Text style={styles.seccionSubtitulo}>{TXT.documentosTitulo}</Text>
             {documentoItems.map((r) => (
               <ChecklistItemRow key={r.id} respuesta={r} />
+            ))}
+            {categoriasGenericas.map((c) => (
+              <View key={c.categoria.id}>
+                <Text style={styles.seccionSubtitulo}>{c.categoria.nombre.toUpperCase()}</Text>
+                {c.items.map((r) => (
+                  <ChecklistItemRow key={r.id} respuesta={r} />
+                ))}
+              </View>
             ))}
           </View>
         </View>
