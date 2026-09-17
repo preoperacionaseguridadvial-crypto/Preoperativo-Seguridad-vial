@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { auth } from "@/lib/auth/config";
-import { RespuestaChecklist } from "@/generated/prisma/client";
+import { RespuestaChecklist, TipoRespuestaItem } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
 import {
   getOwnInspectionOrNotFound,
@@ -40,13 +40,19 @@ export default async function NovedadPage({
 
   const esDocumento = item.category.nombre === CATEGORIA_SIN_PANTALLA_PROPIA;
   const tiposDisponibles = getTiposNovedadParaItem(item);
+  // Fase soporte-moto-carro (Slice 2, A2): esta pantalla la comparten los
+  // ítems BINARIO (Falla) y TRIESTADO de fluidos (Malo) — mismo flujo de
+  // descripción + tipo + foto, distinto valor final según el ítem. Ver
+  // RespuestaTriestadoItem, que enlaza acá para "✕ Malo".
+  const esFluido = item.tipoRespuesta === TipoRespuestaItem.TRIESTADO;
+  const valorNovedad = esFluido ? RespuestaChecklist.MALO : RespuestaChecklist.FALLA;
 
   async function guardarNovedad(formData: FormData) {
     "use server";
     const observacion = formData.get("observacion")?.toString() ?? "";
     const tipo = formData.get("tipo")?.toString() as TipoNovedad;
     const ubicacion = esDocumento ? "" : (formData.get("ubicacion")?.toString() ?? "");
-    const { novedad } = await responderItem(id, itemId, RespuestaChecklist.FALLA, observacion, tipo, ubicacion);
+    const { novedad } = await responderItem(id, itemId, valorNovedad, observacion, tipo, ubicacion);
     if (novedad) {
       redirect(`/inspecciones/${id}/novedades/${novedad.id}/foto`);
     }
@@ -57,7 +63,9 @@ export default async function NovedadPage({
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
       <div>
         <p className="text-xs uppercase text-gray-400">{item.category.nombre}</p>
-        <h1 className="text-xl font-semibold text-[#0B3B60]">{item.nombre} — Falla</h1>
+        <h1 className="text-xl font-semibold text-[#0B3B60]">
+          {item.nombre} — {esFluido ? "Malo" : "Falla"}
+        </h1>
         <p className="mt-1 text-sm text-gray-500">Describí qué encontraste.</p>
       </div>
 

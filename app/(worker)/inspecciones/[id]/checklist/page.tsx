@@ -26,9 +26,16 @@ import { ProgresoInspeccion } from "@/app/(worker)/inspecciones/_components/Prog
 // visual interactiva de la moto (rechazada por el dueño de producto por
 // saturar la interfaz) manteniendo el mismo estilo de barra de progreso
 // que ya se usaba.
+// `BUENO`/`BAJO`/`MALO` son el triestado de fluidos (fase soporte-moto-carro,
+// Slice 2, A2). BAJO usa su propio ícono/color de advertencia (ámbar), nunca
+// el rojo de falla/malo: es dato queryable normal, no crea Novedad ni
+// bloquea el envío (decisión confirmada, ver lib/inspections/respuesta.ts).
 const ESTADO_ICONO: Record<EstadoChecklistItem, { icon: string; className: string; texto: string }> = {
   OK: { icon: "✓", className: "text-green-600", texto: "OK" },
   FALLA: { icon: "🔴", className: "", texto: "Falla" },
+  BUENO: { icon: "✓", className: "text-green-600", texto: "Bueno" },
+  BAJO: { icon: "⚠", className: "text-amber-600", texto: "Bajo — revisar" },
+  MALO: { icon: "🔴", className: "", texto: "Malo" },
   PENDIENTE: { icon: "○", className: "text-gray-400", texto: "Pendiente" },
 };
 
@@ -50,8 +57,8 @@ export default async function ChecklistListPage({ params }: { params: Promise<{ 
   const catalogConEstado = await getChecklistEstadoCompleto(id);
   const allItems = catalogConEstado.flatMap((category) => category.items);
   const totalItems = allItems.length;
-  const conformes = allItems.filter((item) => item.estado === "OK").length;
-  const noConformes = allItems.filter((item) => item.estado === "FALLA").length;
+  const conformes = allItems.filter((item) => item.estado === "OK" || item.estado === "BUENO").length;
+  const noConformes = allItems.filter((item) => item.estado === "FALLA" || item.estado === "MALO").length;
   const pendientes = allItems.filter((item) => item.estado === "PENDIENTE").length;
   const revisados = totalItems - pendientes;
 

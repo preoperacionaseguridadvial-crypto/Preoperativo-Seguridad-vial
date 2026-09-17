@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
-import { RespuestaChecklist } from "@/generated/prisma/client";
+import { RespuestaChecklist, TipoRespuestaItem } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
 import {
   getOwnInspectionOrNotFound,
@@ -13,6 +13,7 @@ import {
 import { responderItem } from "@/lib/inspections/actions";
 import { GaleriaReferencia } from "@/app/(worker)/inspecciones/_components/GaleriaReferencia";
 import { RespuestaChecklistItem } from "@/app/(worker)/inspecciones/_components/RespuestaChecklistItem";
+import { RespuestaTriestadoItem } from "@/app/(worker)/inspecciones/_components/RespuestaTriestadoItem";
 import { ProgresoInspeccion } from "@/app/(worker)/inspecciones/_components/ProgresoInspeccion";
 
 // Un ítem por pantalla, botones grandes, poco texto: respuesta rápida
@@ -48,7 +49,7 @@ export default async function ChecklistItemPage({
     notFound();
   }
 
-  const { previousItemId, nextItemId } = await getAdjacentChecklistItemIds(itemId);
+  const { previousItemId, nextItemId } = await getAdjacentChecklistItemIds(id, itemId);
 
   // Mismo cálculo que la pantalla de lista (checklist/page.tsx) — misma
   // fuente de verdad (getChecklistEstadoCompleto), para que el progreso
@@ -56,8 +57,8 @@ export default async function ChecklistItemPage({
   const catalogConEstado = await getChecklistEstadoCompleto(id);
   const allItems = catalogConEstado.flatMap((category) => category.items);
   const totalItems = allItems.length;
-  const conformes = allItems.filter((i) => i.estado === "OK").length;
-  const noConformes = allItems.filter((i) => i.estado === "FALLA").length;
+  const conformes = allItems.filter((i) => i.estado === "OK" || i.estado === "BUENO").length;
+  const noConformes = allItems.filter((i) => i.estado === "FALLA" || i.estado === "MALO").length;
   const pendientes = allItems.filter((i) => i.estado === "PENDIENTE").length;
   const revisados = totalItems - pendientes;
 
@@ -94,6 +95,26 @@ export default async function ChecklistItemPage({
     redirect(await getNextStepPath(id));
   }
 
+  /**
+   * Ítems de fluidos (`tipoRespuesta = TRIESTADO`, fase soporte-moto-carro
+   * Slice 2, A2). "Bueno" y "Bajo" se guardan directo, sin pedir nada — BAJO
+   * no crea Novedad ni bloquea el envío (decisión confirmada: solo dato
+   * queryable con badge de advertencia, ver lib/inspections/respuesta.ts).
+   * "Malo" usa el Link a la pantalla de novedad (RespuestaTriestadoItem),
+   * igual que "Falla" para ítems binarios.
+   */
+  async function marcarBueno() {
+    "use server";
+    await responderItem(id, itemId, RespuestaChecklist.BUENO);
+    redirect(await getNextStepPath(id));
+  }
+
+  async function marcarBajo() {
+    "use server";
+    await responderItem(id, itemId, RespuestaChecklist.BAJO);
+    redirect(await getNextStepPath(id));
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-6">
       <ProgresoInspeccion
@@ -112,13 +133,22 @@ export default async function ChecklistItemPage({
           <h1 className="text-2xl font-semibold text-[#17324D]">{item.nombre}</h1>
         </div>
 
-        <RespuestaChecklistItem
-          idInspeccion={id}
-          itemId={itemId}
-          pideUbicacion={item.pideUbicacion}
-          marcarOk={marcarOk}
-          marcarFallaConUbicacion={item.pideUbicacion ? marcarFallaConUbicacion : undefined}
-        />
+        {item.tipoRespuesta === TipoRespuestaItem.TRIESTADO ? (
+          <RespuestaTriestadoItem
+            idInspeccion={id}
+            itemId={itemId}
+            marcarBueno={marcarBueno}
+            marcarBajo={marcarBajo}
+          />
+        ) : (
+          <RespuestaChecklistItem
+            idInspeccion={id}
+            itemId={itemId}
+            pideUbicacion={item.pideUbicacion}
+            marcarOk={marcarOk}
+            marcarFallaConUbicacion={item.pideUbicacion ? marcarFallaConUbicacion : undefined}
+          />
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-3">
