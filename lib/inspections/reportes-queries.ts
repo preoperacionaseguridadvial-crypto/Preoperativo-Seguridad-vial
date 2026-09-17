@@ -1,6 +1,14 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { InspectionStatus, RespuestaChecklist, Role, type TipoNovedad } from "@/generated/prisma/client";
+import { esNovedad } from "@/lib/inspections/respuesta";
+
+// Único conjunto de valores que cuentan como "falla real" para reportes,
+// derivado de `esNovedad()` (lib/inspections/respuesta.ts) — así este
+// archivo nunca mantiene su propia copia divergente de esa regla de
+// negocio. Se calcula una sola vez porque `RespuestaChecklist` es un enum
+// fijo en tiempo de ejecución (no cambia entre llamadas).
+const VALORES_FALLA = Object.values(RespuestaChecklist).filter(esNovedad);
 
 // Queries del dashboard ejecutivo "Informes de Gerencia" (DIRECTOR/SST).
 // Ninguna de estas toca el flujo de inspección del trabajador, la
@@ -314,8 +322,13 @@ export async function getFallasPorItem(filtros: FiltrosReporte): Promise<FallaPo
   const rango = normalizarRango(filtros);
   const where = construirWhereReporte(filtros, rango);
 
+  // Corrección Slice 2 (hallazgo CRITICAL #4): antes solo filtraba
+  // `valor === FALLA`, excluyendo MALO — pero `esNovedad()` trata FALLA
+  // (binario) y MALO (triestado, ítems de fluidos) como igual de severos
+  // (ambos crean Novedad). Un ítem de fluido en MALO desaparecía
+  // silenciosamente de "elementos con más fallas".
   const respuestas = await prisma.inspectionItemResponse.findMany({
-    where: { valor: RespuestaChecklist.FALLA, inspection: where },
+    where: { valor: { in: VALORES_FALLA }, inspection: where },
     select: { checklistItem: { select: { nombre: true } } },
   });
 
