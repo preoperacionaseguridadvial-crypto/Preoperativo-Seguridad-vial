@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/requireRole";
-import { Role, Prisma } from "@/generated/prisma/client";
+import { Role, Prisma, TipoVehiculo } from "@/generated/prisma/client";
 
 // Server actions del panel de administración (Administrador): crear/editar
 // usuarios de cualquier rol y restablecer contraseñas. Ningún usuario se
@@ -28,6 +28,8 @@ export async function crearUsuario(data: {
   cedula?: string;
   telefono?: string;
   cargo?: string;
+  puestoAsignado?: string;
+  tipoVehiculo?: TipoVehiculo;
   fechaVencimientoPase?: Date;
   conductorActivo?: boolean;
 }) {
@@ -45,6 +47,21 @@ export async function crearUsuario(data: {
     throw new Error("Las contraseñas no coinciden.");
   }
 
+  // Fase soporte-moto-carro: cédula y tipoVehiculo son obligatorios SOLO
+  // para TRABAJADOR (el resto de los roles no operan vehículos). Usuarios
+  // legacy ya creados no se ven afectados — esta validación corre
+  // únicamente en el alta, nunca retroactivamente (ver
+  // spec: user-administration, "Creando un trabajador sin cédula").
+  const cedulaLimpia = data.cedula?.trim() || null;
+  if (data.role === Role.TRABAJADOR) {
+    if (!cedulaLimpia) {
+      throw new Error("La cédula es obligatoria para un trabajador.");
+    }
+    if (!data.tipoVehiculo) {
+      throw new Error("El tipo de vehículo es obligatorio para un trabajador.");
+    }
+  }
+
   const passwordHash = await bcrypt.hash(data.password, COSTO_BCRYPT);
 
   let usuario;
@@ -55,9 +72,11 @@ export async function crearUsuario(data: {
         email: emailLimpio,
         passwordHash,
         role: data.role,
-        cedula: data.cedula?.trim() || null,
+        cedula: cedulaLimpia,
         telefono: data.telefono?.trim() || null,
         cargo: data.cargo?.trim() || null,
+        puestoAsignado: data.puestoAsignado?.trim() || null,
+        tipoVehiculo: data.tipoVehiculo ?? null,
         fechaVencimientoPase: data.fechaVencimientoPase ?? null,
         conductorActivo: data.conductorActivo ?? true,
       },
@@ -90,6 +109,8 @@ export async function actualizarUsuario(
     cedula?: string;
     telefono?: string;
     cargo?: string;
+    puestoAsignado?: string;
+    tipoVehiculo?: TipoVehiculo | null;
     fechaVencimientoPase?: Date | null;
     conductorActivo?: boolean;
   },
@@ -102,6 +123,19 @@ export async function actualizarUsuario(
     throw new Error("Nombre y email son obligatorios.");
   }
 
+  // Igual que en `crearUsuario`: solo se exige para TRABAJADOR. Editar un
+  // usuario legacy sin completar estos campos sigue permitido para
+  // cualquier otro rol (spec: "pendiente de asignación" no bloquea).
+  const cedulaLimpia = data.cedula?.trim() || null;
+  if (data.role === Role.TRABAJADOR) {
+    if (!cedulaLimpia) {
+      throw new Error("La cédula es obligatoria para un trabajador.");
+    }
+    if (!data.tipoVehiculo) {
+      throw new Error("El tipo de vehículo es obligatorio para un trabajador.");
+    }
+  }
+
   let usuario;
   try {
     usuario = await prisma.user.update({
@@ -111,9 +145,11 @@ export async function actualizarUsuario(
         email: emailLimpio,
         role: data.role,
         activo: data.activo,
-        cedula: data.cedula?.trim() || null,
+        cedula: cedulaLimpia,
         telefono: data.telefono?.trim() || null,
         cargo: data.cargo?.trim() || null,
+        puestoAsignado: data.puestoAsignado?.trim() || null,
+        tipoVehiculo: data.tipoVehiculo ?? null,
         fechaVencimientoPase: data.fechaVencimientoPase ?? null,
         conductorActivo: data.conductorActivo ?? true,
       },
