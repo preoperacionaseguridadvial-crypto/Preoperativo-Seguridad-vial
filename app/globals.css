@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f7fa;
+  --foreground: #17324d;
+
+  /* Paleta corporativa ESS LTDA — validada por muestreo de píxeles contra
+     public/logo/ess-ltda.png (azul dominante real del logo: #005098). */
+  --color-page: #f4f7fa;
+  --color-surface: #ffffff;
+  --color-border: #d9e2ea;
+  --color-brand: #005b96;
+  --color-ink: #17324d;
+  --color-ink-muted: #66788a;
+  --color-ok: #16a34a;
+  --color-falla: #dc2626;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-page: var(--color-page);
+  --color-surface: var(--color-surface);
+  --color-border: var(--color-border);
+  --color-brand: var(--color-brand);
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ok: var(--color-ok);
+  --color-falla: var(--color-falla);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}

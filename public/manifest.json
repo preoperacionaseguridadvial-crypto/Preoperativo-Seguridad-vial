@@ -1,0 +1,32 @@
+{
+  "_comment": "PLACEHOLDER identity. name/short_name/colors are provisional until ESS LTDA provides its official logo and brand guidelines — do not treat #0B3B60 / #2E9BD6 as confirmed corporate colors.",
+  "name": "Preoperacional Seguridad Vial — ESS LTDA",
+  "short_name": "Preoperacional ESS",
+  "description": "Inspecciones preoperacionales diarias de motocicletas para motorizados de seguridad vial de ESS LTDA.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0B3B60",
+  "theme_color": "#0B3B60",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

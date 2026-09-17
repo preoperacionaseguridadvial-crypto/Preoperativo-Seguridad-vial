@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="placeholderTitle">
+  <title id="placeholderTitle">Foto de referencia no disponible</title>
+  <rect width="400" height="300" fill="#EAF4FB" />
+  <rect x="1" y="1" width="398" height="298" fill="none" stroke="#2E9BD6" stroke-width="2" stroke-dasharray="8 6" />
+
+  <!-- Icono de cámara genérico: no representa ninguna moto real, solo indica "falta la foto". -->
+  <g transform="translate(200,128)">
+    <rect x="-46" y="-28" width="92" height="66" rx="8" fill="#FFFFFF" stroke="#0B3B60" stroke-width="4" />
+    <rect x="-16" y="-42" width="32" height="16" rx="3" fill="#FFFFFF" stroke="#0B3B60" stroke-width="4" />
+    <circle cx="0" cy="6" r="20" fill="#EAF4FB" stroke="#0B3B60" stroke-width="4" />
+    <circle cx="0" cy="6" r="9" fill="#2E9BD6" />
+    <line x1="-58" y1="-42" x2="58" y2="46" stroke="#0B3B60" stroke-width="4" stroke-linecap="round" opacity="0.55" />
+  </g>
+
+  <text x="200" y="228" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600" fill="#0B3B60">
+    Foto de referencia
+  </text>
+  <text x="200" y="250" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#2E9BD6">
+    Próximamente
+  </text>
+</svg>

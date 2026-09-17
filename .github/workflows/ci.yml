@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Base de datos de test: mismo approach que en local (ver
+    # test/setup.ts) — Postgres real, no mocks, porque las reglas de
+    # negocio críticas (constraints @@unique de inmutabilidad, transacciones)
+    # son comportamiento de la base de datos.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: preop
+          POSTGRES_PASSWORD: preop
+          POSTGRES_DB: preoperacional_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U preop -d preoperacional_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://preop:preop@localhost:5432/preoperacional_test"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Prisma migrate deploy (test DB)
+        run: npx prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Unit/integration tests
+        run: npm test

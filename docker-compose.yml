@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: preop-postgres
+    environment:
+      POSTGRES_USER: preop
+      POSTGRES_PASSWORD: preop
+      POSTGRES_DB: preoperacional
+    ports:
+      - "5433:5432"
+    volumes:
+      - preop-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U preop -d preoperacional"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: preop-minio
+    command: server /data --console-address ":9011"
+    environment:
+      MINIO_ROOT_USER: preopadmin
+      MINIO_ROOT_PASSWORD: preopadmin123
+    ports:
+      - "9010:9000"
+      - "9011:9011"
+    volumes:
+      - preop-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  preop-postgres-data:
+  preop-minio-data:

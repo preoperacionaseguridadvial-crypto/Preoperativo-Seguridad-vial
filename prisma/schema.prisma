@@ -1,0 +1,331 @@
+// Prisma schema — Fase 1 (cimientos) de PREOPERACIONAL SEGURIDAD VIAL (ESS LTDA).
+//
+// Reglas de negocio inmutables reflejadas aquí (ver brief del proyecto):
+// - Ninguna inspección se borra: no hay campo deletedAt ni mutation delete.
+// - Los timestamps oficiales (startedAt, completedAt, approvedAt, rejectedAt,
+//   reviewedAt) se generan SIEMPRE en el servidor (`now()` / `new Date()`),
+//   nunca se reciben del cliente como valor de confianza.
+// - No hay ninguna restricción de ventana horaria para iniciar una inspección.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  TRABAJADOR
+  SUPERVISOR
+  DIRECTOR
+  SST
+  // Administra usuarios y vehículos (crear, editar, restablecer
+  // contraseñas) — ver app/(admin)/**. Acceso de solo lectura a
+  // dashboard/consulta-inspecciones para visibilidad operativa; no opera
+  // como TRABAJADOR ni decide como SUPERVISOR (rompería la trazabilidad de
+  // quién hizo cada acción).
+  ADMINISTRADOR
+}
+
+enum InspectionStatus {
+  EN_PROCESO
+  ENVIADA
+  PENDIENTE_APROBACION
+  APROBADA
+  RECHAZADA
+  NO_APTA_PARA_OPERAR
+  // Trabajador descarta una inspección EN_PROCESO que no va a terminar (ver
+  // cancelarInspeccion, lib/inspections/actions.ts). No es un borrado: la
+  // regla de inmutabilidad del proyecto sigue intacta, el registro queda en
+  // la base — solo deja de aparecer como "En proceso".
+  CANCELADA
+}
+
+// Fase 2: respuesta de un ítem de checklist dentro de una inspección.
+// Formato oficial FO-SVS-23: binario (✓ OK / X FALLA-DAÑO-FALTANTE), no hay
+// una tercera opción N/A en el formato real de la empresa.
+enum RespuestaChecklist {
+  OK
+  FALLA
+}
+
+// Fase C: tipo de novedad, alineado a las convenciones de dibujo del
+// formato oficial FO-SVS-23 (sección de daños de carrocería) más las
+// categorías generales de novedad del resto del checklist. Los primeros 7
+// valores son los auditados contra el formato físico. VENCIDO se agregó
+// después, específico para "Documentación" (SOAT/licencia/etc. vencidos no
+// entran en ninguno de los otros 7) — ver TIPOS_NOVEDAD_DOCUMENTO en
+// lib/inspections/novedad-tipo.ts.
+enum TipoNovedad {
+  RAYON
+  RAYON_FUERTE
+  ABOLLADURA
+  GOLPE_FUERTE
+  FALLA
+  DANO
+  FALTANTE
+  VENCIDO
+}
+
+// Fase D: las dos líneas de firma del formato oficial FO-SVS-23 ("NOMBRE Y
+// FIRMA DEL CONDUCTOR" / "NOMBRE Y FIRMA DEL SUPERVISOR").
+enum TipoFirma {
+  CONDUCTOR
+  SUPERVISOR
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Número de documento de identidad (cédula), mostrado junto a la firma
+  // manuscrita en el detalle y el PDF para trazabilidad — pedido del dueño
+  // de producto. Opcional: hoy no existe ninguna pantalla de administración
+  // de usuarios (solo se crean vía prisma/seed.ts), así que forzarlo
+  // NOT NULL sin forma de completarlo después sería peor.
+  cedula String?
+
+  // Teléfono y cargo: datos administrativos pedidos para el panel de
+  // Administrador (app/(admin)/admin/usuarios) — opcionales por el mismo
+  // motivo que `cedula` (se completan/editan desde el panel, no hay forma
+  // de forzarlos retroactivamente en los usuarios ya existentes).
+  telefono String?
+  cargo    String?
+
+  // Datos del conductor (formato oficial FO-SVS-23): el conductor siempre es
+  // un usuario del sistema (rol TRABAJADOR, confirmado por el dueño de
+  // producto), por eso viven acá y no en una entidad nueva. Ninguno de los
+  // dos es exclusivo del rol TRABAJADOR a nivel de schema (no hay forma de
+  // restringir por enum en Prisma), pero conceptualmente solo aplican a
+  // conductores.
+  fechaVencimientoPase DateTime?
+  conductorActivo      Boolean   @default(true)
+
+  inspectionsAsWorker     Inspection[] @relation("InspectionWorker")
+  inspectionsAsSupervisor Inspection[] @relation("InspectionSupervisor")
+  inspectionsAsConductor  Inspection[] @relation("InspectionConductor")
+  auditLogs               AuditLog[]
+  firmas                  Firma[]
+
+  @@index([role])
+}
+
+model Vehicle {
+  id        String   @id @default(cuid())
+  placa     String   @unique
+  tipo      String
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Vencimiento de la revisión tecnicomecánica (formato oficial FO-SVS-23,
+  // encabezado del formulario).
+  fechaVencimientoTecnicomecanica DateTime?
+
+  inspections Inspection[]
+}
+
+// Registro inmutable: no se agrega deletedAt ni mutation de borrado. Los
+// errores se corrigen con nuevos estados/observaciones, nunca eliminando.
+model Inspection {
+  id            String            @id @default(cuid())
+  workerId      String
+  worker        User              @relation("InspectionWorker", fields: [workerId], references: [id])
+  // Conductor responsable de la unidad (formato oficial FO-SVS-23), separado
+  // de `workerId` ("quién hace la inspección") aunque en el flujo normal sea
+  // la misma persona — ver `iniciarInspeccion` en lib/inspections/actions.ts,
+  // que hoy setea `conductorId = workerId` automáticamente por defecto.
+  conductorId   String
+  conductor     User              @relation("InspectionConductor", fields: [conductorId], references: [id])
+  vehicleId     String
+  vehicle       Vehicle           @relation(fields: [vehicleId], references: [id])
+  supervisorId  String?
+  supervisor    User?             @relation("InspectionSupervisor", fields: [supervisorId], references: [id])
+  status        InspectionStatus  @default(EN_PROCESO)
+
+  // Todos los timestamps siguientes se asignan con la hora del servidor
+  // (nunca con un valor enviado por el cliente).
+  startedAt     DateTime          @default(now())
+  completedAt   DateTime?
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  reviewedAt    DateTime?
+
+  // Observaciones que deja el Supervisor al aprobar o rechazar (Fase 3).
+  observacionesSupervisor String?
+
+  // Medida directa de la inspección (Fase 2): no es un check de
+  // conforme/no-conforme, es un valor medible que el trabajador reporta una
+  // sola vez por inspección — por eso vive acá como campo y NO como
+  // ChecklistItem. Ver `registrarKilometraje` en lib/inspections/actions.ts.
+  kilometraje       Int?
+
+  // Resultado final reportado por el trabajador (sección 13 del brief). Si
+  // `puedeOperar` es false, `justificacionNoOperar` es obligatoria (validado
+  // en `registrarResultado`, lib/inspections/actions.ts).
+  puedeOperar             Boolean?
+  justificacionNoOperar   String?
+
+  respuestas    InspectionItemResponse[]
+  novedades     Novedad[]
+  firmas        Firma[]
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([workerId])
+  @@index([conductorId])
+  @@index([vehicleId])
+  @@index([status])
+}
+
+// Catálogo de categorías del checklist, alineado al formato oficial
+// FO-SVS-23 (columna MOTOS): "Inspección Visual" y "Documentación". Se
+// pueblan vía prisma/seed.ts, no se crean desde la UI en esta fase.
+model ChecklistCategory {
+  id        String          @id @default(cuid())
+  nombre    String          @unique
+  orden     Int
+  items     ChecklistItem[]
+
+  @@index([orden])
+}
+
+// Ítem individual del checklist (ej: "Luces Altas y Bajas", "SOAT").
+model ChecklistItem {
+  id          String                    @id @default(cuid())
+  categoryId  String
+  category    ChecklistCategory         @relation(fields: [categoryId], references: [id])
+  nombre      String
+  orden       Int
+  // Rutas públicas (bajo /public/checklist/) de las fotos de referencia que
+  // se muestran al trabajador para que asocie visualmente sobre qué parte de
+  // la moto se le está preguntando (feedback del dueño de producto). Galería
+  // (0 a N imágenes, ej. "Direccionales y Estacionarias" usa 2) en vez de una
+  // sola imagen. Vacío para los ítems de Documentación, que no tienen foto de
+  // referencia; mientras un archivo no exista, la UI cae a un placeholder
+  // neutro (ver GaleriaReferencia/ImagenReferencia en
+  // app/(worker)/inspecciones/_components).
+  imagenesUrl String[]                  @default([])
+  // Único ítem del catálogo (hoy: "Rayones") que, cuando queda en FALLA,
+  // pide al trabajador indicar por escrito dónde está lo que reporta, con
+  // un selector de tipo acotado a daños de carrocería en vez de la pantalla
+  // de novedad genérica. Si el ítem queda OK no se pide nada — no hay nada
+  // que ubicar. Se modela como flag simple en vez de una tabla/columna
+  // nueva porque reutiliza el campo `observacion` ya existente en
+  // InspectionItemResponse; ver UI en
+  // app/(worker)/inspecciones/[id]/checklist/[itemId]/page.tsx.
+  pideUbicacion Boolean                 @default(false)
+  respuestas  InspectionItemResponse[]
+
+  @@index([categoryId])
+}
+
+// Respuesta de un trabajador a un ChecklistItem dentro de una inspección
+// puntual. Único por (inspectionId, checklistItemId): un ítem se responde
+// una sola vez por inspección (se puede actualizar mientras la inspección
+// sigue EN_PROCESO, nunca después de enviada).
+model InspectionItemResponse {
+  id              String              @id @default(cuid())
+  inspectionId    String
+  inspection      Inspection          @relation(fields: [inspectionId], references: [id])
+  checklistItemId String
+  checklistItem   ChecklistItem       @relation(fields: [checklistItemId], references: [id])
+  valor           RespuestaChecklist
+  observacion     String?
+  // Generado por el servidor (`now()`), nunca recibido del cliente.
+  createdAt       DateTime            @default(now())
+
+  novedad         Novedad?
+
+  @@unique([inspectionId, checklistItemId])
+  @@index([inspectionId])
+}
+
+// Novedad reportada cuando un ítem queda en FALLA (caso principal, ligada
+// a `inspectionItemResponseId`). También admite una novedad general de la
+// inspección (no ligada a un ítem puntual) dejando `inspectionItemResponseId`
+// en null pero conservando `inspectionId` — así nunca queda huérfana de la
+// inspección a la que pertenece. Esta fase solo crea el caso principal
+// (ligada a ítem) desde `responderItem`; el caso general queda modelado para
+// una fase futura. Ver duda de modelado documentada en el reporte de Fase 2.
+model Novedad {
+  id                        String                   @id @default(cuid())
+  inspectionId              String
+  inspection                Inspection               @relation(fields: [inspectionId], references: [id])
+  inspectionItemResponseId  String?                  @unique
+  inspectionItemResponse    InspectionItemResponse?  @relation(fields: [inspectionItemResponseId], references: [id])
+  descripcion               String
+  tipo                      TipoNovedad
+  // Campo "¿Dónde?" del formato oficial FO-SVS-23: descripción de la
+  // ubicación física del daño, separada de `descripcion` (texto libre que
+  // explica QUÉ pasó). Para el ítem "Rayones" (`ChecklistItem.pideUbicacion`)
+  // el valor ya capturado en esa pantalla especial termina acá, sin pedirlo
+  // dos veces — ver lib/inspections/actions.ts (`responderItem`).
+  ubicacion                 String?
+  createdAt                 DateTime                 @default(now())
+
+  photos                    Photo[]
+
+  @@index([inspectionId])
+}
+
+// Las fotos SOLO se relacionan a una Novedad (nunca sueltas, sección 11 del
+// brief). Se guarda únicamente el `s3Key`: nunca una URL pública permanente.
+// Las URLs de lectura se firman on-demand (ver lib/storage/s3.ts) cuando se
+// necesite mostrar la foto (ej: futura pantalla de aprobación del
+// supervisor).
+model Photo {
+  id         String   @id @default(cuid())
+  novedadId  String
+  novedad    Novedad  @relation(fields: [novedadId], references: [id])
+  s3Key      String
+  createdAt  DateTime @default(now())
+
+  @@index([novedadId])
+}
+
+// Firma manuscrita real (Fase D), dibujada con el dedo/mouse en un
+// `<canvas>` y subida como PNG a S3 (mismo patrón que `Photo`: solo se
+// guarda el `s3Key`, nunca una URL pública permanente). Una por
+// inspección y por tipo (CONDUCTOR/SUPERVISOR) — el `@@unique` es la
+// garantía real de inmutabilidad: una vez creada, ninguna mutation la
+// sobrescribe (ver `guardarFirmaConductor`/`guardarFirmaSupervisor` en
+// lib/inspections/firma-actions.ts, que rechazan explícitamente el intento
+// de reemplazo antes de tocar la base de datos).
+model Firma {
+  id           String     @id @default(cuid())
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id])
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  tipo         TipoFirma
+  s3Key        String
+  // Generado por el servidor (`now()`), nunca recibido del cliente.
+  createdAt    DateTime   @default(now())
+
+  @@unique([inspectionId, tipo])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  // Timestamp de auditoría generado por el servidor (`now()`), nunca por el cliente.
+  createdAt  DateTime @default(now())
+  metadata   Json?
+
+  @@index([userId])
+  @@index([entityType, entityId])
+}

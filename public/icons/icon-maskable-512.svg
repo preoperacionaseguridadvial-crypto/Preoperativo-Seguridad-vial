@@ -1,0 +1,17 @@
+<!--
+  Placeholder maskable PWA icon (512x512, safe-zone padded for Android
+  adaptive icons). Provisional colors and shape only — replace with ESS
+  LTDA's official logo/brand identity when available.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0B3B60" />
+  <circle cx="256" cy="256" r="120" fill="#2E9BD6" />
+  <path
+    d="M200 262 L240 302 L318 216"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="28"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

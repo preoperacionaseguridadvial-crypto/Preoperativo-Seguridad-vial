@@ -1,0 +1,215 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Mockeamos la sesión de NextAuth (no la base de datos): `auth()` normalmente
+// lee una cookie firmada y no tiene sentido simularla acá — lo único que
+// `requireRole` necesita es el objeto `{ user: { id, role } }` que devuelve.
+// El resto (Prisma, constraints, transacciones) corre contra Postgres real
+// (ver test/setup.ts y test/helpers/db.ts) porque son justo las reglas de
+// negocio que hay que proteger.
+const mockAuth = vi.fn();
+vi.mock("@/lib/auth/config", () => ({
+  auth: () => mockAuth(),
+}));
+
+import { prisma } from "@/lib/prisma";
+import { Role, InspectionStatus, RespuestaChecklist, TipoFirma } from "@/generated/prisma/client";
+import {
+  cancelarInspeccion,
+  enviarInspeccion,
+  registrarKilometraje,
+  registrarResultado,
+  responderItem,
+} from "@/lib/inspections/actions";
+import { crearCatalogoMinimo, crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
+
+function loginComo(user: { id: string; role: Role }) {
+  mockAuth.mockResolvedValue({ user: { id: user.id, role: user.role } });
+}
+
+async function crearInspeccionEnProceso() {
+  const worker = await crearUsuario(Role.TRABAJADOR);
+  const vehicle = await crearVehiculo();
+  const inspection = await prisma.inspection.create({
+    data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+  });
+  return { worker, vehicle, inspection };
+}
+
+async function responderTodoElChecklist(inspectionId: string, itemId: string) {
+  await prisma.inspectionItemResponse.create({
+    data: { inspectionId, checklistItemId: itemId, valor: RespuestaChecklist.OK },
+  });
+}
+
+async function firmarComoConductor(inspectionId: string, userId: string) {
+  await prisma.firma.create({
+    data: { inspectionId, userId, tipo: TipoFirma.CONDUCTOR, s3Key: "firmas/test.png" },
+  });
+}
+
+beforeEach(async () => {
+  await limpiarBaseDeTest();
+  await crearCatalogoMinimo();
+  mockAuth.mockReset();
+});
+
+afterAll(async () => {
+  await limpiarBaseDeTest();
+  await prisma.$disconnect();
+});
+
+describe("enviarInspeccion", () => {
+  it("rechaza si falta registrar el resultado (puedeOperar)", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(
+      /falta registrar si el vehículo puede operar/i,
+    );
+  });
+
+  it("rechaza si falta la firma del conductor", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+    await registrarResultado(inspection.id, true);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/falta la firma del conductor/i);
+  });
+
+  it("rechaza si el checklist no está completo", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+
+    // Catálogo mínimo tiene 1 ítem y no se respondió ninguno.
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan ítems del checklist/i);
+  });
+
+  it("acepta el envío cuando checklist, resultado y firma están completos, y fija completedAt server-side", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+
+    await responderTodoElChecklist(inspection.id, item.id);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+
+    const antes = Date.now();
+    const resultado = await enviarInspeccion(inspection.id);
+    const despues = Date.now();
+
+    expect(resultado.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
+    expect(resultado.completedAt).not.toBeNull();
+    const completedAtMs = resultado.completedAt!.getTime();
+    // `enviarInspeccion` no recibe ningún parámetro de fecha del caller: el
+    // timestamp se genera con `new Date()` del servidor dentro de la propia
+    // función, así que alcanza con verificar que cae en la ventana de
+    // ejecución del test (no hay forma de que el caller lo inyecte).
+    expect(completedAtMs).toBeGreaterThanOrEqual(antes);
+    expect(completedAtMs).toBeLessThanOrEqual(despues);
+  });
+
+  it("mueve a NO_APTA_PARA_OPERAR cuando puedeOperar es false", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+
+    await responderTodoElChecklist(inspection.id, item.id);
+    await registrarResultado(inspection.id, false, "Frenos en mal estado");
+    await firmarComoConductor(inspection.id, worker.id);
+
+    const resultado = await enviarInspeccion(inspection.id);
+    expect(resultado.status).toBe(InspectionStatus.NO_APTA_PARA_OPERAR);
+  });
+});
+
+describe("cancelarInspeccion", () => {
+  it("cancela una inspección propia EN_PROCESO (no la borra, pasa a CANCELADA)", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+
+    const resultado = await cancelarInspeccion(inspection.id);
+
+    expect(resultado.status).toBe(InspectionStatus.CANCELADA);
+    const enBase = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(enBase.status).toBe(InspectionStatus.CANCELADA);
+  });
+
+  it("ya no aparece en getInspeccionesEnProcesoDelTrabajador después de cancelarla", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+    await cancelarInspeccion(inspection.id);
+
+    const { getInspeccionesEnProcesoDelTrabajador } = await import("@/lib/inspections/queries");
+    const enProceso = await getInspeccionesEnProcesoDelTrabajador(worker.id);
+    expect(enProceso.find((i) => i.id === inspection.id)).toBeUndefined();
+  });
+
+  it("rechaza cancelar una inspección de otro trabajador", async () => {
+    const { inspection } = await crearInspeccionEnProceso();
+    const otro = await crearUsuario(Role.TRABAJADOR);
+    loginComo(otro);
+
+    await expect(cancelarInspeccion(inspection.id)).rejects.toThrow(/no pertenece al usuario autenticado/i);
+  });
+
+  it("rechaza cancelar una inspección que ya no está EN_PROCESO", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    await responderTodoElChecklist(inspection.id, item.id);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+    await enviarInspeccion(inspection.id);
+
+    await expect(cancelarInspeccion(inspection.id)).rejects.toThrow(
+      /solo se puede cancelar una inspección que sigue en proceso/i,
+    );
+  });
+});
+
+describe("inmutabilidad: una inspección ENVIADA no puede volver a editarse con acciones del trabajador", () => {
+  async function crearInspeccionEnviada() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    await responderTodoElChecklist(inspection.id, item.id);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+    await enviarInspeccion(inspection.id);
+    return { worker, inspection, item };
+  }
+
+  // Estas pruebas confirman una regla YA implementada hoy en el código
+  // (`getOwnInspeccionEnProceso` en lib/inspections/actions.ts exige
+  // `status === EN_PROCESO` antes de cualquier escritura del trabajador), no
+  // agregan lógica nueva. Se dejan explícitas porque protegen exactamente la
+  // regla de inmutabilidad del brief.
+  it("responderItem rechaza sobre una inspección ya enviada", async () => {
+    const { worker, inspection, item } = await crearInspeccionEnviada();
+    loginComo(worker);
+
+    await expect(
+      responderItem(inspection.id, item.id, RespuestaChecklist.OK),
+    ).rejects.toThrow(/ya no está en proceso/i);
+  });
+
+  it("registrarResultado rechaza sobre una inspección ya enviada", async () => {
+    const { worker, inspection } = await crearInspeccionEnviada();
+    loginComo(worker);
+
+    await expect(registrarResultado(inspection.id, false, "otro motivo")).rejects.toThrow(
+      /ya no está en proceso/i,
+    );
+  });
+
+  it("registrarKilometraje rechaza sobre una inspección ya enviada", async () => {
+    const { worker, inspection } = await crearInspeccionEnviada();
+    loginComo(worker);
+
+    await expect(
+      registrarKilometraje(inspection.id, { kilometraje: 12345 }),
+    ).rejects.toThrow(/ya no está en proceso/i);
+  });
+});

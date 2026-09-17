@@ -1,0 +1,16 @@
+<!--
+  Placeholder PWA icon (192x192). Provisional colors and shape only —
+  replace with ESS LTDA's official logo/brand identity when available.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="28" fill="#0B3B60" />
+  <circle cx="96" cy="96" r="58" fill="#2E9BD6" />
+  <path
+    d="M70 98 L88 116 L124 76"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

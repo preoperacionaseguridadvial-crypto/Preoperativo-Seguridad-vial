@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Propuesta de Infraestructura — ESS</title>
+<style>
+  @page { size: Letter; margin: 22mm 18mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1f2937;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0;
+  }
+  h1, h2, h3 { color: #0f172a; font-family: "Segoe UI", Arial, sans-serif; }
+  header.cover {
+    padding: 60px 0 30px 0;
+    border-bottom: 4px solid #1d4ed8;
+    margin-bottom: 28px;
+  }
+  header.cover .eyebrow {
+    color: #1d4ed8;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+  header.cover h1 {
+    font-size: 26px;
+    margin: 0 0 8px 0;
+  }
+  header.cover .meta {
+    color: #475569;
+    font-size: 12px;
+    margin-top: 14px;
+  }
+  header.cover .meta div { margin-bottom: 3px; }
+  section { margin-bottom: 26px; page-break-inside: avoid; }
+  h2 {
+    font-size: 15px;
+    border-left: 4px solid #1d4ed8;
+    padding-left: 10px;
+    margin-bottom: 12px;
+    margin-top: 0;
+  }
+  h3 { font-size: 13px; margin-bottom: 6px; }
+  p { margin: 6px 0; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 12px;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #1d4ed8;
+    color: #fff;
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .total-row td {
+    background: #eff6ff !important;
+    font-weight: 700;
+    border-top: 2px solid #1d4ed8;
+  }
+  .callout {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-left: 4px solid #0284c7;
+    padding: 12px 14px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 12px;
+  }
+  .callout.warn {
+    background: #fffbeb;
+    border-color: #fde68a;
+    border-left-color: #d97706;
+  }
+  .callout strong { color: #0f172a; }
+  .diagram {
+    text-align: center;
+    margin: 14px 0;
+  }
+  .source {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+  }
+  .badge {
+    display: inline-block;
+    background: #dcfce7;
+    color: #166534;
+    border-radius: 3px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+  footer {
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 10px;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="eyebrow">Propuesta técnica y económica · Infraestructura</div>
+  <h1>Plataforma de Inspección Preoperacional de Seguridad Vial</h1>
+  <div class="meta">
+    <div><strong>Cliente:</strong> ESS</div>
+    <div><strong>Fecha:</strong> 31 de agosto de 2026</div>
+    <div><strong>Alcance de este documento:</strong> Recomendación de hosting, base de datos y almacenamiento para poner la plataforma en producción</div>
+  </div>
+</header>
+
+<section>
+  <h2>1. Entendimiento de la necesidad</h2>
+  <p>ESS cuenta con una aplicación ya construida y probada que digitaliza la inspección preoperacional de vehículos, con el siguiente flujo operativo:</p>
+  <ul>
+    <li>El trabajador realiza la inspección diaria del vehículo desde la aplicación.</li>
+    <li>El supervisor revisa y aprueba o rechaza, con firma digital posterior a la decisión.</li>
+    <li>El sistema genera el formato oficial <strong>FO-SVS-23</strong> en PDF, listo para archivo o auditoría.</li>
+    <li>La dirección cuenta con un tablero ejecutivo de seguimiento, y el área administrativa gestiona usuarios y vehículos.</li>
+  </ul>
+  <p>La escala inicial de operación es de <strong>8 trabajadores</strong>, realizando <strong>una inspección diaria cada uno</strong> — aproximadamente <strong>240 inspecciones al mes</strong>. Es una carga operativa baja: la prioridad no es la capacidad de procesamiento, sino la confiabilidad de los registros (al tratarse de un documento regulatorio) y un costo mensual predecible.</p>
+</section>
+
+<section>
+  <h2>2. Arquitectura recomendada</h2>
+  <p>La aplicación ya está construida de forma independiente de un proveedor específico: la base de datos usa el estándar PostgreSQL, y el almacenamiento de archivos usa el protocolo estándar S3, compatible con múltiples proveedores. Esto permite elegir la opción más simple de administrar sin modificar una sola línea de código.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 720 210" width="100%" height="210" xmlns="http://www.w3.org/2000/svg">
+      <!-- Users -->
+      <rect x="10" y="80" width="110" height="50" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="65" y="100" text-anchor="middle" font-size="11" fill="#0f172a" font-family="Segoe UI, Arial">Trabajadores /</text>
+      <text x="65" y="114" text-anchor="middle" font-size="11" fill="#0f172a" font-family="Segoe UI, Arial">Supervisores / Admin</text>
+
+      <!-- Arrow -->
+      <line x1="120" y1="105" x2="175" y2="105" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Railway container -->
+      <rect x="180" y="20" width="530" height="170" rx="10" fill="#f8fafc" stroke="#1d4ed8" stroke-width="2" stroke-dasharray="6,4"/>
+      <text x="200" y="40" font-size="12" fill="#1d4ed8" font-weight="700" font-family="Segoe UI, Arial">Railway — una sola cuenta / una sola factura</text>
+
+      <!-- App box -->
+      <rect x="205" y="60" width="150" height="60" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="280" y="85" text-anchor="middle" font-size="11" fill="#0f172a" font-family="Segoe UI, Arial">Aplicación Next.js</text>
+      <text x="280" y="100" text-anchor="middle" font-size="10" fill="#334155" font-family="Segoe UI, Arial">(hosting + generación de PDF)</text>
+
+      <!-- DB box -->
+      <rect x="385" y="30" width="150" height="60" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+      <text x="460" y="55" text-anchor="middle" font-size="11" fill="#0f172a" font-family="Segoe UI, Arial">PostgreSQL</text>
+      <text x="460" y="70" text-anchor="middle" font-size="10" fill="#334155" font-family="Segoe UI, Arial">(base de datos administrada)</text>
+
+      <!-- Storage box -->
+      <rect x="385" y="105" width="150" height="60" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+      <text x="460" y="130" text-anchor="middle" font-size="11" fill="#0f172a" font-family="Segoe UI, Arial">Storage Bucket (S3)</text>
+      <text x="460" y="145" text-anchor="middle" font-size="10" fill="#334155" font-family="Segoe UI, Arial">(fotos y PDFs)</text>
+
+      <!-- connections -->
+      <line x1="355" y1="80" x2="385" y2="60" stroke="#64748b" stroke-width="1.5"/>
+      <line x1="355" y1="100" x2="385" y2="130" stroke="#64748b" stroke-width="1.5"/>
+
+      <!-- SSL badge -->
+      <rect x="555" y="60" width="130" height="60" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+      <text x="620" y="85" text-anchor="middle" font-size="11" fill="#0f172a" font-family="Segoe UI, Arial">SSL automático</text>
+      <text x="620" y="100" text-anchor="middle" font-size="10" fill="#334155" font-family="Segoe UI, Arial">+ backups</text>
+      <line x1="355" y1="90" x2="555" y2="90" stroke="#64748b" stroke-width="1.5" stroke-dasharray="3,3"/>
+
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+
+  <p>Los tres componentes — aplicación, base de datos y almacenamiento de archivos — quedan bajo <strong>una sola cuenta y una sola factura</strong> en Railway, incluyendo certificado SSL automático y copias de seguridad por snapshot.</p>
+</section>
+
+<section>
+  <h2>3. Por qué Railway frente a otras alternativas evaluadas</h2>
+  <table>
+    <tr><th>Opción</th><th>Evaluación</th></tr>
+    <tr>
+      <td><strong>VPS autoadministrado</strong> (ej. Hostinger VPS)</td>
+      <td>Costo base más bajo, pero el cliente pasa a ser responsable de instalar y mantener PostgreSQL, aplicar parches de seguridad y gestionar backups manualmente. Riesgo alto para un sistema que produce un documento regulatorio.</td>
+    </tr>
+    <tr>
+      <td><strong>Multi-proveedor</strong> (hosting + base de datos + almacenamiento por separado)</td>
+      <td>Más flexible para escalas grandes, pero implica varias facturas y paneles de administración distintos — complejidad innecesaria para 8 usuarios.</td>
+    </tr>
+    <tr>
+      <td><strong>Railway</strong> <span class="badge">RECOMENDADO</span></td>
+      <td>Plataforma administrada: base de datos y almacenamiento incluidos en la misma cuenta, SSL automático, backups incluidos. Costo previsible y acorde al volumen actual de operación.</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>4. Cotización formal</h2>
+  <table>
+    <tr><th>Concepto</th><th>Detalle</th><th>Costo mensual</th></tr>
+    <tr>
+      <td>Plan Railway Pro</td>
+      <td>Incluye: hosting de la aplicación, base de datos PostgreSQL administrada, almacenamiento de archivos (S3-compatible), certificado SSL automático y copias de seguridad</td>
+      <td>USD $20,00</td>
+    </tr>
+    <tr>
+      <td>Dominio propio</td>
+      <td>Ya adquirido por el cliente — fuera del alcance de esta cotización</td>
+      <td>—</td>
+    </tr>
+    <tr class="total-row">
+      <td colspan="2">Total mensual recurrente</td>
+      <td>USD $20,00</td>
+    </tr>
+  </table>
+  <p class="source">Fuente de precios: railway.com/pricing (consultado el 31/08/2026). El valor en pesos colombianos dependerá de la TRM del día de facturación.</p>
+</section>
+
+<section>
+  <h2>5. Sobre la garantía del costo de $20/mes</h2>
+  <div class="callout">
+    <strong>¿Cómo funciona el cobro?</strong> El plan Pro de Railway funciona como un piso: los USD $20 mensuales incluyen USD $20 de crédito de consumo real (cómputo de la aplicación + base de datos + almacenamiento). Si el consumo se mantiene dentro de ese crédito, el cliente paga exactamente $20/mes — nada adicional.
+  </div>
+  <p>Con el volumen actual (8 trabajadores, ~240 inspecciones al mes), la aplicación está inactiva la mayor parte del tiempo, la base de datos es pequeña y el volumen de fotos/PDF generado es bajo. Con ese perfil de uso, es razonable esperar que el consumo real quede muy por debajo del crédito incluido, y que la factura se mantenga en $20/mes.</p>
+  <div class="callout warn">
+    <strong>Salvedad honesta:</strong> este es un modelo de pago por uso, no una tarifa plana garantizada contractualmente por Railway. La estimación anterior está basada en el volumen de operación descrito por el cliente; se recomienda revisar la primera factura real tras el lanzamiento para confirmarla con datos de producción.
+  </div>
+</section>
+
+<footer>
+  <div>Propuesta de infraestructura — ESS</div>
+  <div>Página confidencial · uso interno para evaluación del cliente</div>
+</footer>
+
+</body>
+</html>
