@@ -20,8 +20,14 @@ export function getChecklistCatalog() {
 }
 
 /** Estado de un ítem para una inspección puntual: la respuesta ya dada, o
- * `"PENDIENTE"` si todavía no tiene `InspectionItemResponse`. */
-export type EstadoChecklistItem = RespuestaChecklist | "PENDIENTE";
+ * `"PENDIENTE"` si todavía no tiene `InspectionItemResponse`.
+ *
+ * `BUENO`/`BAJO`/`MALO` (agregados al enum `RespuestaChecklist` en la fase
+ * soporte-moto-carro, Slice 1) quedan excluidos acá a propósito: ningún
+ * `ChecklistItem` usa `tipoRespuesta = TRIESTADO` todavía (llega en el
+ * Slice 2, que también actualiza este archivo — ver design del cambio), así
+ * que en este slice esos valores nunca ocurren en la práctica. */
+export type EstadoChecklistItem = Exclude<RespuestaChecklist, "BUENO" | "BAJO" | "MALO"> | "PENDIENTE";
 
 /**
  * Catálogo completo (reusa `getChecklistCatalog`) más el estado de cada

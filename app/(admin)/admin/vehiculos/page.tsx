@@ -44,6 +44,7 @@ export default async function AdminVehiculosPage() {
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th className="py-2 pr-2 font-medium">Placa</th>
                   <th className="py-2 pr-2 font-medium">Tipo</th>
+                  <th className="py-2 pr-2 font-medium">Tipo de vehículo</th>
                   <th className="py-2 pr-2 font-medium">Vencimiento tecnicomecánica</th>
                   <th className="py-2 pr-2 font-medium">Activo</th>
                   <th className="py-2 pr-2 font-medium">Acciones</th>
@@ -54,6 +55,7 @@ export default async function AdminVehiculosPage() {
                   <tr key={vehiculo.id} className="border-b border-gray-100 last:border-0">
                     <td className="py-2 pr-2 font-medium text-[#0B3B60]">{vehiculo.placa}</td>
                     <td className="py-2 pr-2">{vehiculo.tipo}</td>
+                    <td className="py-2 pr-2">{vehiculo.tipoVehiculo ?? "—"}</td>
                     <td className="py-2 pr-2">
                       {vehiculo.fechaVencimientoTecnicomecanica
                         ? new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(

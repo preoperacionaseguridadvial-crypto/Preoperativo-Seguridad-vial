@@ -3,9 +3,10 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getUsuarioPorId } from "@/lib/admin/queries";
 import { actualizarUsuario, restablecerPassword } from "@/lib/admin/user-actions";
-import { Role } from "@/generated/prisma/client";
+import { Role, TipoVehiculo } from "@/generated/prisma/client";
 
 const ROLES: Role[] = [Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR, Role.SST, Role.ADMINISTRADOR];
+const TIPOS_VEHICULO: TipoVehiculo[] = [TipoVehiculo.MOTO, TipoVehiculo.CARRO];
 
 function toDateInputValue(date: Date | null): string {
   if (!date) return "";
@@ -47,6 +48,8 @@ export default async function EditarUsuarioPage({
         cedula: formData.get("cedula")?.toString(),
         telefono: formData.get("telefono")?.toString(),
         cargo: formData.get("cargo")?.toString(),
+        puestoAsignado: formData.get("puestoAsignado")?.toString(),
+        tipoVehiculo: (formData.get("tipoVehiculo")?.toString() || null) as TipoVehiculo | null,
         fechaVencimientoPase: fechaVencimientoPaseRaw ? new Date(fechaVencimientoPaseRaw) : null,
         conductorActivo: formData.get("conductorActivo") === "on",
       });
@@ -139,6 +142,44 @@ export default async function EditarUsuarioPage({
             name="cedula"
             type="text"
             defaultValue={usuario.cedula ?? ""}
+            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+          />
+          {!usuario.cedula && usuario.role === Role.TRABAJADOR && (
+            <p className="mt-1 text-xs font-medium text-amber-600">Pendiente de asignación.</p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="tipoVehiculo" className="mb-1 block text-sm font-medium text-gray-700">
+            Tipo de vehículo
+          </label>
+          <select
+            id="tipoVehiculo"
+            name="tipoVehiculo"
+            defaultValue={usuario.tipoVehiculo ?? ""}
+            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+          >
+            <option value="">Sin asignar</option>
+            {TIPOS_VEHICULO.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {tipo}
+              </option>
+            ))}
+          </select>
+          {!usuario.tipoVehiculo && usuario.role === Role.TRABAJADOR && (
+            <p className="mt-1 text-xs font-medium text-amber-600">Pendiente de asignación.</p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="puestoAsignado" className="mb-1 block text-sm font-medium text-gray-700">
+            Puesto asignado
+          </label>
+          <input
+            id="puestoAsignado"
+            name="puestoAsignado"
+            type="text"
+            defaultValue={usuario.puestoAsignado ?? ""}
             className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
           />
         </div>

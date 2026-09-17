@@ -49,6 +49,43 @@ enum InspectionStatus {
 enum RespuestaChecklist {
   OK
   FALLA
+  // Fase soporte-moto-carro (Slice 2): valores del estado triestado para
+  // ítems de fluidos (tipoRespuesta = TRIESTADO). Agregados de forma
+  // aditiva acá porque `ADD VALUE` de Postgres no reescribe nada; quedan
+  // sin uso en este slice — el gate `tipoRespuesta` que los habilita llega
+  // en el slice siguiente (ChecklistItem.tipoRespuesta).
+  BUENO
+  BAJO
+  MALO
+}
+
+// Fase soporte-moto-carro: tipo de vehículo que decide qué catálogo de
+// checklist se abre (Vehicle.tipoVehiculo) y qué vehículos puede elegir un
+// trabajador (User.tipoVehiculo). Ver ADR A1/D3 en el design del cambio: no
+// hay FK trabajador→vehículo, un conductor nunca queda atado a una unidad
+// fija.
+enum TipoVehiculo {
+  MOTO
+  CARRO
+}
+
+// Fase soporte-moto-carro (Slice 2): discrimina si un ChecklistItem acepta
+// la respuesta binaria de siempre (OK/FALLA) o el triestado de fluidos
+// (BUENO/BAJO/MALO). Creado en este slice (junto con el resto de los enums
+// nuevos) pero sin ningún campo que lo use todavía — `ChecklistItem.tipoRespuesta`
+// llega en el slice siguiente; ver nota de RespuestaChecklist arriba.
+enum TipoRespuestaItem {
+  BINARIO
+  TRIESTADO
+}
+
+// Fase soporte-moto-carro (Slice 3): tipo de foto diaria obligatoria por
+// inspección (lateral y placa del vehículo), independiente del resultado
+// del checklist. Igual que TipoRespuestaItem: el enum se crea acá, el
+// modelo `FotoInspeccion` que lo consume llega en el slice siguiente.
+enum TipoFotoInspeccion {
+  LATERAL
+  PLACA
 }
 
 // Fase C: tipo de novedad, alineado a las convenciones de dibujo del
@@ -100,6 +137,22 @@ model User {
   telefono String?
   cargo    String?
 
+  // Fase soporte-moto-carro: tipo de vehículo que el trabajador está
+  // habilitado a operar (MOTO/CARRO). Filtra qué vehículos ve en el
+  // arranque de inspección (getVehiculosActivos) — NO es una asignación a
+  // un vehículo puntual, no hay FK a Vehicle (confirmado con el dueño de
+  // producto: un conductor nunca queda atado a una unidad fija). Nullable:
+  // usuarios legacy (creados antes de este cambio) se muestran como
+  // "pendiente de asignación" en el panel de Administrador en vez de
+  // bloquearse — se completa desde ahí, igual que `cedula`/`cargo`.
+  tipoVehiculo TipoVehiculo?
+
+  // Puesto asignado (dato administrativo, distinto de `cargo`): pedido
+  // explícito del dueño de producto para el panel de Administrador. Mismo
+  // motivo de nullability que el resto de los campos administrativos de
+  // este modelo.
+  puestoAsignado String?
+
   // Datos del conductor (formato oficial FO-SVS-23): el conductor siempre es
   // un usuario del sistema (rol TRABAJADOR, confirmado por el dueño de
   // producto), por eso viven acá y no en una entidad nueva. Ninguno de los
@@ -129,6 +182,33 @@ model Vehicle {
   // Vencimiento de la revisión tecnicomecánica (formato oficial FO-SVS-23,
   // encabezado del formulario).
   fechaVencimientoTecnicomecanica DateTime?
+
+  // Fase soporte-moto-carro: tipo de vehículo (MOTO/CARRO), decide qué
+  // catálogo de checklist se abre (getChecklistCatalog). Backfill a MOTO
+  // para todos los vehículos existentes en la misma migración que agrega la
+  // columna (el sistema fue moto-only hasta este cambio) — ver
+  // prisma/migrations/*_tipo_vehiculo_hoja_de_vida/migration.sql. Nullable a
+  // nivel de schema por la misma regla D4 que el resto de los campos
+  // nuevos (requeridos se validan en la capa de server actions, nunca con
+  // NOT NULL), aunque en la práctica todo vehículo queda con valor tras el
+  // backfill + la validación de `crearVehiculo`.
+  tipoVehiculo TipoVehiculo?
+
+  // Hoja de vida del vehículo (capturada por SST/Administrador en el alta):
+  // foto (S3/MinIO, mismo patrón que Photo/Firma — solo se guarda el
+  // s3Key, nunca una URL pública permanente) + datos de identificación +
+  // vencimientos de documentos. Todo nullable a nivel de schema (D4);
+  // `crearVehiculo` exige photo + estos campos, `actualizarVehiculo` los
+  // deja editables sin volver a exigir la foto.
+  fotoS3Key String?
+  marca     String?
+  modelo    String?
+  color     String?
+  numeroMotor  String?
+  numeroChasis String?
+
+  fechaVencimientoSoat             DateTime?
+  fechaVencimientoTarjetaTransito  DateTime?
 
   inspections Inspection[]
 }

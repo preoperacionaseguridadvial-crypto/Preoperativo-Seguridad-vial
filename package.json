@@ -9,6 +9,7 @@
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:test": "node -e \"require('child_process').execSync('prisma migrate deploy',{stdio:'inherit',env:{...process.env,DATABASE_URL:'postgresql://preop:preop@localhost:5433/preoperacional_test'}})\"",
     "prisma:seed": "prisma db seed",
     "test": "vitest run"
   },

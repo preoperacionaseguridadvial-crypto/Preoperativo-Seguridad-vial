@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { crearUsuario } from "@/lib/admin/user-actions";
-import { Role } from "@/generated/prisma/client";
+import { Role, TipoVehiculo } from "@/generated/prisma/client";
 
 const ROLES: Role[] = [Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR, Role.SST, Role.ADMINISTRADOR];
+const TIPOS_VEHICULO: TipoVehiculo[] = [TipoVehiculo.MOTO, TipoVehiculo.CARRO];
 
 export default async function NuevoUsuarioPage({
   searchParams,
@@ -30,6 +31,10 @@ export default async function NuevoUsuarioPage({
         cedula: formData.get("cedula")?.toString(),
         telefono: formData.get("telefono")?.toString(),
         cargo: formData.get("cargo")?.toString(),
+        puestoAsignado: formData.get("puestoAsignado")?.toString(),
+        tipoVehiculo: (formData.get("tipoVehiculo")?.toString() || undefined) as
+          | TipoVehiculo
+          | undefined,
         fechaVencimientoPase: fechaVencimientoPaseRaw ? new Date(fechaVencimientoPaseRaw) : undefined,
         conductorActivo: formData.get("conductorActivo") === "on",
       });
@@ -131,11 +136,44 @@ export default async function NuevoUsuarioPage({
 
         <div>
           <label htmlFor="cedula" className="mb-1 block text-sm font-medium text-gray-700">
-            Cédula (opcional)
+            Cédula
           </label>
           <input
             id="cedula"
             name="cedula"
+            type="text"
+            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+          />
+          <p className="mt-1 text-xs text-gray-500">Obligatoria si el rol es Trabajador.</p>
+        </div>
+
+        <div>
+          <label htmlFor="tipoVehiculo" className="mb-1 block text-sm font-medium text-gray-700">
+            Tipo de vehículo
+          </label>
+          <select
+            id="tipoVehiculo"
+            name="tipoVehiculo"
+            defaultValue=""
+            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+          >
+            <option value="">Sin asignar</option>
+            {TIPOS_VEHICULO.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {tipo}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">Obligatorio si el rol es Trabajador.</p>
+        </div>
+
+        <div>
+          <label htmlFor="puestoAsignado" className="mb-1 block text-sm font-medium text-gray-700">
+            Puesto asignado (opcional)
+          </label>
+          <input
+            id="puestoAsignado"
+            name="puestoAsignado"
             type="text"
             className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
           />
