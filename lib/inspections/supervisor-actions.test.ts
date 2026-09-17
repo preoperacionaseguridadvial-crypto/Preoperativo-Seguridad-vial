@@ -8,13 +8,21 @@ vi.mock("@/lib/auth/config", () => ({
 import { prisma } from "@/lib/prisma";
 import { Role, InspectionStatus, TipoFirma } from "@/generated/prisma/client";
 import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervisor-actions";
+import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 
 function loginComo(user: { id: string; role: Role }) {
   mockAuth.mockResolvedValue({ user: { id: user.id, role: user.role } });
 }
 
-async function crearInspeccion(status: InspectionStatus) {
+async function crearInspeccion(
+  status: InspectionStatus,
+  overrides: Partial<{
+    tomaMedicamentos: boolean | null;
+    condicionesAptas: boolean | null;
+    consumioAlcohol: boolean | null;
+  }> = {},
+) {
   const worker = await crearUsuario(Role.TRABAJADOR);
   const vehicle = await crearVehiculo();
   return prisma.inspection.create({
@@ -25,6 +33,9 @@ async function crearInspeccion(status: InspectionStatus) {
       status,
       puedeOperar: status !== InspectionStatus.NO_APTA_PARA_OPERAR,
       completedAt: status === InspectionStatus.EN_PROCESO ? null : new Date(),
+      tomaMedicamentos: overrides.tomaMedicamentos ?? null,
+      condicionesAptas: overrides.condicionesAptas ?? null,
+      consumioAlcohol: overrides.consumioAlcohol ?? null,
     },
   });
 }
@@ -141,5 +152,47 @@ describe("rechazarInspeccion", () => {
     await expect(rechazarInspeccion(inspection.id, "Otro motivo")).rejects.toThrow(
       /no está en un estado que admita revisión/i,
     );
+  });
+});
+
+// Slice 3 (spec driver-state-declaration, D8/A6): una declaración de estado
+// del conductor "preocupante" surge como advertencia derivada para el
+// Supervisor, pero NUNCA bloquea ni auto-transiciona el estado de la
+// inspección — el Supervisor sigue siendo el único que decide
+// aprobar/rechazar (`aprobarInspeccion`/`rechazarInspeccion` no miran estos
+// campos en absoluto).
+describe("declaración de estado del conductor — advertencia derivada, nunca auto-bloqueo", () => {
+  it("requiereAtencionEstadoConductor detecta la inspección como preocupante", async () => {
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      tomaMedicamentos: true,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+
+    expect(requiereAtencionEstadoConductor(inspection)).toBe(true);
+  });
+
+  it("aprobarInspeccion aprueba igual una inspección con declaración preocupante (el Supervisor decide)", async () => {
+    const supervisor = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      tomaMedicamentos: true,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+    loginComo(supervisor);
+
+    const resultado = await aprobarInspeccion(inspection.id);
+
+    expect(resultado.status).toBe(InspectionStatus.APROBADA);
+  });
+
+  it("una declaración sin respuestas preocupantes no requiere atención", async () => {
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      tomaMedicamentos: false,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+
+    expect(requiereAtencionEstadoConductor(inspection)).toBe(false);
   });
 });

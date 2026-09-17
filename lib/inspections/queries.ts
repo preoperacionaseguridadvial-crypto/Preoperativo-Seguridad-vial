@@ -1,8 +1,23 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
+import {
+  InspectionStatus,
+  RespuestaChecklist,
+  TipoFirma,
+  TipoVehiculo,
+  TipoFotoInspeccion,
+} from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
+
+// Fase soporte-moto-carro (Slice 3, A7): las 2 fotos diarias obligatorias,
+// independiente del resultado del checklist. Un único lugar de verdad de
+// "cuáles son" para no repetir el arreglo en `getFotosInspeccion` y en el
+// chequeo de completitud de `getNextStepPath`.
+export const FOTOS_DIARIAS_REQUERIDAS: TipoFotoInspeccion[] = [
+  TipoFotoInspeccion.LATERAL,
+  TipoFotoInspeccion.PLACA,
+];
 
 /**
  * Catálogo completo del checklist para un tipo de vehículo, ordenado por
@@ -260,6 +275,33 @@ export async function getFirmasInspeccion(inspectionId: string) {
 }
 
 /**
+ * Las 2 fotos diarias obligatorias de una inspección (A7 del design), cada
+ * una en su slot por tipo — `null` si todavía no se subió. Usada tanto por
+ * la pantalla de fotos (`/inspecciones/[id]/fotos`) para saber cuál falta,
+ * como potencialmente por el Supervisor más adelante.
+ */
+export async function getFotosInspeccion(inspectionId: string) {
+  const fotos = await prisma.fotoInspeccion.findMany({ where: { inspectionId } });
+  return {
+    lateral: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.LATERAL) ?? null,
+    placa: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.PLACA) ?? null,
+  };
+}
+
+/**
+ * `true` si ya existen las 2 fotos diarias obligatorias (LATERAL y PLACA).
+ * Interna: usada por `getNextStepPath` para decidir si toca mandar a
+ * `/fotos`; `enviarInspeccion` (lib/inspections/actions.ts) hace su propio
+ * chequeo de completitud, nombrando qué falta.
+ */
+async function tieneFotosDiariasCompletas(inspectionId: string): Promise<boolean> {
+  const count = await prisma.fotoInspeccion.count({
+    where: { inspectionId, tipo: { in: FOTOS_DIARIAS_REQUERIDAS } },
+  });
+  return count >= FOTOS_DIARIAS_REQUERIDAS.length;
+}
+
+/**
  * Defensa en profundidad a nivel de dato: el proxy (proxy.ts) solo filtra
  * por rol a nivel de ruta, nunca sabe de quién es cada inspección. Todas las
  * páginas del flujo del trabajador deben validar acá que la inspección le
@@ -306,8 +348,24 @@ export async function getNextStepPath(inspectionId: string): Promise<string> {
       ? `${base}/checklist`
       : `${base}/checklist/${nextItem.id}`;
   }
+
+  // Fase soporte-moto-carro (Slice 3): 2 paradas nuevas en el flujo guiado,
+  // después del checklist y antes de confirmar — fotos diarias (A7,
+  // independiente del resultado del checklist) y declaración de estado del
+  // conductor (A6, va justo antes de confirmar/firmar, mismo espíritu que
+  // "resultado": declaración personal del conductor).
+  if (!(await tieneFotosDiariasCompletas(inspectionId))) {
+    return `${base}/fotos`;
+  }
   if (inspection.puedeOperar === null) {
     return `${base}/resultado`;
+  }
+  const declaracionCompleta =
+    inspection.tomaMedicamentos !== null &&
+    inspection.condicionesAptas !== null &&
+    inspection.consumioAlcohol !== null;
+  if (!declaracionCompleta) {
+    return `${base}/estado-conductor`;
   }
   return `${base}/confirmar`;
 }

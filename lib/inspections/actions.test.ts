@@ -19,11 +19,13 @@ import {
   TipoFirma,
   TipoVehiculo,
   TipoRespuestaItem,
+  TipoFotoInspeccion,
 } from "@/generated/prisma/client";
 import {
   cancelarInspeccion,
   enviarInspeccion,
   iniciarInspeccion,
+  registrarEstadoConductor,
   registrarKilometraje,
   registrarResultado,
   responderItem,
@@ -59,6 +61,29 @@ async function responderTodoElChecklist(inspectionId: string, itemId: string) {
 async function firmarComoConductor(inspectionId: string, userId: string) {
   await prisma.firma.create({
     data: { inspectionId, userId, tipo: TipoFirma.CONDUCTOR, s3Key: "firmas/test.png" },
+  });
+}
+
+// Slice 3: `enviarInspeccion` ahora también exige las 2 fotos diarias y la
+// declaración de estado del conductor completa. Helper equivalente a
+// `firmarComoConductor` — inserta directo en base (mismo criterio: no pasa
+// por el server action `subirFotoInspeccion`, que requiere un `File` real y
+// S3, igual que `firmarComoConductor` no pasa por `guardarFirmaConductor`).
+async function completarFotosYDeclaracion(inspectionId: string) {
+  await prisma.fotoInspeccion.create({
+    data: { inspectionId, tipo: TipoFotoInspeccion.LATERAL, s3Key: "fotos-inspeccion/test-lateral.jpg" },
+  });
+  await prisma.fotoInspeccion.create({
+    data: { inspectionId, tipo: TipoFotoInspeccion.PLACA, s3Key: "fotos-inspeccion/test-placa.jpg" },
+  });
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      tomaMedicamentos: false,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+      declaracionEstadoAt: new Date(),
+    },
   });
 }
 
@@ -101,7 +126,7 @@ describe("enviarInspeccion", () => {
     await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan ítems del checklist/i);
   });
 
-  it("acepta el envío cuando checklist, resultado y firma están completos, y fija completedAt server-side", async () => {
+  it("acepta el envío cuando checklist, resultado, firma, fotos y declaración están completos, y fija completedAt server-side", async () => {
     const { worker, inspection } = await crearInspeccionEnProceso();
     const item = await prisma.checklistItem.findFirstOrThrow();
     loginComo(worker);
@@ -109,6 +134,7 @@ describe("enviarInspeccion", () => {
     await responderTodoElChecklist(inspection.id, item.id);
     await registrarResultado(inspection.id, true);
     await firmarComoConductor(inspection.id, worker.id);
+    await completarFotosYDeclaracion(inspection.id);
 
     const antes = Date.now();
     const resultado = await enviarInspeccion(inspection.id);
@@ -133,9 +159,146 @@ describe("enviarInspeccion", () => {
     await responderTodoElChecklist(inspection.id, item.id);
     await registrarResultado(inspection.id, false, "Frenos en mal estado");
     await firmarComoConductor(inspection.id, worker.id);
+    await completarFotosYDeclaracion(inspection.id);
 
     const resultado = await enviarInspeccion(inspection.id);
     expect(resultado.status).toBe(InspectionStatus.NO_APTA_PARA_OPERAR);
+  });
+});
+
+// Slice 3 (spec: daily-vehicle-photos): las 2 fotos diarias (LATERAL/PLACA)
+// son obligatorias antes de enviar, independiente del resultado del
+// checklist.
+describe("enviarInspeccion — fotos diarias obligatorias", () => {
+  async function prepararHastaFirma() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    await responderTodoElChecklist(inspection.id, item.id);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+    return { worker, inspection };
+  }
+
+  it("rechaza el envío sin ninguna de las 2 fotos diarias", async () => {
+    const { inspection } = await prepararHastaFirma();
+    await registrarEstadoConductor(inspection.id, {
+      tomaMedicamentos: false,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos/i);
+  });
+
+  it("rechaza el envío con solo una de las 2 fotos diarias", async () => {
+    const { inspection } = await prepararHastaFirma();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "solo-lateral.jpg" },
+    });
+    await registrarEstadoConductor(inspection.id, {
+      tomaMedicamentos: false,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos/i);
+  });
+
+  it("acepta el envío con las 2 fotos diarias presentes", async () => {
+    const { inspection } = await prepararHastaFirma();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+    await registrarEstadoConductor(inspection.id, {
+      tomaMedicamentos: false,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+
+    await expect(enviarInspeccion(inspection.id)).resolves.not.toThrow();
+  });
+});
+
+// Slice 3 (spec: driver-state-declaration): las 3 respuestas son
+// obligatorias antes de enviar, pero una respuesta "preocupante" NUNCA
+// bloquea el envío — solo se refleja como advertencia derivada para el
+// Supervisor (D8, A6). Ver lib/inspections/estado-conductor.ts.
+describe("enviarInspeccion — declaración de estado del conductor obligatoria, nunca bloqueante por preocupante", () => {
+  async function prepararHastaFotos() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    await responderTodoElChecklist(inspection.id, item.id);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+    return { worker, inspection };
+  }
+
+  it("rechaza el envío si falta la declaración de estado del conductor", async () => {
+    const { inspection } = await prepararHastaFotos();
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(
+      /declaración de estado del conductor/i,
+    );
+  });
+
+  it("acepta el envío aunque la declaración tenga una respuesta preocupante (no bloquea)", async () => {
+    const { inspection } = await prepararHastaFotos();
+    await registrarEstadoConductor(inspection.id, {
+      tomaMedicamentos: true,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+
+    const resultado = await enviarInspeccion(inspection.id);
+    expect(resultado.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
+  });
+});
+
+describe("registrarEstadoConductor", () => {
+  it("guarda las 3 respuestas y fija declaracionEstadoAt server-side", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+
+    const antes = Date.now();
+    const resultado = await registrarEstadoConductor(inspection.id, {
+      tomaMedicamentos: false,
+      condicionesAptas: true,
+      consumioAlcohol: false,
+    });
+    const despues = Date.now();
+
+    expect(resultado.tomaMedicamentos).toBe(false);
+    expect(resultado.condicionesAptas).toBe(true);
+    expect(resultado.consumioAlcohol).toBe(false);
+    expect(resultado.declaracionEstadoAt).not.toBeNull();
+    const declaracionMs = resultado.declaracionEstadoAt!.getTime();
+    expect(declaracionMs).toBeGreaterThanOrEqual(antes);
+    expect(declaracionMs).toBeLessThanOrEqual(despues);
+  });
+
+  it("rechaza sobre una inspección de otro trabajador", async () => {
+    const { inspection } = await crearInspeccionEnProceso();
+    const otro = await crearUsuario(Role.TRABAJADOR);
+    loginComo(otro);
+
+    await expect(
+      registrarEstadoConductor(inspection.id, {
+        tomaMedicamentos: false,
+        condicionesAptas: true,
+        consumioAlcohol: false,
+      }),
+    ).rejects.toThrow(/no pertenece al usuario autenticado/i);
   });
 });
 
@@ -176,6 +339,7 @@ describe("cancelarInspeccion", () => {
     await responderTodoElChecklist(inspection.id, item.id);
     await registrarResultado(inspection.id, true);
     await firmarComoConductor(inspection.id, worker.id);
+    await completarFotosYDeclaracion(inspection.id);
     await enviarInspeccion(inspection.id);
 
     await expect(cancelarInspeccion(inspection.id)).rejects.toThrow(
@@ -192,6 +356,7 @@ describe("inmutabilidad: una inspección ENVIADA no puede volver a editarse con 
     await responderTodoElChecklist(inspection.id, item.id);
     await registrarResultado(inspection.id, true);
     await firmarComoConductor(inspection.id, worker.id);
+    await completarFotosYDeclaracion(inspection.id);
     await enviarInspeccion(inspection.id);
     return { worker, inspection, item };
   }
@@ -225,6 +390,19 @@ describe("inmutabilidad: una inspección ENVIADA no puede volver a editarse con 
 
     await expect(
       registrarKilometraje(inspection.id, { kilometraje: 12345 }),
+    ).rejects.toThrow(/ya no está en proceso/i);
+  });
+
+  it("registrarEstadoConductor rechaza sobre una inspección ya enviada", async () => {
+    const { worker, inspection } = await crearInspeccionEnviada();
+    loginComo(worker);
+
+    await expect(
+      registrarEstadoConductor(inspection.id, {
+        tomaMedicamentos: false,
+        condicionesAptas: true,
+        consumioAlcohol: false,
+      }),
     ).rejects.toThrow(/ya no está en proceso/i);
   });
 });

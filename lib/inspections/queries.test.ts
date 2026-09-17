@@ -1,12 +1,20 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { Role, TipoVehiculo } from "@/generated/prisma/client";
+import { Role, TipoVehiculo, TipoFotoInspeccion } from "@/generated/prisma/client";
 import {
   getChecklistCatalog,
   getVehiculosActivos,
   getAdjacentChecklistItemIds,
+  getFotosInspeccion,
+  getNextStepPath,
 } from "@/lib/inspections/queries";
-import { crearChecklistItem, crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
+import {
+  crearCatalogoMinimo,
+  crearChecklistItem,
+  crearUsuario,
+  crearVehiculo,
+  limpiarBaseDeTest,
+} from "@/test/helpers/db";
 
 beforeEach(async () => {
   await limpiarBaseDeTest();
@@ -119,5 +127,116 @@ describe("getAdjacentChecklistItemIds", () => {
 
     const { nextItemId } = await getAdjacentChecklistItemIds(inspection.id, item1.id);
     expect(nextItemId).toBe(soloMoto.id);
+  });
+});
+
+async function crearInspeccionEnProceso() {
+  const worker = await crearUsuario(Role.TRABAJADOR);
+  const vehicle = await crearVehiculo();
+  return prisma.inspection.create({
+    data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+  });
+}
+
+// A7 del design: `FotoInspeccion` mirrorea `Firma` — una por inspección y
+// por tipo (LATERAL/PLACA).
+describe("getFotosInspeccion", () => {
+  it("devuelve null para las fotos que todavía no se subieron", async () => {
+    const inspection = await crearInspeccionEnProceso();
+
+    const fotos = await getFotosInspeccion(inspection.id);
+
+    expect(fotos.lateral).toBeNull();
+    expect(fotos.placa).toBeNull();
+  });
+
+  it("devuelve cada foto en su slot correspondiente por tipo", async () => {
+    const inspection = await crearInspeccionEnProceso();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "x-lateral.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "x-placa.jpg" },
+    });
+
+    const fotos = await getFotosInspeccion(inspection.id);
+
+    expect(fotos.lateral?.s3Key).toBe("x-lateral.jpg");
+    expect(fotos.placa?.s3Key).toBe("x-placa.jpg");
+  });
+});
+
+// Slice 3: `getNextStepPath` gana dos paradas nuevas en el flujo guiado
+// (fotos diarias tras terminar el checklist, declaración de estado del
+// conductor tras el resultado) — ver Data Flow del design.
+describe("getNextStepPath — nuevas paradas de Slice 3", () => {
+  async function crearInspeccionConChecklistCompleto() {
+    const { item } = await crearCatalogoMinimo();
+    const inspection = await crearInspeccionEnProceso();
+    await prisma.inspection.update({ where: { id: inspection.id }, data: { kilometraje: 100 } });
+    await prisma.inspectionItemResponse.create({
+      data: { inspectionId: inspection.id, checklistItemId: item.id, valor: "OK" },
+    });
+    return inspection;
+  }
+
+  it("manda a /fotos cuando el checklist está completo pero faltan las fotos diarias", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+
+    const path = await getNextStepPath(inspection.id);
+
+    expect(path).toBe(`/inspecciones/${inspection.id}/fotos`);
+  });
+
+  it("manda a /resultado cuando ya están las 2 fotos", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+
+    const path = await getNextStepPath(inspection.id);
+
+    expect(path).toBe(`/inspecciones/${inspection.id}/resultado`);
+  });
+
+  it("manda a /estado-conductor cuando ya hay resultado pero falta la declaración del conductor", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+    await prisma.inspection.update({ where: { id: inspection.id }, data: { puedeOperar: true } });
+
+    const path = await getNextStepPath(inspection.id);
+
+    expect(path).toBe(`/inspecciones/${inspection.id}/estado-conductor`);
+  });
+
+  it("manda a /confirmar cuando checklist, fotos, resultado y declaración del conductor están completos", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+    await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: {
+        puedeOperar: true,
+        tomaMedicamentos: false,
+        condicionesAptas: true,
+        consumioAlcohol: false,
+      },
+    });
+
+    const path = await getNextStepPath(inspection.id);
+
+    expect(path).toBe(`/inspecciones/${inspection.id}/confirmar`);
   });
 });

@@ -7,7 +7,11 @@ import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
-import { getChecklistCatalog, getTipoVehiculoDelTrabajador } from "@/lib/inspections/queries";
+import {
+  getChecklistCatalog,
+  getTipoVehiculoDelTrabajador,
+  FOTOS_DIARIAS_REQUERIDAS,
+} from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { esNovedad, valoresPermitidos } from "@/lib/inspections/respuesta";
 
@@ -377,6 +381,35 @@ export async function registrarResultado(
 }
 
 /**
+ * Registra la declaración de estado del conductor (Fase soporte-moto-carro,
+ * Slice 3, A6): 3 respuestas sí/no, una sola vez por inspección (se puede
+ * volver a llamar mientras siga EN_PROCESO para corregir una respuesta, igual
+ * que el resto de las mutaciones de este archivo — no hay motivo para
+ * tratarla distinto). `declaracionEstadoAt` se fija con la hora del servidor,
+ * nunca recibida del cliente. Ninguna combinación de respuestas bloquea nada
+ * acá (D8, confirmado): una respuesta "preocupante" solo se refleja como
+ * advertencia derivada para el Supervisor, ver
+ * lib/inspections/estado-conductor.ts.
+ */
+export async function registrarEstadoConductor(
+  inspectionId: string,
+  data: { tomaMedicamentos: boolean; condicionesAptas: boolean; consumioAlcohol: boolean },
+) {
+  const session = await requireRole([Role.TRABAJADOR]);
+  await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+
+  return prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      tomaMedicamentos: data.tomaMedicamentos,
+      condicionesAptas: data.condicionesAptas,
+      consumioAlcohol: data.consumioAlcohol,
+      declaracionEstadoAt: new Date(),
+    },
+  });
+}
+
+/**
  * Envía la inspección: valida que todos los ChecklistItem tengan respuesta,
  * que se haya registrado el resultado (`puedeOperar`) y que exista la firma
  * manuscrita del conductor (Fase D — validación real de backend, no solo de
@@ -432,6 +465,35 @@ export async function enviarInspeccion(inspectionId: string) {
   if (itemsFaltantes.length > 0) {
     const nombresFaltantes = itemsFaltantes.map((item) => item.nombre).join(", ");
     throw new Error(`Faltan ítems del checklist por responder: ${nombresFaltantes}.`);
+  }
+
+  // Fase soporte-moto-carro (Slice 3, spec daily-vehicle-photos): las 2
+  // fotos diarias (LATERAL/PLACA) son obligatorias, independiente del
+  // resultado del checklist. Mismo criterio de diferencia de conjuntos que
+  // arriba (por tipo, no por cantidad) — con solo 2 tipos posibles alcanza
+  // con nombrarlos directo en el mensaje de error.
+  const fotos = await prisma.fotoInspeccion.findMany({
+    where: { inspectionId, tipo: { in: FOTOS_DIARIAS_REQUERIDAS } },
+    select: { tipo: true },
+  });
+  const tiposConFoto = new Set(fotos.map((foto) => foto.tipo));
+  const fotosFaltantes = FOTOS_DIARIAS_REQUERIDAS.filter((tipo) => !tiposConFoto.has(tipo));
+  if (fotosFaltantes.length > 0) {
+    throw new Error(`Faltan fotos obligatorias: ${fotosFaltantes.join(", ")}.`);
+  }
+
+  // Fase soporte-moto-carro (Slice 3, spec driver-state-declaration): las 3
+  // respuestas deben estar completas (no-null) antes de enviar, pero
+  // NINGUNA combinación de valores bloquea el envío (D8) — eso es
+  // responsabilidad exclusiva de `requiereAtencionEstadoConductor`
+  // (lib/inspections/estado-conductor.ts), que solo decide si el Supervisor
+  // ve una advertencia, nunca si se puede enviar.
+  if (
+    inspection.tomaMedicamentos === null ||
+    inspection.condicionesAptas === null ||
+    inspection.consumioAlcohol === null
+  ) {
+    throw new Error("Falta completar la declaración de estado del conductor antes de enviar.");
   }
 
   const status = inspection.puedeOperar
