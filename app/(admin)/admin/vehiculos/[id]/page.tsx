@@ -126,6 +126,11 @@ export default async function EditarVehiculoPage({
 
         <fieldset className="flex flex-col gap-4 rounded-md border border-gray-200 p-4">
           <legend className="px-1 text-sm font-medium text-gray-700">Hoja de vida</legend>
+          <p className="text-xs text-gray-500">
+            Si este vehículo todavía no tiene hoja de vida, podés dejar estos campos vacíos y
+            guardar igual. Si empezás a completarla, tenés que llenar todos los campos de esta
+            sección.
+          </p>
 
           <div>
             <label htmlFor="foto" className="mb-1 block text-sm font-medium text-gray-700">
@@ -148,7 +153,6 @@ export default async function EditarVehiculoPage({
               id="marca"
               name="marca"
               type="text"
-              required
               defaultValue={vehiculo.marca ?? ""}
               className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
             />
@@ -162,7 +166,6 @@ export default async function EditarVehiculoPage({
               id="modelo"
               name="modelo"
               type="text"
-              required
               defaultValue={vehiculo.modelo ?? ""}
               className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
             />
@@ -176,7 +179,6 @@ export default async function EditarVehiculoPage({
               id="color"
               name="color"
               type="text"
-              required
               defaultValue={vehiculo.color ?? ""}
               className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
             />
@@ -190,7 +192,6 @@ export default async function EditarVehiculoPage({
               id="numeroMotor"
               name="numeroMotor"
               type="text"
-              required
               defaultValue={vehiculo.numeroMotor ?? ""}
               className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
             />
@@ -204,7 +205,6 @@ export default async function EditarVehiculoPage({
               id="numeroChasis"
               name="numeroChasis"
               type="text"
-              required
               defaultValue={vehiculo.numeroChasis ?? ""}
               className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
             />
