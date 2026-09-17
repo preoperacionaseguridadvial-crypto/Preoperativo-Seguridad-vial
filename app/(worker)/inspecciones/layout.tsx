@@ -1,6 +1,6 @@
 import { AppHeader } from "@/app/_components/AppHeader";
 
-// Layout compartido de las 10 pantallas del flujo guiado del trabajador
+// Layout compartido de las pantallas del flujo guiado del trabajador
 // (app/(worker)/inspecciones/**). `flex flex-1 flex-col` para que el
 // `<main className="flex-1 ...">` de cada pantalla siga creciendo
 // correctamente dentro del `<body className="flex flex-col">` del layout
