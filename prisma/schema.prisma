@@ -81,8 +81,7 @@ enum TipoRespuestaItem {
 
 // Fase soporte-moto-carro (Slice 3): tipo de foto diaria obligatoria por
 // inspección (lateral y placa del vehículo), independiente del resultado
-// del checklist. Igual que TipoRespuestaItem: el enum se crea acá, el
-// modelo `FotoInspeccion` que lo consume llega en el slice siguiente.
+// del checklist. Consumido por el modelo `FotoInspeccion` (más abajo).
 enum TipoFotoInspeccion {
   LATERAL
   PLACA
@@ -254,9 +253,25 @@ model Inspection {
   puedeOperar             Boolean?
   justificacionNoOperar   String?
 
+  // Fase soporte-moto-carro (Slice 3, A6): declaración de estado del
+  // conductor — 3 preguntas sí/no del formato, respondidas una sola vez por
+  // inspección (`registrarEstadoConductor`, lib/inspections/actions.ts). Una
+  // respuesta "preocupante" NO bloquea el envío ni transiciona el estado —
+  // solo se refleja como advertencia derivada para el Supervisor (ver
+  // `requiereAtencionEstadoConductor`, lib/inspections/estado-conductor.ts,
+  // función pura, no un flag guardado: evita que quede desactivado si algún
+  // día se permitiera editar la declaración). El Supervisor sigue siendo el
+  // único que decide aprobar/rechazar (D8). Nullable (D4): se exigen
+  // completas (las 3 no-null) recién en `enviarInspeccion`.
+  tomaMedicamentos    Boolean?
+  condicionesAptas    Boolean?
+  consumioAlcohol     Boolean?
+  declaracionEstadoAt DateTime?
+
   respuestas    InspectionItemResponse[]
   novedades     Novedad[]
   firmas        Firma[]
+  fotos         FotoInspeccion[]
 
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -406,6 +421,25 @@ model Firma {
   s3Key        String
   // Generado por el servidor (`now()`), nunca recibido del cliente.
   createdAt    DateTime   @default(now())
+
+  @@unique([inspectionId, tipo])
+}
+
+// Foto diaria obligatoria por inspección (lateral y placa del vehículo),
+// independiente del resultado del checklist (fase soporte-moto-carro, Slice
+// 3, A7). Mismo patrón que `Firma`: inmutable, `@@unique([inspectionId,
+// tipo])` — una vez subida, ninguna mutation la reemplaza (ver
+// `subirFotoInspeccion`, lib/inspections/foto-actions.ts). Solo se guarda el
+// `s3Key`, nunca una URL pública permanente (mismo criterio que
+// `Photo`/`Firma`).
+model FotoInspeccion {
+  id           String             @id @default(cuid())
+  inspectionId String
+  inspection   Inspection         @relation(fields: [inspectionId], references: [id])
+  tipo         TipoFotoInspeccion
+  s3Key        String
+  // Generado por el servidor (`now()`), nunca recibido del cliente.
+  createdAt    DateTime           @default(now())
 
   @@unique([inspectionId, tipo])
 }
