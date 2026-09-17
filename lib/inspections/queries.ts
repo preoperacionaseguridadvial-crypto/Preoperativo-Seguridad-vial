@@ -1,43 +1,88 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, RespuestaChecklist, TipoFirma } from "@/generated/prisma/client";
+import { InspectionStatus, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 
 /**
- * Catálogo completo del checklist, ordenado por `orden` de categoría e
- * ítem. Usado tanto por la UI (para renderizar el flujo guiado) como por
- * `enviarInspeccion` (lib/inspections/actions.ts) para validar que todos
- * los ítems obligatorios tengan respuesta.
+ * Catálogo completo del checklist para un tipo de vehículo, ordenado por
+ * `orden` de categoría e ítem. Usado tanto por la UI (para renderizar el
+ * flujo guiado) como por `enviarInspeccion` (lib/inspections/actions.ts)
+ * para validar que todos los ítems obligatorios tengan respuesta.
+ *
+ * Branching por tipo de vehículo (A1 del design de soporte-moto-carro):
+ * `ChecklistItem.tipoVehiculo` null aplica a ambos tipos (ej: Documentación,
+ * Fluidos); un valor puntual restringe el ítem a MOTO o CARRO. Una categoría
+ * que se queda sin ítems tras el filtro (ej: "Equipo de prevención" es 100%
+ * específico por tipo) se excluye entera para no renderizar secciones
+ * vacías.
  */
-export function getChecklistCatalog() {
-  return prisma.checklistCategory.findMany({
+export async function getChecklistCatalog(tipoVehiculo: TipoVehiculo) {
+  const categories = await prisma.checklistCategory.findMany({
     orderBy: { orden: "asc" },
     include: {
-      items: { orderBy: { orden: "asc" } },
+      items: {
+        where: { OR: [{ tipoVehiculo: null }, { tipoVehiculo }] },
+        orderBy: { orden: "asc" },
+      },
     },
   });
+  return categories.filter((category) => category.items.length > 0);
+}
+
+/**
+ * Tipo de vehículo de la inspección, resuelto vía `Vehicle.tipoVehiculo` (A3
+ * del design). Vehículos legacy sin tipo (previos al backfill de la fase
+ * soporte-moto-carro Slice 1, que ya debería haber cubierto todos) resuelven
+ * a MOTO por seguridad — el sistema era moto-only antes de este cambio.
+ * Interna: los consumidores públicos de este archivo siguen recibiendo solo
+ * `inspectionId`, no filtran por tipo desde afuera.
+ */
+async function getTipoVehiculoDeInspeccion(inspectionId: string): Promise<TipoVehiculo> {
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+    select: { vehicle: { select: { tipoVehiculo: true } } },
+  });
+  if (!inspection) {
+    notFound();
+  }
+  return inspection.vehicle.tipoVehiculo ?? TipoVehiculo.MOTO;
+}
+
+/**
+ * Tipo de vehículo declarado para un trabajador (`User.tipoVehiculo`), o
+ * `null` si todavía no tiene uno asignado (usuario legacy "pendiente de
+ * asignación"). Filtra la lista de vehículos que puede elegir
+ * (`getVehiculosActivos`) y se re-valida en `iniciarInspeccion`
+ * (lib/inspections/actions.ts) como defensa en profundidad — no alcanza con
+ * que esta pantalla ya haya filtrado la lista.
+ */
+export async function getTipoVehiculoDelTrabajador(workerId: string): Promise<TipoVehiculo | null> {
+  const user = await prisma.user.findUnique({ where: { id: workerId }, select: { tipoVehiculo: true } });
+  return user?.tipoVehiculo ?? null;
 }
 
 /** Estado de un ítem para una inspección puntual: la respuesta ya dada, o
  * `"PENDIENTE"` si todavía no tiene `InspectionItemResponse`.
  *
- * `BUENO`/`BAJO`/`MALO` (agregados al enum `RespuestaChecklist` en la fase
- * soporte-moto-carro, Slice 1) quedan excluidos acá a propósito: ningún
- * `ChecklistItem` usa `tipoRespuesta = TRIESTADO` todavía (llega en el
- * Slice 2, que también actualiza este archivo — ver design del cambio), así
- * que en este slice esos valores nunca ocurren en la práctica. */
-export type EstadoChecklistItem = Exclude<RespuestaChecklist, "BUENO" | "BAJO" | "MALO"> | "PENDIENTE";
+ * Desde la fase soporte-moto-carro (Slice 2), `BUENO`/`BAJO`/`MALO` sí son
+ * estados reales y alcanzables: los ítems de fluidos (`tipoRespuesta =
+ * TRIESTADO`) los usan. El tipo ya no los excluye (a diferencia del Slice 1,
+ * que los excluía porque ningún ítem los usaba todavía — ver git blame).
+ */
+export type EstadoChecklistItem = RespuestaChecklist | "PENDIENTE";
 
 /**
- * Catálogo completo (reusa `getChecklistCatalog`) más el estado de cada
- * ítem para una inspección puntual — usado por la pantalla de lista del
- * checklist para mostrar el estado de cada ítem agrupado por categoría, sin
- * duplicar la consulta del catálogo.
+ * Catálogo completo (reusa `getChecklistCatalog`, ya filtrado por el tipo de
+ * vehículo de la inspección) más el estado de cada ítem para una inspección
+ * puntual — usado por la pantalla de lista del checklist para mostrar el
+ * estado de cada ítem agrupado por categoría, sin duplicar la consulta del
+ * catálogo.
  */
 export async function getChecklistEstadoCompleto(inspectionId: string) {
+  const tipoVehiculo = await getTipoVehiculoDeInspeccion(inspectionId);
   const [catalog, responses] = await Promise.all([
-    getChecklistCatalog(),
+    getChecklistCatalog(tipoVehiculo),
     prisma.inspectionItemResponse.findMany({
       where: { inspectionId },
       select: { checklistItemId: true, valor: true },
@@ -71,7 +116,8 @@ export const CATEGORIA_SIN_PANTALLA_PROPIA = "Documentación";
 async function getNextUnansweredItem(
   inspectionId: string,
 ): Promise<{ id: string; categoryNombre: string } | null> {
-  const categories = await getChecklistCatalog();
+  const tipoVehiculo = await getTipoVehiculoDeInspeccion(inspectionId);
+  const categories = await getChecklistCatalog(tipoVehiculo);
   const responses = await prisma.inspectionItemResponse.findMany({
     where: { inspectionId },
     select: { checklistItemId: true },
@@ -97,11 +143,18 @@ async function getNextUnansweredItem(
  * (`getNextStepPath`): permite revisar ítems ya respondidos o saltar a los
  * pendientes sin perder lo ya guardado. `null` en el primer/último ítem de
  * la categoría.
+ *
+ * Recibe `inspectionId` (A3 del design) porque `getChecklistCatalog` ahora
+ * exige el tipo de vehículo — se resuelve acá mismo en vez de pedírselo al
+ * caller, que ya tiene el `inspectionId` a mano (ver
+ * app/(worker)/inspecciones/[id]/checklist/[itemId]/page.tsx).
  */
 export async function getAdjacentChecklistItemIds(
+  inspectionId: string,
   itemId: string,
 ): Promise<{ previousItemId: string | null; nextItemId: string | null }> {
-  const categories = await getChecklistCatalog();
+  const tipoVehiculo = await getTipoVehiculoDeInspeccion(inspectionId);
+  const categories = await getChecklistCatalog(tipoVehiculo);
   const category = categories.find((cat) => cat.items.some((item) => item.id === itemId));
   if (!category) {
     return { previousItemId: null, nextItemId: null };
@@ -141,9 +194,19 @@ export function getInspectionForWorker(inspectionId: string) {
   });
 }
 
-export function getVehiculosActivos() {
+/**
+ * Vehículos activos que un trabajador puede elegir para iniciar una
+ * inspección, filtrados por su `tipoVehiculo` declarado (spec: "Vehicle
+ * selection filtered by worker type"). `null` (trabajador legacy sin tipo
+ * asignado, "pendiente de asignación") devuelve lista vacía a propósito: no
+ * hay forma segura de inferir qué catálogo debería ver.
+ */
+export async function getVehiculosActivos(tipoVehiculo: TipoVehiculo | null) {
+  if (!tipoVehiculo) {
+    return [];
+  }
   return prisma.vehicle.findMany({
-    where: { activo: true },
+    where: { activo: true, tipoVehiculo },
     orderBy: { placa: "asc" },
   });
 }

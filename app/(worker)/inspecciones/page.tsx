@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { iniciarInspeccion, cancelarInspeccion } from "@/lib/inspections/actions";
-import { getVehiculosActivos, getInspeccionesEnProcesoDelTrabajador } from "@/lib/inspections/queries";
+import {
+  getVehiculosActivos,
+  getInspeccionesEnProcesoDelTrabajador,
+  getTipoVehiculoDelTrabajador,
+} from "@/lib/inspections/queries";
 
 // Punto de entrada del flujo del trabajador (Fase 2): elegir un vehículo
 // para iniciar una inspección nueva, o retomar una que quedó EN_PROCESO.
@@ -17,8 +21,9 @@ export default async function InspeccionesPage({
     redirect("/login");
   }
 
+  const tipoVehiculo = await getTipoVehiculoDelTrabajador(session.user.id);
   const [vehiculos, enProceso] = await Promise.all([
-    getVehiculosActivos(),
+    getVehiculosActivos(tipoVehiculo),
     getInspeccionesEnProcesoDelTrabajador(session.user.id),
   ]);
 
