@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { Role, TipoVehiculo } from "@/generated/prisma/client";
+import { Role, TipoVehiculo, TipoRespuestaItem } from "@/generated/prisma/client";
 
 /**
  * Limpia todas las tablas relevantes entre tests, respetando FKs (hijos
@@ -62,13 +62,52 @@ export async function crearVehiculo(
   });
 }
 
-/** Crea una categoría con un único ítem de checklist — catálogo mínimo para tests. */
-export async function crearCatalogoMinimo() {
+/** Crea una categoría con un único ítem de checklist — catálogo mínimo para tests.
+ * `tipoVehiculo`/`tipoRespuesta` quedan en sus defaults (null = aplica a ambos
+ * tipos, BINARIO) para que todos los tests existentes que llaman esta función
+ * sin argumentos sigan compilando y pasando sin cambios (Testing Strategy del
+ * design de soporte-moto-carro). */
+export async function crearCatalogoMinimo(
+  overrides: Partial<{
+    nombreCategoria: string;
+    tipoVehiculo: TipoVehiculo | null;
+    tipoRespuesta: TipoRespuestaItem;
+  }> = {},
+) {
   const categoria = await prisma.checklistCategory.create({
-    data: { nombre: `Categoria-${randomUUID()}`, orden: 1 },
+    data: { nombre: overrides.nombreCategoria ?? `Categoria-${randomUUID()}`, orden: 1 },
   });
   const item = await prisma.checklistItem.create({
-    data: { categoryId: categoria.id, nombre: "Item de prueba", orden: 1 },
+    data: {
+      categoryId: categoria.id,
+      nombre: "Item de prueba",
+      orden: 1,
+      tipoVehiculo: overrides.tipoVehiculo ?? null,
+      tipoRespuesta: overrides.tipoRespuesta ?? TipoRespuestaItem.BINARIO,
+    },
   });
   return { categoria, item };
+}
+
+/** Agrega un ítem adicional a una categoría existente — usado para armar
+ * catálogos con varios ítems (compartidos + específicos de MOTO/CARRO) en
+ * los tests de `getChecklistCatalog`. */
+export async function crearChecklistItem(
+  categoryId: string,
+  overrides: Partial<{
+    nombre: string;
+    orden: number;
+    tipoVehiculo: TipoVehiculo | null;
+    tipoRespuesta: TipoRespuestaItem;
+  }> = {},
+) {
+  return prisma.checklistItem.create({
+    data: {
+      categoryId,
+      nombre: overrides.nombre ?? `Item-${randomUUID()}`,
+      orden: overrides.orden ?? 1,
+      tipoVehiculo: overrides.tipoVehiculo ?? null,
+      tipoRespuesta: overrides.tipoRespuesta ?? TipoRespuestaItem.BINARIO,
+    },
+  });
 }

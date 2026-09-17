@@ -304,6 +304,21 @@ model ChecklistItem {
   // InspectionItemResponse; ver UI en
   // app/(worker)/inspecciones/[id]/checklist/[itemId]/page.tsx.
   pideUbicacion Boolean                 @default(false)
+
+  // Fase soporte-moto-carro (Slice 2): mismo patrón de branching que
+  // `Vehicle.tipoVehiculo`/`User.tipoVehiculo` (A1) — null significa "aplica
+  // a ambos tipos" (ej: Documentación, Fluidos), un valor puntual restringe
+  // el ítem a MOTO o CARRO (ej: Casco, Cinturones de seguridad). Filtrado en
+  // `getChecklistCatalog` (lib/inspections/queries.ts).
+  tipoVehiculo TipoVehiculo?
+
+  // Fase soporte-moto-carro (Slice 2, A2): discrimina si este ítem acepta la
+  // respuesta binaria de siempre (OK/FALLA) o el triestado de fluidos
+  // (BUENO/BAJO/MALO). `@default(BINARIO)` preserva el comportamiento
+  // existente para todo ítem que no lo declare explícitamente. Validado en
+  // `responderItem` vía `lib/inspections/respuesta.ts`.
+  tipoRespuesta TipoRespuestaItem      @default(BINARIO)
+
   respuestas  InspectionItemResponse[]
 
   @@index([categoryId])
