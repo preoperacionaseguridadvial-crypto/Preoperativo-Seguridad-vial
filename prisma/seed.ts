@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { PrismaClient, Role } from "../generated/prisma/client";
+import { PrismaClient, Role, TipoVehiculo, TipoRespuestaItem } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const adapter = new PrismaPg(process.env.DATABASE_URL ?? "");
@@ -11,8 +11,24 @@ const prisma = new PrismaClient({ adapter });
 // este script sino con una contraseña propia.
 const SEED_PASSWORD = process.env.SEED_USER_PASSWORD ?? "Cambiar123!";
 
-const SEED_USERS: Array<{ email: string; name: string; role: Role; cedula: string }> = [
-  { email: "trabajador@ess.local", name: "Trabajador Demo", role: Role.TRABAJADOR, cedula: "1001234567" },
+const SEED_USERS: Array<{
+  email: string;
+  name: string;
+  role: Role;
+  cedula: string;
+  // Fase soporte-moto-carro (Slice 2): solo el TRABAJADOR demo necesita un
+  // tipo asignado para poder probar el flujo de inspección de punta a
+  // punta (getVehiculosActivos filtra por esto) — el resto de los roles no
+  // lo usa para nada.
+  tipoVehiculo?: TipoVehiculo;
+}> = [
+  {
+    email: "trabajador@ess.local",
+    name: "Trabajador Demo",
+    role: Role.TRABAJADOR,
+    cedula: "1001234567",
+    tipoVehiculo: TipoVehiculo.MOTO,
+  },
   { email: "supervisor@ess.local", name: "Supervisor Demo", role: Role.SUPERVISOR, cedula: "1002345678" },
   { email: "director@ess.local", name: "Director Demo", role: Role.DIRECTOR, cedula: "1003456789" },
   { email: "sst@ess.local", name: "SST Demo", role: Role.SST, cedula: "1004567890" },
@@ -32,19 +48,21 @@ const SEED_FECHA_VENCIMIENTO_PASE = new Date("2027-06-30T00:00:00.000Z");
 const SEED_FECHA_VENCIMIENTO_TECNICOMECANICA = new Date("2027-03-15T00:00:00.000Z");
 
 // Catálogo REAL del checklist, auditado contra el formato oficial FO-SVS-23
-// (columna MOTOS) y autorizado por el dueño de producto — reemplaza al
-// catálogo anterior (5 categorías con datos inventados). Dos categorías:
-// "Inspección Visual" (7 ítems, con foto(s) de referencia) y
-// "Documentación" (10 ítems, sin foto — el formato oficial no trae imagen
-// para estos, la UI cae al placeholder neutro).
+// y autorizado por el dueño de producto — reemplaza al catálogo del Slice 1
+// (moto-only, sin fluidos). Reestructuración de la fase soporte-moto-carro
+// (Slice 2, A1/A2): cuatro categorías ("Documentación", "Inspección Visual",
+// "Fluidos", "Equipo de prevención"), cada ítem branchea por `tipoVehiculo`
+// (`undefined` = aplica a MOTO y CARRO) y declara `tipoRespuesta` (por
+// defecto BINARIO; TRIESTADO para los 3 ítems de fluidos).
 //
-// Rines, Extintor, Botiquín y "Documentos exigidos por la compañía" se
-// eliminan por completo: no existen para motos en el formato oficial.
+// "Frenos" (el sistema de frenos en sí) es BINARIO y compartido — distinto
+// de "Nivel líquido de frenos" (TRIESTADO, Fluidos): confirmado
+// explícitamente con el dueño de producto para no confundir los dos ítems.
 //
-// "Rayones" tiene `pideUbicacion: true` — reusa la misma zona física que
-// "Estado de la latonería" (misma imagen) pero pide siempre un texto
-// "¿Dónde?" al trabajador, no solo cuando queda en FALLA. Ver comentario en
-// prisma/schema.prisma.
+// "Equipo de prevención" es una categoría compartida conceptualmente, pero
+// sus ítems concretos son 100% específicos por tipo: MOTO usa "Canguro de
+// emergencia vial", CARRO usa "Botiquín" + "Extintor" — ningún ítem de esta
+// categoría tiene `tipoVehiculo: undefined`.
 const CHECKLIST: Array<{
   nombre: string;
   orden: number;
@@ -53,35 +71,77 @@ const CHECKLIST: Array<{
     orden: number;
     slugs: string[];
     pideUbicacion?: boolean;
+    tipoVehiculo?: TipoVehiculo;
+    tipoRespuesta?: TipoRespuestaItem;
   }>;
 }> = [
   {
-    nombre: "Inspección Visual",
+    nombre: "Documentación",
     orden: 1,
     items: [
-      { nombre: "Luces Altas y Bajas", orden: 1, slugs: ["luces-altas", "luces-bajas"] },
-      { nombre: "Direccionales y Estacionarias", orden: 2, slugs: ["direccionales", "luces-estacionarias"] },
-      { nombre: "Luz de Reversa", orden: 3, slugs: ["luz-reversa"] },
-      { nombre: "Espejos en buen estado", orden: 4, slugs: ["espejos"] },
-      { nombre: "Llantas en buen estado", orden: 5, slugs: ["llantas"] },
-      { nombre: "Estado de la latonería", orden: 6, slugs: ["carroceria-latoneria"] },
-      { nombre: "Rayones", orden: 7, slugs: ["carroceria-latoneria"], pideUbicacion: true },
+      { nombre: "Tarjeta de propiedad / Licencia de tránsito", orden: 1, slugs: [] },
+      { nombre: "SOAT", orden: 2, slugs: [] },
+      { nombre: "Revisión técnicomecánica", orden: 3, slugs: [] },
+      { nombre: "Licencia de conducción", orden: 4, slugs: [] },
+      { nombre: "Cédula de ciudadanía", orden: 5, slugs: [] },
     ],
   },
   {
-    nombre: "Documentación",
+    nombre: "Inspección Visual",
     orden: 2,
     items: [
-      { nombre: "SOAT", orden: 1, slugs: [] },
-      { nombre: "Cédula de ciudadanía", orden: 2, slugs: [] },
-      { nombre: "Carné de la compañía", orden: 3, slugs: [] },
-      { nombre: "Tarjeta de propiedad", orden: 4, slugs: [] },
-      { nombre: "Credencial SSP", orden: 5, slugs: [] },
-      { nombre: "Licencia de conducción vigente", orden: 6, slugs: [] },
-      { nombre: "Carné ARL", orden: 7, slugs: [] },
-      { nombre: "Carné EPS", orden: 8, slugs: [] },
-      { nombre: "Copia parafiscales mes en curso", orden: 9, slugs: [] },
-      { nombre: "Copia salvoconducto autenticada", orden: 10, slugs: [] },
+      { nombre: "Espejos", orden: 1, slugs: ["espejos"] },
+      { nombre: "Frenos", orden: 2, slugs: [] },
+      {
+        nombre: "Luces externas con direccionales",
+        orden: 3,
+        slugs: ["direccionales"],
+        tipoVehiculo: TipoVehiculo.MOTO,
+      },
+      { nombre: "Llantas", orden: 4, slugs: ["llantas"], tipoVehiculo: TipoVehiculo.MOTO },
+      { nombre: "Casco", orden: 5, slugs: [], tipoVehiculo: TipoVehiculo.MOTO },
+      {
+        nombre: "Luces altas, bajas, reversa e internas con direccionales",
+        orden: 6,
+        slugs: ["luces-altas", "luces-bajas", "luz-reversa"],
+        tipoVehiculo: TipoVehiculo.CARRO,
+      },
+      {
+        nombre: "Llantas, incluye repuesto",
+        orden: 7,
+        slugs: ["llantas"],
+        tipoVehiculo: TipoVehiculo.CARRO,
+      },
+      { nombre: "Cinturones de seguridad", orden: 8, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
+      { nombre: "Limpiabrisas", orden: 9, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
+    ],
+  },
+  {
+    nombre: "Fluidos",
+    orden: 3,
+    items: [
+      { nombre: "Nivel de aceite", orden: 1, slugs: [], tipoRespuesta: TipoRespuestaItem.TRIESTADO },
+      {
+        nombre: "Nivel líquido de frenos",
+        orden: 2,
+        slugs: [],
+        tipoRespuesta: TipoRespuestaItem.TRIESTADO,
+      },
+      {
+        nombre: "Nivel refrigerante",
+        orden: 3,
+        slugs: [],
+        tipoRespuesta: TipoRespuestaItem.TRIESTADO,
+      },
+    ],
+  },
+  {
+    nombre: "Equipo de prevención",
+    orden: 4,
+    items: [
+      { nombre: "Canguro de emergencia vial", orden: 1, slugs: [], tipoVehiculo: TipoVehiculo.MOTO },
+      { nombre: "Botiquín", orden: 2, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
+      { nombre: "Extintor", orden: 3, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
     ],
   },
 ];
@@ -142,7 +202,7 @@ async function limpiarDatosDePruebaObsoletos() {
 async function main() {
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
 
-  for (const { email, name, role, cedula } of SEED_USERS) {
+  for (const { email, name, role, cedula, tipoVehiculo } of SEED_USERS) {
     await prisma.user.upsert({
       where: { email },
       update: {
@@ -152,6 +212,7 @@ async function main() {
         activo: true,
         fechaVencimientoPase: SEED_FECHA_VENCIMIENTO_PASE,
         conductorActivo: true,
+        tipoVehiculo: tipoVehiculo ?? null,
       },
       create: {
         email,
@@ -161,6 +222,7 @@ async function main() {
         passwordHash,
         fechaVencimientoPase: SEED_FECHA_VENCIMIENTO_PASE,
         conductorActivo: true,
+        tipoVehiculo: tipoVehiculo ?? null,
       },
     });
   }
@@ -189,11 +251,16 @@ async function main() {
         (slug) => `/checklist/${slug}.${PNG_SLUGS.has(slug) ? "png" : "jpg"}`,
       );
       const pideUbicacion = item.pideUbicacion ?? false;
+      // `tipoVehiculo` sin declarar en CHECKLIST → null en la base (aplica a
+      // MOTO y CARRO, A1 del design). `tipoRespuesta` sin declarar → BINARIO
+      // (default del schema).
+      const tipoVehiculo = item.tipoVehiculo ?? null;
+      const tipoRespuesta = item.tipoRespuesta ?? TipoRespuestaItem.BINARIO;
 
       if (existing) {
         await prisma.checklistItem.update({
           where: { id: existing.id },
-          data: { orden: item.orden, imagenesUrl, pideUbicacion },
+          data: { orden: item.orden, imagenesUrl, pideUbicacion, tipoVehiculo, tipoRespuesta },
         });
       } else {
         await prisma.checklistItem.create({
@@ -203,6 +270,8 @@ async function main() {
             orden: item.orden,
             imagenesUrl,
             pideUbicacion,
+            tipoVehiculo,
+            tipoRespuesta,
           },
         });
       }
@@ -214,18 +283,46 @@ async function main() {
     `Seed OK: ${CHECKLIST.length} categorías y ${totalItems} ítems de checklist creados/actualizados.`,
   );
 
-  // Vehículo demo para poder probar el flujo de inspección de punta a punta.
+  // Vehículo demo MOTO para poder probar el flujo de inspección de punta a
+  // punta con el trabajador demo (también MOTO, ver SEED_USERS).
   await prisma.vehicle.upsert({
     where: { placa: "ABC123" },
-    update: { activo: true, fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA },
+    update: {
+      activo: true,
+      fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
+      tipoVehiculo: TipoVehiculo.MOTO,
+    },
     create: {
       placa: "ABC123",
       tipo: "Motocicleta",
       activo: true,
       fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
+      tipoVehiculo: TipoVehiculo.MOTO,
     },
   });
-  console.log('Seed OK: vehículo demo "ABC123" creado/actualizado.');
+  console.log('Seed OK: vehículo demo "ABC123" (MOTO) creado/actualizado.');
+
+  // Fase soporte-moto-carro (Slice 2): vehículo demo CARRO — el trabajador
+  // demo sigue siendo MOTO (SEED_USERS), así que este vehículo no aparece en
+  // su lista de "Iniciar nueva inspección"; sirve para verificación manual
+  // del catálogo CARRO (crear/loguear un usuario CARRO desde el panel de
+  // Administrador, ver app/(admin)/admin/usuarios).
+  await prisma.vehicle.upsert({
+    where: { placa: "XYZ789" },
+    update: {
+      activo: true,
+      fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
+      tipoVehiculo: TipoVehiculo.CARRO,
+    },
+    create: {
+      placa: "XYZ789",
+      tipo: "Automóvil",
+      activo: true,
+      fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
+      tipoVehiculo: TipoVehiculo.CARRO,
+    },
+  });
+  console.log('Seed OK: vehículo demo "XYZ789" (CARRO) creado/actualizado.');
 }
 
 main()
