@@ -41,6 +41,21 @@ export default async function ConfirmarPage({
     redirect(await getNextStepPath(id));
   }
 
+  // Fix (Slice 3, resiliencia): `getNextStepPath` es la única fuente de
+  // verdad de qué falta (checklist, fotos diarias A7, declaración de estado
+  // del conductor A6, en ese orden) — una inspección que ya estaba
+  // EN_PROCESO antes de que estas dos paradas existieran nunca pasó por
+  // `/fotos` ni `/estado-conductor`, así que acá se vuelve a preguntar en
+  // vez de asumir que, por estar EN_PROCESO, ya está lista para confirmar.
+  // Sin este chequeo, esta pantalla renderizaba igual y el gate solo
+  // aparecía recién al enviar (`enviarInspeccion`), con un error de texto
+  // sin link de vuelta a lo que falta — a diferencia de `/fotos` y
+  // `/estado-conductor`, que sí redirigen así.
+  const siguientePaso = await getNextStepPath(id);
+  if (siguientePaso !== `/inspecciones/${id}/confirmar`) {
+    redirect(siguientePaso);
+  }
+
   const { conductor: firmaConductor } = await getFirmasInspeccion(id);
 
   // Corrección Slice 2 (hallazgo CRITICAL #5): antes solo miraba

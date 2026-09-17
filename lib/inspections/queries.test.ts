@@ -217,6 +217,33 @@ describe("getNextStepPath — nuevas paradas de Slice 3", () => {
     expect(path).toBe(`/inspecciones/${inspection.id}/estado-conductor`);
   });
 
+  // Fix (WARNING resilience, "worsened" por Slice 3): `confirmar/page.tsx`
+  // vuelve a llamar `getNextStepPath` para redirigir a la primera parada
+  // incompleta en vez de renderizar el resumen sin haber pasado por
+  // `/fotos`/`/estado-conductor` — este test prueba la función que hace ese
+  // gating (no hay patrón establecido en este proyecto para testear el
+  // redirect de una página de App Router directamente; no hay ningún
+  // `page.test.tsx` en el repo).
+  it("NUNCA devuelve /confirmar si faltan las fotos diarias o la declaración del conductor, aunque el checklist ya esté completo (gate reforzado tras el fix de confirmar/page.tsx)", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+
+    // Checklist completo mas nada de Slice 3 todavía: no debe llegar a /confirmar.
+    expect(await getNextStepPath(inspection.id)).not.toBe(`/inspecciones/${inspection.id}/confirmar`);
+
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+    await prisma.inspection.update({ where: { id: inspection.id }, data: { puedeOperar: true } });
+
+    // Fotos y resultado completos, pero falta la declaración del conductor:
+    // sigue sin poder llegar a /confirmar.
+    expect(await getNextStepPath(inspection.id)).not.toBe(`/inspecciones/${inspection.id}/confirmar`);
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/estado-conductor`);
+  });
+
   it("manda a /confirmar cuando checklist, fotos, resultado y declaración del conductor están completos", async () => {
     const inspection = await crearInspeccionConChecklistCompleto();
     await prisma.fotoInspeccion.create({
