@@ -35,6 +35,7 @@ import {
   crearVehiculo,
   limpiarBaseDeTest,
 } from "@/test/helpers/db";
+import { getChecklistCatalog } from "@/lib/inspections/queries";
 
 function loginComo(user: { id: string; role: Role }) {
   mockAuth.mockResolvedValue({ user: { id: user.id, role: user.role } });
@@ -348,6 +349,16 @@ describe("iniciarInspeccion — tipo de vehículo debe coincidir con el del trab
     await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
   });
 
+  // Corrección Slice 2 (hallazgo WARNING #6): la misma guarda es simétrica —
+  // antes de este test solo se cubría MOTO trabajador vs CARRO vehículo.
+  it("rechaza si el trabajador es CARRO y el vehículo es MOTO", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.CARRO });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
+  });
+
   it("rechaza si el trabajador no tiene tipo asignado (null)", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: null });
     const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
@@ -363,5 +374,99 @@ describe("iniciarInspeccion — tipo de vehículo debe coincidir con el del trab
 
     const inspection = await iniciarInspeccion(vehicle.id);
     expect(inspection.vehicleId).toBe(vehicle.id);
+  });
+});
+
+// Corrección Slice 2 (hallazgo CRITICAL #1, corroborado por 3 lentes): la
+// completitud del checklist en `enviarInspeccion` era un conteo pelado, no
+// una comparación de conjuntos — un ítem de OTRO tipo de vehículo "colado"
+// vía `responderItem` podía inflar el conteo y tapar que faltaba un ítem
+// real. `responderItem` ahora valida que el ítem pertenezca al catálogo del
+// tipo de vehículo de la inspección, y `enviarInspeccion` compara por
+// diferencia de conjuntos de IDs en vez de por cantidad.
+describe("responderItem — el ítem debe pertenecer al catálogo del tipo de vehículo de la inspección", () => {
+  it("rechaza un checklistItemId de un ítem exclusivo de otro tipo de vehículo", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.MOTO });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const { categoria } = await crearCatalogoMinimo();
+    const itemDeCarro = await crearChecklistItem(categoria.id, {
+      nombre: "Cinturones de seguridad",
+      tipoVehiculo: TipoVehiculo.CARRO,
+    });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    await expect(
+      responderItem(inspection.id, itemDeCarro.id, RespuestaChecklist.OK),
+    ).rejects.toThrow(/no corresponde al tipo de vehículo/i);
+  });
+
+  it("acepta un ítem compartido (tipoVehiculo null) o del mismo tipo que el vehículo", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.MOTO });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const { item: itemCompartido } = await crearCatalogoMinimo();
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    await expect(
+      responderItem(inspection.id, itemCompartido.id, RespuestaChecklist.OK),
+    ).resolves.not.toThrow();
+  });
+});
+
+describe("enviarInspeccion — completitud por diferencia de conjuntos, no por conteo pelado", () => {
+  it("rechaza el envío si falta un ítem real del tipo de vehículo aunque el conteo total coincida (ítem ajeno colado)", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.MOTO });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const { categoria } = await crearCatalogoMinimo();
+    // Ítem real, obligatorio para MOTO — a propósito NO se responde.
+    const itemMoto = await crearChecklistItem(categoria.id, {
+      nombre: "Casco",
+      orden: 2,
+      tipoVehiculo: TipoVehiculo.MOTO,
+    });
+    // Ítem exclusivo de CARRO: no pertenece al catálogo MOTO de esta
+    // inspección, pero se "cuela" con una respuesta directa en base (simula
+    // el bypass de `responderItem` que exponía el hallazgo original).
+    const itemCarro = await crearChecklistItem(categoria.id, {
+      nombre: "Cinturones de seguridad",
+      orden: 3,
+      tipoVehiculo: TipoVehiculo.CARRO,
+    });
+
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    // Responde TODOS los ítems reales del catálogo MOTO salvo "Casco"
+    // (incluye el ítem del catálogo mínimo global del beforeEach) — así el
+    // conteo total de respuestas queda exactamente en `totalItems - 1`...
+    const catalogoMoto = await getChecklistCatalog(TipoVehiculo.MOTO);
+    const idsRequeridos = catalogoMoto.flatMap((c) => c.items.map((i) => i.id));
+    expect(idsRequeridos).toContain(itemMoto.id);
+    expect(idsRequeridos).not.toContain(itemCarro.id);
+    for (const id of idsRequeridos) {
+      if (id === itemMoto.id) continue;
+      await prisma.inspectionItemResponse.create({
+        data: { inspectionId: inspection.id, checklistItemId: id, valor: RespuestaChecklist.OK },
+      });
+    }
+    // ...y agrega la respuesta "colada" de un ítem de CARRO para volver a
+    // igualar el conteo total (`totalItems`) sin haber respondido "Casco" en
+    // realidad — exactamente el escenario que el conteo pelado antiguo no
+    // podía distinguir de un envío legítimo.
+    await prisma.inspectionItemResponse.create({
+      data: { inspectionId: inspection.id, checklistItemId: itemCarro.id, valor: RespuestaChecklist.OK },
+    });
+
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan ítems del checklist/i);
   });
 });

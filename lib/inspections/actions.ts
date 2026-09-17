@@ -191,11 +191,33 @@ export async function responderItem(
   ubicacion?: string,
 ) {
   const session = await requireRole([Role.TRABAJADOR]);
-  await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
 
   const item = await prisma.checklistItem.findUnique({ where: { id: checklistItemId } });
   if (!item) {
     throw new Error("Ítem de checklist no encontrado.");
+  }
+
+  // Corrección Slice 2 (hallazgo CRITICAL #1, corroborado por 3 lentes de
+  // revisión): antes de este chequeo, `responderItem` solo validaba `valor`
+  // contra el `tipoRespuesta` del propio ítem, nunca que el ítem
+  // perteneciera al catálogo del tipo de vehículo de ESTA inspección. Eso
+  // permitía "colar" una respuesta a un ítem exclusivo de otro tipo (ej.
+  // "Cinturones de seguridad", solo CARRO) en una inspección MOTO, inflando
+  // el conteo de respuestas que `enviarInspeccion` usaba para decidir si el
+  // checklist estaba completo. Se resuelve el tipo de vehículo de la
+  // inspección (nunca el que mande el cliente) y se compara contra
+  // `ChecklistItem.tipoVehiculo` (`null` = aplica a ambos tipos, A1 del
+  // design).
+  const vehiculoInspeccion = await prisma.vehicle.findUnique({
+    where: { id: inspection.vehicleId },
+    select: { tipoVehiculo: true },
+  });
+  const tipoVehiculoInspeccion = vehiculoInspeccion?.tipoVehiculo ?? TipoVehiculo.MOTO;
+  if (item.tipoVehiculo !== null && item.tipoVehiculo !== tipoVehiculoInspeccion) {
+    throw new Error(
+      `El ítem "${item.nombre}" no corresponde al tipo de vehículo de esta inspección.`,
+    );
   }
 
   // A2 del design: un ítem BINARIO solo acepta OK/FALLA, un ítem TRIESTADO
@@ -381,18 +403,35 @@ export async function enviarInspeccion(inspectionId: string) {
   }
 
   // El catálogo se filtra por el tipo del vehículo de esta inspección (A1) —
-  // el conteo de "faltan ítems por responder" de abajo debe compararse
+  // la validación de "faltan ítems por responder" de abajo debe compararse
   // contra el mismo subconjunto que el trabajador realmente vio, no contra
   // el catálogo completo de ambos tipos.
+  //
+  // Corrección Slice 2 (hallazgo CRITICAL #1, corroborado por 3 lentes de
+  // revisión): esto era un conteo pelado (`responseCount < totalItems`), no
+  // una comparación real de qué ítems faltan. Un ítem de OTRO tipo de
+  // vehículo colado en `inspectionItemResponse` (ver guarda agregada en
+  // `responderItem` arriba) inflaba `responseCount` sin cubrir un ítem
+  // realmente obligatorio, dejando pasar el envío. Ahora se compara por
+  // diferencia de conjuntos de IDs: se resuelven los IDs requeridos del
+  // catálogo scoped por tipo y se verifica que cada uno tenga una respuesta
+  // real, sin importar cuántas respuestas "de más" (de otro tipo) existan.
   const vehicle = await prisma.vehicle.findUnique({
     where: { id: inspection.vehicleId },
     select: { tipoVehiculo: true },
   });
   const catalog = await getChecklistCatalog(vehicle?.tipoVehiculo ?? TipoVehiculo.MOTO);
-  const totalItems = catalog.reduce((sum, category) => sum + category.items.length, 0);
-  const responseCount = await prisma.inspectionItemResponse.count({ where: { inspectionId } });
-  if (responseCount < totalItems) {
-    throw new Error("Faltan ítems del checklist por responder.");
+  const itemsRequeridos = catalog.flatMap((category) => category.items);
+  const idsRequeridos = itemsRequeridos.map((item) => item.id);
+  const responses = await prisma.inspectionItemResponse.findMany({
+    where: { inspectionId, checklistItemId: { in: idsRequeridos } },
+    select: { checklistItemId: true },
+  });
+  const idsRespondidos = new Set(responses.map((response) => response.checklistItemId));
+  const itemsFaltantes = itemsRequeridos.filter((item) => !idsRespondidos.has(item.id));
+  if (itemsFaltantes.length > 0) {
+    const nombresFaltantes = itemsFaltantes.map((item) => item.nombre).join(", ");
+    throw new Error(`Faltan ítems del checklist por responder: ${nombresFaltantes}.`);
   }
 
   const status = inspection.puedeOperar
