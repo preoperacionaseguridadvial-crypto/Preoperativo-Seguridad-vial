@@ -4,11 +4,12 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
-import { Role, InspectionStatus, RespuestaChecklist, TipoFirma } from "@/generated/prisma/client";
+import { Role, InspectionStatus, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
-import { getChecklistCatalog } from "@/lib/inspections/queries";
+import { getChecklistCatalog, getTipoVehiculoDelTrabajador } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
+import { esNovedad, valoresPermitidos } from "@/lib/inspections/respuesta";
 
 // Server actions del flujo de inspección del TRABAJADOR (Fase 2). Todas
 // validan rol vía `requireRole` (nunca confían en el frontend) y, cuando
@@ -59,6 +60,19 @@ export async function iniciarInspeccion(vehicleId: string) {
   const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
   if (!vehicle || !vehicle.activo) {
     throw new Error("Vehículo no encontrado o inactivo.");
+  }
+
+  // Fase soporte-moto-carro (A1): defensa en profundidad — la pantalla de
+  // inicio (app/(worker)/inspecciones/page.tsx) ya filtra la lista de
+  // vehículos por `getVehiculosActivos(tipoVehiculo)`, pero acá se re-valida
+  // en el servidor, nunca se confía en que el frontend haya mandado un
+  // vehículo del tipo correcto. Vehículos legacy sin tipo resuelven a MOTO
+  // (mismo backfill del Slice 1); un trabajador sin tipo asignado nunca
+  // puede iniciar ninguna inspección.
+  const tipoTrabajador = await getTipoVehiculoDelTrabajador(session.user.id);
+  const tipoVehiculo = vehicle.tipoVehiculo ?? TipoVehiculo.MOTO;
+  if (tipoTrabajador === null || tipoTrabajador !== tipoVehiculo) {
+    throw new Error("Este vehículo no corresponde al tipo de vehículo asignado al trabajador.");
   }
 
   const inspection = await prisma.inspection.create({
@@ -183,9 +197,20 @@ export async function responderItem(
   if (!item) {
     throw new Error("Ítem de checklist no encontrado.");
   }
+
+  // A2 del design: un ítem BINARIO solo acepta OK/FALLA, un ítem TRIESTADO
+  // (fluidos) solo acepta BUENO/BAJO/MALO — nunca se mezclan los dos
+  // conjuntos, sin importar qué mande el cliente.
+  if (!valoresPermitidos(item.tipoRespuesta).includes(valor)) {
+    throw new Error(`"${valor}" no es un valor válido para el ítem "${item.nombre}".`);
+  }
+
   const observacionLimpia = observacion?.trim() || "";
   const ubicacionLimpia = ubicacion?.trim() || "";
-  if (valor === RespuestaChecklist.FALLA) {
+  // `esNovedad` es true para FALLA (binario) y MALO (triestado) — BAJO queda
+  // afuera a propósito (decisión confirmada: solo dato/observación, no
+  // Novedad, no bloquea el envío). Ver lib/inspections/respuesta.ts.
+  if (esNovedad(valor)) {
     if (!observacionLimpia) {
       throw new Error(
         item.pideUbicacion
@@ -218,13 +243,13 @@ export async function responderItem(
           },
         });
 
-    if (existing?.novedad && valor !== RespuestaChecklist.FALLA) {
+    if (existing?.novedad && !esNovedad(valor)) {
       await tx.photo.deleteMany({ where: { novedadId: existing.novedad.id } });
       await tx.novedad.delete({ where: { id: existing.novedad.id } });
     }
 
     let novedad = existing?.novedad ?? null;
-    if (valor === RespuestaChecklist.FALLA) {
+    if (esNovedad(valor)) {
       const descripcionNovedad = item.pideUbicacion
         ? TIPO_NOVEDAD_LABELS[tipo!]
         : observacionLimpia;
@@ -355,7 +380,15 @@ export async function enviarInspeccion(inspectionId: string) {
     throw new Error("Falta la firma del conductor antes de enviar.");
   }
 
-  const catalog = await getChecklistCatalog();
+  // El catálogo se filtra por el tipo del vehículo de esta inspección (A1) —
+  // el conteo de "faltan ítems por responder" de abajo debe compararse
+  // contra el mismo subconjunto que el trabajador realmente vio, no contra
+  // el catálogo completo de ambos tipos.
+  const vehicle = await prisma.vehicle.findUnique({
+    where: { id: inspection.vehicleId },
+    select: { tipoVehiculo: true },
+  });
+  const catalog = await getChecklistCatalog(vehicle?.tipoVehiculo ?? TipoVehiculo.MOTO);
   const totalItems = catalog.reduce((sum, category) => sum + category.items.length, 0);
   const responseCount = await prisma.inspectionItemResponse.count({ where: { inspectionId } });
   if (responseCount < totalItems) {

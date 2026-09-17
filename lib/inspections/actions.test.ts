@@ -12,15 +12,29 @@ vi.mock("@/lib/auth/config", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { Role, InspectionStatus, RespuestaChecklist, TipoFirma } from "@/generated/prisma/client";
+import {
+  Role,
+  InspectionStatus,
+  RespuestaChecklist,
+  TipoFirma,
+  TipoVehiculo,
+  TipoRespuestaItem,
+} from "@/generated/prisma/client";
 import {
   cancelarInspeccion,
   enviarInspeccion,
+  iniciarInspeccion,
   registrarKilometraje,
   registrarResultado,
   responderItem,
 } from "@/lib/inspections/actions";
-import { crearCatalogoMinimo, crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
+import {
+  crearCatalogoMinimo,
+  crearChecklistItem,
+  crearUsuario,
+  crearVehiculo,
+  limpiarBaseDeTest,
+} from "@/test/helpers/db";
 
 function loginComo(user: { id: string; role: Role }) {
   mockAuth.mockResolvedValue({ user: { id: user.id, role: user.role } });
@@ -211,5 +225,143 @@ describe("inmutabilidad: una inspección ENVIADA no puede volver a editarse con 
     await expect(
       registrarKilometraje(inspection.id, { kilometraje: 12345 }),
     ).rejects.toThrow(/ya no está en proceso/i);
+  });
+});
+
+// A2 del design de soporte-moto-carro: `ChecklistItem.tipoRespuesta`
+// discrimina BINARIO (OK/FALLA, como siempre) de TRIESTADO (BUENO/BAJO/MALO,
+// ítems de fluidos). `responderItem` valida `valor` contra ese discriminador
+// vía lib/inspections/respuesta.ts.
+describe("responderItem — valores según tipoRespuesta", () => {
+  it("acepta BUENO/BAJO/MALO en un ítem TRIESTADO", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    const { categoria } = await crearCatalogoMinimo();
+    const itemFluido = await crearChecklistItem(categoria.id, {
+      nombre: "Nivel de aceite",
+      tipoRespuesta: TipoRespuestaItem.TRIESTADO,
+    });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    const { response } = await responderItem(inspection.id, itemFluido.id, RespuestaChecklist.BUENO);
+    expect(response.valor).toBe(RespuestaChecklist.BUENO);
+  });
+
+  it("rechaza BUENO/BAJO/MALO en un ítem BINARIO", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    const { item } = await crearCatalogoMinimo();
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    await expect(
+      responderItem(inspection.id, item.id, RespuestaChecklist.MALO),
+    ).rejects.toThrow(/no es un valor válido/i);
+  });
+
+  it("rechaza OK/FALLA en un ítem TRIESTADO", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    const { categoria } = await crearCatalogoMinimo();
+    const itemFluido = await crearChecklistItem(categoria.id, {
+      nombre: "Nivel de aceite",
+      tipoRespuesta: TipoRespuestaItem.TRIESTADO,
+    });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    await expect(
+      responderItem(inspection.id, itemFluido.id, RespuestaChecklist.OK),
+    ).rejects.toThrow(/no es un valor válido/i);
+  });
+
+  it("MALO en un ítem TRIESTADO crea una Novedad; BAJO no crea nada", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    const { categoria } = await crearCatalogoMinimo();
+    const itemFluido = await crearChecklistItem(categoria.id, {
+      nombre: "Nivel de aceite",
+      tipoRespuesta: TipoRespuestaItem.TRIESTADO,
+    });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    const { novedad: novedadBajo } = await responderItem(
+      inspection.id,
+      itemFluido.id,
+      RespuestaChecklist.BAJO,
+    );
+    expect(novedadBajo).toBeNull();
+
+    const { novedad: novedadMalo } = await responderItem(
+      inspection.id,
+      itemFluido.id,
+      RespuestaChecklist.MALO,
+      "Nivel muy bajo, huele a quemado",
+      "FALLA",
+    );
+    expect(novedadMalo).not.toBeNull();
+    const enBase = await prisma.novedad.findFirst({
+      where: { inspectionItemResponse: { checklistItemId: itemFluido.id, inspectionId: inspection.id } },
+    });
+    expect(enBase).not.toBeNull();
+  });
+
+  it("BAJO no requiere observación ni tipo de novedad", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    const { categoria } = await crearCatalogoMinimo();
+    const itemFluido = await crearChecklistItem(categoria.id, {
+      nombre: "Nivel refrigerante",
+      tipoRespuesta: TipoRespuestaItem.TRIESTADO,
+    });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+
+    await expect(
+      responderItem(inspection.id, itemFluido.id, RespuestaChecklist.BAJO),
+    ).resolves.not.toThrow();
+  });
+});
+
+// A1 del design: `iniciarInspeccion` re-valida en el servidor que el tipo del
+// vehículo coincida con el tipo declarado del trabajador (defensa en
+// profundidad — no confía en que `getVehiculosActivos` ya haya filtrado la
+// lista en la pantalla anterior).
+describe("iniciarInspeccion — tipo de vehículo debe coincidir con el del trabajador", () => {
+  it("rechaza si el trabajador es MOTO y el vehículo es CARRO", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.MOTO });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.CARRO });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
+  });
+
+  it("rechaza si el trabajador no tiene tipo asignado (null)", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: null });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
+  });
+
+  it("acepta cuando el tipo del trabajador coincide con el del vehículo", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.CARRO });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.CARRO });
+    loginComo(worker);
+
+    const inspection = await iniciarInspeccion(vehicle.id);
+    expect(inspection.vehicleId).toBe(vehicle.id);
   });
 });
