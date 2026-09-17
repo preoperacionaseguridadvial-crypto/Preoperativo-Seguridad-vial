@@ -6,6 +6,7 @@ import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervi
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
+import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 
 // Pantalla de detalle de la revisión del Supervisor (Fase 3): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -61,6 +62,9 @@ export default async function AprobacionDetallePage({
   }
 
   const noApta = inspection.status === "NO_APTA_PARA_OPERAR";
+  // Slice 3 (A6/D8): dato derivado, nunca bloquea ni auto-transiciona —
+  // solo decide si esta pantalla muestra la advertencia.
+  const alertaEstadoConductor = requiereAtencionEstadoConductor(inspection);
 
   const ahora = new Date();
   const paseVencido = Boolean(
@@ -189,6 +193,31 @@ export default async function AprobacionDetallePage({
         {!inspection.puedeOperar && inspection.justificacionNoOperar && (
           <p className="mt-1">{inspection.justificacionNoOperar}</p>
         )}
+      </section>
+
+      <section
+        className={`rounded-md p-4 text-sm ${
+          alertaEstadoConductor ? "bg-amber-50 text-amber-900" : "border border-gray-200"
+        }`}
+      >
+        <p className="text-xs uppercase tracking-wide opacity-70">Declaración del conductor</p>
+        {alertaEstadoConductor && (
+          <p className="text-base font-semibold">⚠ Requiere atención</p>
+        )}
+        <dl className="mt-2 flex flex-col gap-1">
+          <div className="flex justify-between">
+            <dt>¿Medicamento/sustancia/condición que afecte su capacidad?</dt>
+            <dd className="font-medium">{siNoOTexto(inspection.tomaMedicamentos)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>¿Condiciones físicas y mentales adecuadas?</dt>
+            <dd className="font-medium">{siNoOTexto(inspection.condicionesAptas)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>¿Consumió alcohol u otra sustancia?</dt>
+            <dd className="font-medium">{siNoOTexto(inspection.consumioAlcohol)}</dd>
+          </div>
+        </dl>
       </section>
 
       <section className="flex flex-col gap-4">
@@ -383,13 +412,35 @@ function formatFecha(date: Date | null) {
   return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(date);
 }
 
+// Corrección Slice 3: antes solo distinguía OK/Falla — los ítems de
+// fluidos con `tipoRespuesta = TRIESTADO` (Slice 2, BUENO/BAJO/MALO) caían
+// todos en "Falla" salvo OK, mostrando "Bueno" y "Bajo" como si fueran
+// fallas reales. "Bajo" es advertencia, no falla (no crea Novedad, ver
+// lib/inspections/respuesta.ts `esNovedad`) — color propio (ámbar) para no
+// confundirlo con "Malo".
 function badgeLabel(valor: string) {
-  if (valor === "OK") return "OK";
-  return "Falla";
+  switch (valor) {
+    case "OK":
+      return "OK";
+    case "BUENO":
+      return "Bueno";
+    case "BAJO":
+      return "Bajo";
+    case "MALO":
+      return "Malo";
+    default:
+      return "Falla";
+  }
 }
 
 function badgeClass(valor: string) {
   const base = "rounded-full px-2 py-0.5 text-xs font-semibold";
-  if (valor === "OK") return `${base} bg-green-100 text-green-800`;
-  return `${base} bg-red-100 text-red-800`;
+  if (valor === "OK" || valor === "BUENO") return `${base} bg-green-100 text-green-800`;
+  if (valor === "BAJO") return `${base} bg-amber-100 text-amber-800`;
+  return `${base} bg-red-100 text-red-800`; // FALLA, MALO
+}
+
+function siNoOTexto(valor: boolean | null) {
+  if (valor === null) return "—";
+  return valor ? "Sí" : "No";
 }
