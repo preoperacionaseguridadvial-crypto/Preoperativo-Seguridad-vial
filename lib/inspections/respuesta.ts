@@ -26,3 +26,18 @@ export function valoresPermitidos(tipoRespuesta: TipoRespuestaItem): RespuestaCh
     ? [RespuestaChecklist.BUENO, RespuestaChecklist.BAJO, RespuestaChecklist.MALO]
     : [RespuestaChecklist.OK, RespuestaChecklist.FALLA];
 }
+
+/**
+ * Filtra un arreglo de respuestas a las que cuentan como "no conforme"
+ * (mismo criterio que `esNovedad`: FALLA o MALO). Único lugar de esta regla
+ * para consumidores que necesitan la lista completa de respuestas en falla,
+ * no solo el booleano — hoy la pantalla de confirmar
+ * (app/(worker)/inspecciones/[id]/confirmar/page.tsx), donde el conductor ve
+ * el resumen justo antes de firmar. Antes de esta función esa pantalla
+ * filtraba `valor === "FALLA"` a mano y se perdía MALO (corrección Slice 2,
+ * hallazgo CRITICAL #5) — de ahí que valga la pena tenerlo acá en vez de
+ * como copia local de esa pantalla.
+ */
+export function filtrarNoConformes<T extends { valor: RespuestaChecklist }>(respuestas: T[]): T[] {
+  return respuestas.filter((respuesta) => esNovedad(respuesta.valor));
+}

@@ -8,6 +8,7 @@ import {
 } from "@/lib/inspections/queries";
 import { enviarInspeccion } from "@/lib/inspections/actions";
 import { guardarFirmaConductor } from "@/lib/inspections/firma-actions";
+import { filtrarNoConformes } from "@/lib/inspections/respuesta";
 import { FirmaCanvas } from "@/app/_components/FirmaCanvas";
 
 // Pantalla de confirmación antes de enviar (última del flujo): resume lo
@@ -42,7 +43,13 @@ export default async function ConfirmarPage({
 
   const { conductor: firmaConductor } = await getFirmasInspeccion(id);
 
-  const noConformes = inspection.respuestas.filter((r) => r.valor === "FALLA");
+  // Corrección Slice 2 (hallazgo CRITICAL #5): antes solo miraba
+  // `valor === "FALLA"` — un ítem TRIESTADO de fluidos en MALO (que sí crea
+  // Novedad, ver esNovedad() en lib/inspections/respuesta.ts) quedaba fuera
+  // de "Ítems en falla" y de "Novedades reportadas" justo antes de que el
+  // conductor firme. `filtrarNoConformes` reusa el mismo criterio que
+  // `responderItem`/`esNovedad`.
+  const noConformes = filtrarNoConformes(inspection.respuestas);
 
   const ahora = new Date();
   const paseVencido = Boolean(
