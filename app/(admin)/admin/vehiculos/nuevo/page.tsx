@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { crearVehiculo } from "@/lib/admin/vehicle-actions";
+import { TipoVehiculo } from "@/generated/prisma/client";
+
+const TIPOS_VEHICULO: TipoVehiculo[] = [TipoVehiculo.MOTO, TipoVehiculo.CARRO];
 
 export default async function NuevoVehiculoPage({
   searchParams,
@@ -17,10 +20,24 @@ export default async function NuevoVehiculoPage({
   async function crearAction(formData: FormData) {
     "use server";
     const fechaRaw = formData.get("fechaVencimientoTecnicomecanica")?.toString();
+    const fechaSoatRaw = formData.get("fechaVencimientoSoat")?.toString();
+    const fechaTarjetaRaw = formData.get("fechaVencimientoTarjetaTransito")?.toString();
+    const foto = formData.get("foto");
     try {
       await crearVehiculo({
         placa: formData.get("placa")?.toString() ?? "",
         tipo: formData.get("tipo")?.toString() ?? "",
+        tipoVehiculo: (formData.get("tipoVehiculo")?.toString() || undefined) as
+          | TipoVehiculo
+          | undefined,
+        foto: foto instanceof File ? foto : undefined,
+        marca: formData.get("marca")?.toString(),
+        modelo: formData.get("modelo")?.toString(),
+        color: formData.get("color")?.toString(),
+        numeroMotor: formData.get("numeroMotor")?.toString(),
+        numeroChasis: formData.get("numeroChasis")?.toString(),
+        fechaVencimientoSoat: fechaSoatRaw ? new Date(fechaSoatRaw) : undefined,
+        fechaVencimientoTarjetaTransito: fechaTarjetaRaw ? new Date(fechaTarjetaRaw) : undefined,
         fechaVencimientoTecnicomecanica: fechaRaw ? new Date(fechaRaw) : undefined,
       });
     } catch (err) {
@@ -41,7 +58,7 @@ export default async function NuevoVehiculoPage({
 
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <form action={crearAction} className="flex flex-col gap-4">
+      <form action={crearAction} encType="multipart/form-data" className="flex flex-col gap-4">
         <div>
           <label htmlFor="placa" className="mb-1 block text-sm font-medium text-gray-700">
             Placa
@@ -70,16 +87,148 @@ export default async function NuevoVehiculoPage({
         </div>
 
         <div>
-          <label htmlFor="fechaVencimientoTecnicomecanica" className="mb-1 block text-sm font-medium text-gray-700">
-            Vencimiento tecnicomecánica (opcional)
+          <label htmlFor="tipoVehiculo" className="mb-1 block text-sm font-medium text-gray-700">
+            Tipo de vehículo
           </label>
-          <input
-            id="fechaVencimientoTecnicomecanica"
-            name="fechaVencimientoTecnicomecanica"
-            type="date"
+          <select
+            id="tipoVehiculo"
+            name="tipoVehiculo"
+            required
+            defaultValue=""
             className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
+          >
+            <option value="" disabled>
+              Seleccioná un tipo
+            </option>
+            {TIPOS_VEHICULO.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {tipo}
+              </option>
+            ))}
+          </select>
         </div>
+
+        <fieldset className="flex flex-col gap-4 rounded-md border border-gray-200 p-4">
+          <legend className="px-1 text-sm font-medium text-gray-700">Hoja de vida</legend>
+
+          <div>
+            <label htmlFor="foto" className="mb-1 block text-sm font-medium text-gray-700">
+              Foto del vehículo
+            </label>
+            <input
+              id="foto"
+              name="foto"
+              type="file"
+              accept="image/*"
+              required
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="marca" className="mb-1 block text-sm font-medium text-gray-700">
+              Marca
+            </label>
+            <input
+              id="marca"
+              name="marca"
+              type="text"
+              required
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="modelo" className="mb-1 block text-sm font-medium text-gray-700">
+              Modelo
+            </label>
+            <input
+              id="modelo"
+              name="modelo"
+              type="text"
+              required
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="color" className="mb-1 block text-sm font-medium text-gray-700">
+              Color
+            </label>
+            <input
+              id="color"
+              name="color"
+              type="text"
+              required
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="numeroMotor" className="mb-1 block text-sm font-medium text-gray-700">
+              Número de motor
+            </label>
+            <input
+              id="numeroMotor"
+              name="numeroMotor"
+              type="text"
+              required
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="numeroChasis" className="mb-1 block text-sm font-medium text-gray-700">
+              Número de chasis
+            </label>
+            <input
+              id="numeroChasis"
+              name="numeroChasis"
+              type="text"
+              required
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="fechaVencimientoSoat" className="mb-1 block text-sm font-medium text-gray-700">
+              Vencimiento SOAT (opcional)
+            </label>
+            <input
+              id="fechaVencimientoSoat"
+              name="fechaVencimientoSoat"
+              type="date"
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="fechaVencimientoTarjetaTransito"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
+              Vencimiento tarjeta de tránsito (opcional)
+            </label>
+            <input
+              id="fechaVencimientoTarjetaTransito"
+              name="fechaVencimientoTarjetaTransito"
+              type="date"
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="fechaVencimientoTecnicomecanica" className="mb-1 block text-sm font-medium text-gray-700">
+              Vencimiento tecnicomecánica (opcional)
+            </label>
+            <input
+              id="fechaVencimientoTecnicomecanica"
+              name="fechaVencimientoTecnicomecanica"
+              type="date"
+              className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
+            />
+          </div>
+        </fieldset>
 
         <button
           type="submit"

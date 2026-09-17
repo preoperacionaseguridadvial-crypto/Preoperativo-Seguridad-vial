@@ -126,6 +126,7 @@ export default async function AdminUsuariosPage({
                   <th className="py-2 pr-2 font-medium">Email</th>
                   <th className="py-2 pr-2 font-medium">Rol</th>
                   <th className="py-2 pr-2 font-medium">Cédula</th>
+                  <th className="py-2 pr-2 font-medium">Tipo de vehículo</th>
                   <th className="py-2 pr-2 font-medium">Cargo</th>
                   <th className="py-2 pr-2 font-medium">Activo</th>
                   <th className="py-2 pr-2 font-medium">Acciones</th>
@@ -138,6 +139,16 @@ export default async function AdminUsuariosPage({
                     <td className="py-2 pr-2">{usuario.email}</td>
                     <td className="py-2 pr-2 font-mono text-xs">{usuario.role}</td>
                     <td className="py-2 pr-2">{usuario.cedula ?? "—"}</td>
+                    <td className="py-2 pr-2">
+                      {usuario.tipoVehiculo ??
+                        (usuario.role === Role.TRABAJADOR ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                            Pendiente de asignación
+                          </span>
+                        ) : (
+                          "—"
+                        ))}
+                    </td>
                     <td className="py-2 pr-2">{usuario.cargo ?? "—"}</td>
                     <td className="py-2 pr-2">
                       {usuario.activo ? (
