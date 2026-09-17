@@ -51,6 +51,9 @@ jobs:
       - name: Prisma migrate deploy (test DB)
         run: npx prisma migrate deploy --schema prisma/schema.prisma
 
+      - name: Next.js typegen
+        run: npx next typegen
+
       - name: Type check
         run: npx tsc --noEmit
 
