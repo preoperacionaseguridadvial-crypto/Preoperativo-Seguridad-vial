@@ -1,0 +1,137 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Mismo patrón de mock que lib/admin/user-actions.test.ts /
+// lib/inspections/actions.test.ts: solo se mockea la sesión de NextAuth,
+// el resto (Prisma, S3/MinIO real) corre contra infraestructura real.
+const mockAuth = vi.fn();
+vi.mock("@/lib/auth/config", () => ({
+  auth: () => mockAuth(),
+}));
+
+const mockUploadObject = vi.fn();
+vi.mock("@/lib/storage/s3", () => ({
+  uploadObject: (...args: unknown[]) => mockUploadObject(...args),
+}));
+
+import { prisma } from "@/lib/prisma";
+import { Role, TipoVehiculo } from "@/generated/prisma/client";
+import { actualizarVehiculo, crearVehiculo } from "@/lib/admin/vehicle-actions";
+import { crearUsuario as crearUsuarioDeTest, limpiarBaseDeTest } from "@/test/helpers/db";
+
+function crearFotoFalsa(nombre = "foto.jpg"): File {
+  return new File([Buffer.from("contenido-de-prueba")], nombre, { type: "image/jpeg" });
+}
+
+function datosHojaDeVida(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    placa: `TEST-${Date.now()}`,
+    tipo: "Motocicleta",
+    tipoVehiculo: TipoVehiculo.MOTO,
+    marca: "Yamaha",
+    modelo: "FZ",
+    color: "Negro",
+    numeroMotor: "MOT-123",
+    numeroChasis: "CHA-456",
+    fechaVencimientoSoat: new Date("2027-01-01"),
+    fechaVencimientoTarjetaTransito: new Date("2027-01-01"),
+    foto: crearFotoFalsa(),
+    ...overrides,
+  };
+}
+
+async function loginComoAdmin() {
+  const admin = await crearUsuarioDeTest(Role.ADMINISTRADOR);
+  mockAuth.mockResolvedValue({ user: { id: admin.id, role: admin.role } });
+  return admin;
+}
+
+beforeEach(async () => {
+  await limpiarBaseDeTest();
+  mockAuth.mockReset();
+  mockUploadObject.mockReset();
+  mockUploadObject.mockResolvedValue("vehiculos/fake-key.jpg");
+});
+
+afterAll(async () => {
+  await limpiarBaseDeTest();
+  await prisma.$disconnect();
+});
+
+describe("crearVehiculo — soporte-moto-carro (Slice 1, hoja de vida)", () => {
+  it("rechaza crear un vehículo sin foto", async () => {
+    await loginComoAdmin();
+    const datos = datosHojaDeVida({ foto: undefined });
+
+    await expect(crearVehiculo(datos)).rejects.toThrow(/foto/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("rechaza crear un vehículo sin marca", async () => {
+    await loginComoAdmin();
+    const datos = datosHojaDeVida({ marca: "" });
+
+    await expect(crearVehiculo(datos)).rejects.toThrow(/marca/i);
+  });
+
+  it("crea un vehículo con hoja de vida completa y sube la foto a S3", async () => {
+    await loginComoAdmin();
+    const datos = datosHojaDeVida();
+
+    const vehiculo = await crearVehiculo(datos);
+
+    expect(vehiculo.tipoVehiculo).toBe(TipoVehiculo.MOTO);
+    expect(vehiculo.marca).toBe("Yamaha");
+    expect(vehiculo.modelo).toBe("FZ");
+    expect(vehiculo.color).toBe("Negro");
+    expect(vehiculo.numeroMotor).toBe("MOT-123");
+    expect(vehiculo.numeroChasis).toBe("CHA-456");
+    expect(vehiculo.fotoS3Key).toMatch(/^vehiculos\/.+\.jpg$/);
+    expect(mockUploadObject).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("actualizarVehiculo — soporte-moto-carro (Slice 1, hoja de vida)", () => {
+  it("rechaza editar sin marca (hoja de vida sigue siendo obligatoria)", async () => {
+    await loginComoAdmin();
+    const vehiculo = await crearVehiculo(datosHojaDeVida());
+    mockUploadObject.mockClear();
+
+    await expect(
+      actualizarVehiculo(vehiculo.id, {
+        placa: vehiculo.placa,
+        tipo: vehiculo.tipo,
+        activo: true,
+        tipoVehiculo: TipoVehiculo.MOTO,
+        marca: "",
+        modelo: "FZ",
+        color: "Negro",
+        numeroMotor: "MOT-123",
+        numeroChasis: "CHA-456",
+      }),
+    ).rejects.toThrow(/marca/i);
+  });
+
+  it("permite editar sin volver a subir foto (conserva el fotoS3Key existente)", async () => {
+    await loginComoAdmin();
+    const vehiculo = await crearVehiculo(datosHojaDeVida());
+    const keyOriginal = vehiculo.fotoS3Key;
+    mockUploadObject.mockClear();
+
+    const actualizado = await actualizarVehiculo(vehiculo.id, {
+      placa: vehiculo.placa,
+      tipo: vehiculo.tipo,
+      activo: true,
+      tipoVehiculo: TipoVehiculo.CARRO,
+      marca: "Chevrolet",
+      modelo: "NPR",
+      color: "Blanco",
+      numeroMotor: "MOT-123",
+      numeroChasis: "CHA-456",
+    });
+
+    expect(actualizado.tipoVehiculo).toBe(TipoVehiculo.CARRO);
+    expect(actualizado.marca).toBe("Chevrolet");
+    expect(actualizado.fotoS3Key).toBe(keyOriginal);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+});
