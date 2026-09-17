@@ -161,6 +161,32 @@ describe("actualizarVehiculo — vehículos legacy sin hoja de vida (fix: no blo
     expect(mockUploadObject).not.toHaveBeenCalled();
   });
 
+  it("normaliza a null los campos de hoja de vida enviados como string vacío (forma real de FormData en un formulario sin completar)", async () => {
+    await loginComoAdmin();
+    const legacy = await crearVehiculoDeTest({ activo: true });
+
+    // Un input de texto vacío en el formulario HTML llega como "" via
+    // FormData.get(), no como undefined — a diferencia del resto de tests
+    // de este bloque, que omiten las claves directamente.
+    const actualizado = await actualizarVehiculo(legacy.id, {
+      placa: legacy.placa,
+      tipo: legacy.tipo,
+      activo: true,
+      tipoVehiculo: TipoVehiculo.MOTO,
+      marca: "",
+      modelo: "",
+      color: "",
+      numeroMotor: "",
+      numeroChasis: "",
+    });
+
+    expect(actualizado.marca).toBeNull();
+    expect(actualizado.modelo).toBeNull();
+    expect(actualizado.color).toBeNull();
+    expect(actualizado.numeroMotor).toBeNull();
+    expect(actualizado.numeroChasis).toBeNull();
+  });
+
   it("rechaza una hoja de vida a medias en un vehículo legacy (no acepta datos parciales)", async () => {
     await loginComoAdmin();
     const legacy = await crearVehiculoDeTest({ activo: true });
