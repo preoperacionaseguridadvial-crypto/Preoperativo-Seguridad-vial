@@ -4,12 +4,16 @@ import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/render
 import type { Style } from "@react-pdf/types";
 import type { InspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
+import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import {
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
+  fotoPorTipo,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
+  formatSiNoPdf,
 } from "@/lib/pdf/pdf-helpers";
+import { registrarFuentesPdf, FONT_FAMILY_REGULAR, FONT_FAMILY_BOLD } from "@/lib/pdf/fonts";
 
 // Componente de presentación puro: recibe los datos ya resueltos por
 // `getInspeccionParaPdf` (lib/inspections/pdf-queries.ts). No accede a
@@ -22,14 +26,29 @@ import {
 // columna abajo). El Excel es solo la referencia visual: nunca se lee ni
 // se sirve desde acá.
 
+// Fase soporte-moto-carro, Slice 5 (D1): registra Liberation Sans Narrow
+// (alternativa libre de Arial Narrow, ver lib/pdf/fonts.ts y
+// public/fonts/README.md para la fuente/licencia real) antes de que
+// cualquier <Document> la use — mismo momento de carga (import del módulo)
+// que la lectura de LOGO_PATH más abajo.
+registrarFuentesPdf();
+
 // Anchos de columna reales del .xlsx (extraídos de <cols> en el XML del
 // sheet): A=8.33 B=11.33 C=12.44 D=9 E=12.89 F=16 -> bloque CARROS (A:F) =
 // 69.99. G=12 H=14.89 I=10 J=23.66 -> bloque MOTOS (G:J) = 60.55. Total
-// A:J = 130.55. El sistema es exclusivamente de motos: el bloque CARROS se
-// conserva en su posición/ancho pero se deja en blanco (sin grilla, sin
-// ítems) — no se estira MOTOS a todo el ancho, no se rediseña el formato.
-const CARROS_PCT = 54; // 69.99 / 130.55
-const MOTOS_PCT = 46; // 60.55 / 130.55
+// A:J = 130.55.
+//
+// Fase soporte-moto-carro, Slice 5 (ADR A8): el sistema ahora sirve ambos
+// tipos de vehículo, pero `data.respuestas` YA llega filtrada por el tipo de
+// la inspección (el catálogo branchea en `getChecklistCatalog`, ver
+// lib/inspections/queries.ts) — este componente nunca supo ni necesitó
+// saber si es MOTO o CARRO, solo dibuja lo que recibe a todo el ancho. Las
+// constantes CARROS_PCT/MOTOS_PCT (heredadas del layout original de un solo
+// tipo) se eliminan: el único lugar que todavía usaba esos porcentajes es la
+// franja de resultado + firmas de abajo, que es un split fijo NO relacionado
+// con tipo de vehículo (ver RESULTADO_IZQ_PCT/RESULTADO_DER_PCT).
+const RESULTADO_IZQ_PCT = 54; // 69.99 / 130.55 — bloque declaración + firmas
+const RESULTADO_DER_PCT = 46; // 60.55 / 130.55 — texto instructivo fijo
 
 // La zona de resultado + firmas (filas 71-74 del Excel) NO está dividida
 // por tipo de vehículo: es un único bloque compartido de ancho A:F (mismo
@@ -61,6 +80,15 @@ const TXT = {
   firmaSupervisor: "NOMBRE Y FIRMA DEL SUPERVISOR",
   evidenciaFotografica: "EVIDENCIA FOTOGRÁFICA",
   novedadesTitulo: "NOVEDADES",
+  fotosDiariasTitulo: "FOTOS DIARIAS DEL VEHÍCULO",
+  fotoLateralLabel: "Lateral",
+  fotoPlacaLabel: "Placa",
+  fotoDiariaVacia: "Sin foto registrada",
+  declaracionEstadoTitulo: "DECLARACIÓN DE ESTADO DEL CONDUCTOR",
+  declaracionEstadoAlerta: "⚠ REQUIERE ATENCIÓN",
+  preguntaMedicamentos: "¿Medicamento/sustancia/condición que afecte su capacidad?",
+  preguntaCondiciones: "¿Condiciones físicas y mentales adecuadas?",
+  preguntaAlcohol: "¿Consumió alcohol u otra sustancia?",
 };
 
 const ESTADO_APROBACION_LABELS: Record<string, string> = {
@@ -76,13 +104,22 @@ const ESTADO_APROBACION_LABELS: Record<string, string> = {
 const LOGO_PATH = path.join(process.cwd(), "public", "logo", "ess-ltda.png");
 const logoBuffer = fs.existsSync(LOGO_PATH) ? fs.readFileSync(LOGO_PATH) : null;
 
+// Fase soporte-moto-carro, Slice 5 (D1/D2): base 11pt en Liberation Sans
+// Narrow en todo el documento — antes 6.5-9pt Helvetica para forzar una sola
+// página. A 11pt el contenido ya no entra en una página (más con las
+// secciones nuevas de esta fase: fotos diarias, declaración de estado del
+// conductor) — se acepta y se soporta multi-página con encabezado repetido
+// (`fixed` en el header, `wrap` en <Page>), nunca se recorta contenido (D2,
+// confirmado). Única excepción deliberada: el pie de página de paginación
+// ("página X de Y") se mantiene en un tamaño menor — es metadato de
+// paginación, no contenido del documento oficial que D1/D2 protegen.
 const styles = StyleSheet.create({
   page: {
     paddingTop: 22,
     paddingBottom: 30,
     paddingHorizontal: 22,
-    fontSize: 8,
-    fontFamily: "Helvetica",
+    fontSize: 11,
+    fontFamily: FONT_FAMILY_REGULAR,
     color: "#111111",
   },
   border: { borderWidth: 1, borderColor: "#111111" },
@@ -106,16 +143,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 4,
   },
-  headerTitle: { fontSize: 13, fontFamily: "Helvetica-Bold", textAlign: "center" },
+  headerTitle: { fontSize: 13, fontFamily: FONT_FAMILY_BOLD, textAlign: "center" },
   headerSubtitle: { fontSize: 11, textAlign: "center", marginTop: 2 },
   headerMetaCell: { width: "30%", justifyContent: "center", padding: 4, gap: 2 },
-  headerMetaText: { fontSize: 8 },
+  headerMetaText: { fontSize: 11 },
   // Corrección Slice 4 (hallazgo CRITICAL #1): "Fecha vigencia" sin
   // configurar (placeholder) no puede verse igual que una fecha real en el
   // documento oficial firmado — mismo lenguaje visual de advertencia (ámbar,
   // negrita) que `itemValorWarn` (ítems TRIESTADO en BAJO), reusado acá para
   // consistencia en vez de un estilo nuevo.
-  headerMetaTextWarn: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#B45309" },
+  headerMetaTextWarn: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, color: "#B45309" },
 
   // Datos de la inspección
   datosGrid: { borderWidth: 1, borderColor: "#111111", marginBottom: 4 },
@@ -129,8 +166,8 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   datosCellLast: { flexGrow: 1, flexBasis: 0, padding: 3 },
-  datosLabel: { fontSize: 6.5, color: "#444444" },
-  datosValue: { fontSize: 8.5, fontFamily: "Helvetica-Bold", marginTop: 1 },
+  datosLabel: { fontSize: 11, color: "#444444" },
+  datosValue: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, marginTop: 1 },
 
   // Banner ancho completo
   bannerFull: {
@@ -140,16 +177,16 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     backgroundColor: "#EFEFEF",
   },
-  bannerFullText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", textAlign: "center" },
+  bannerFullText: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, textAlign: "center" },
 
-  // Banda checklist: a pedido explícito del usuario (2026-08-21) el bloque
-  // MOTOS ocupa el 100% del ancho en vez del 46% original del Excel — ya no
-  // se deja el hueco de 54% que ocupaba CARROS en el formato oficial.
+  // Banda del checklist: `data.respuestas` ya llega filtrada por tipo de
+  // vehículo (ver comentario de RESULTADO_IZQ_PCT arriba) — un único bloque
+  // genérico a todo el ancho, sin dividir por MOTO/CARRO.
   checklistBand: { borderWidth: 1, borderColor: "#111111", marginBottom: 4 },
-  motosBlock: { width: "100%" },
+  checklistBlock: { width: "100%" },
   seccionSubtitulo: {
-    fontSize: 7.5,
-    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    fontFamily: FONT_FAMILY_BOLD,
     backgroundColor: "#DDDDDD",
     padding: 2,
     borderBottomWidth: 1,
@@ -164,25 +201,55 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 3,
   },
-  itemNombre: { fontSize: 7.5, flexShrink: 1, paddingRight: 4 },
-  itemValorOk: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
+  itemNombre: { fontSize: 11, flexShrink: 1, paddingRight: 4 },
+  itemValorOk: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD },
   // Estado intermedio de los ítems TRIESTADO (fluidos en BAJO) — no es una
   // falla (no crea Novedad, ver esNovedad() en lib/inspections/respuesta.ts)
   // pero tampoco es un OK liso, por eso un color propio (ámbar) en vez de
   // reusar itemValorOk/itemValorFalla.
-  itemValorWarn: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#B45309" },
-  itemValorFalla: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
+  itemValorWarn: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, color: "#B45309" },
+  itemValorFalla: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD },
+
+  // Fotos diarias (Slice 5, A7)
+  fotosSeccion: { borderWidth: 1, borderColor: "#111111", marginBottom: 4, padding: 4 },
+  fotosTitulo: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, marginBottom: 4 },
+  fotosRow: { flexDirection: "row", gap: 8 },
+  fotoDiariaBloque: { flexGrow: 1, flexBasis: 0, alignItems: "center" },
+  fotoDiariaLabel: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, marginBottom: 2 },
+  fotoDiariaImagen: { width: "100%", height: 130, objectFit: "contain" },
+  fotoDiariaVacia: { fontSize: 11, color: "#888888", marginTop: 20 },
+
+  // Declaración de estado del conductor (Slice 5, A6)
+  declaracionEstadoSeccion: { borderWidth: 1, borderColor: "#111111", marginBottom: 4, padding: 4 },
+  declaracionEstadoTituloRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  declaracionEstadoTitulo: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD },
+  // Mismo lenguaje visual de advertencia (ámbar, negrita) que
+  // headerMetaTextWarn/itemValorWarn — ver instrucción explícita de esta
+  // fase de reusar ese criterio en vez de inventar un estilo nuevo.
+  declaracionEstadoAlerta: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, color: "#B45309" },
+  declaracionEstadoFila: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 1,
+  },
+  declaracionEstadoPregunta: { fontSize: 11, flexShrink: 1, paddingRight: 4 },
+  declaracionEstadoRespuesta: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD },
 
   // Novedades
   novedadesSeccion: { borderWidth: 1, borderColor: "#111111", marginBottom: 4 },
   novedadItem: { borderBottomWidth: 1, borderColor: "#CCCCCC", padding: 4 },
   novedadHeaderRow: { flexDirection: "row", justifyContent: "space-between" },
-  novedadItemNombre: { fontSize: 8, fontFamily: "Helvetica-Bold" },
-  novedadCampo: { fontSize: 7.5, marginTop: 1 },
+  novedadItemNombre: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD },
+  novedadCampo: { fontSize: 11, marginTop: 1 },
 
   // Resultado + firmas
   resultadoBand: { flexDirection: "row", borderWidth: 1, borderColor: "#111111" },
-  resultadoBloqueIzq: { width: `${CARROS_PCT}%` },
+  resultadoBloqueIzq: { width: `${RESULTADO_IZQ_PCT}%` },
   resultadoTituloRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -191,10 +258,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: "#111111",
   },
-  resultadoTexto: { fontSize: 8.5, fontFamily: "Helvetica-Bold" },
-  resultadoSiNo: { fontSize: 9, fontFamily: "Helvetica-Bold" },
+  resultadoTexto: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD },
+  resultadoSiNo: { fontSize: 12, fontFamily: FONT_FAMILY_BOLD },
   declaracionTexto: {
-    fontSize: 7,
+    fontSize: 11,
     padding: 4,
     borderBottomWidth: 1,
     borderColor: "#111111",
@@ -209,18 +276,18 @@ const styles = StyleSheet.create({
   },
   firmaCajaSupervisor: { width: `${FIRMA_SUPERVISOR_PCT}%`, padding: 4, minHeight: 70 },
   firmaImagen: { width: "100%", height: 36, objectFit: "contain", marginVertical: 2 },
-  firmaLabel: { fontSize: 6.5, fontFamily: "Helvetica-Bold", textAlign: "center" },
-  firmaNombre: { fontSize: 7.5, textAlign: "center", marginTop: 2 },
-  firmaCedula: { fontSize: 6.5, color: "#444444", textAlign: "center" },
-  firmaFecha: { fontSize: 6, color: "#444444", textAlign: "center" },
-  firmaVacia: { fontSize: 6.5, color: "#888888", textAlign: "center", marginTop: 20 },
+  firmaLabel: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, textAlign: "center" },
+  firmaNombre: { fontSize: 11, textAlign: "center", marginTop: 2 },
+  firmaCedula: { fontSize: 11, color: "#444444", textAlign: "center" },
+  firmaFecha: { fontSize: 11, color: "#444444", textAlign: "center" },
+  firmaVacia: { fontSize: 11, color: "#888888", textAlign: "center", marginTop: 20 },
   resultadoBloqueDer: {
-    width: `${MOTOS_PCT}%`,
+    width: `${RESULTADO_DER_PCT}%`,
     borderLeftWidth: 1,
     borderColor: "#111111",
     padding: 5,
   },
-  textoInstructivo: { fontSize: 6.5, lineHeight: 1.3 },
+  textoInstructivo: { fontSize: 11, lineHeight: 1.3 },
 
   // Estado de aprobación (fuera del cuerpo oficial del formato)
   aprobacionBox: {
@@ -229,24 +296,27 @@ const styles = StyleSheet.create({
     borderColor: "#111111",
     padding: 4,
   },
-  aprobacionTitulo: { fontSize: 8, fontFamily: "Helvetica-Bold" },
-  aprobacionObservacion: { fontSize: 7.5, marginTop: 2 },
+  aprobacionTitulo: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD },
+  aprobacionObservacion: { fontSize: 11, marginTop: 2 },
 
+  // Pie de página: metadato de paginación, no contenido del documento — se
+  // mantiene deliberadamente por debajo de 11pt (ver comentario junto a la
+  // definición de `styles` arriba).
   footer: {
     position: "absolute",
     bottom: 10,
     left: 22,
     right: 22,
-    fontSize: 6,
+    fontSize: 7,
     color: "#888888",
     textAlign: "center",
   },
 
   // Evidencia fotográfica (páginas separadas)
-  evidenciaTitulo: { fontSize: 12, fontFamily: "Helvetica-Bold", marginBottom: 10 },
+  evidenciaTitulo: { fontSize: 13, fontFamily: FONT_FAMILY_BOLD, marginBottom: 10 },
   fotoBloque: { marginBottom: 12, borderWidth: 1, borderColor: "#111111", padding: 6 },
-  fotoInfo: { fontSize: 8, marginBottom: 4 },
-  fotoInfoLabel: { fontFamily: "Helvetica-Bold" },
+  fotoInfo: { fontSize: 11, marginBottom: 4 },
+  fotoInfoLabel: { fontFamily: FONT_FAMILY_BOLD },
   fotoImagen: { width: "100%", maxHeight: 320, objectFit: "contain" },
 });
 
@@ -313,6 +383,20 @@ function FirmaCaja({
   );
 }
 
+function FotoDiariaBloque({ label, foto }: { label: string; foto: { url: string } | null }) {
+  return (
+    <View style={styles.fotoDiariaBloque}>
+      <Text style={styles.fotoDiariaLabel}>{label}</Text>
+      {foto ? (
+        // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image no acepta alt
+        <Image src={foto.url} style={styles.fotoDiariaImagen} />
+      ) : (
+        <Text style={styles.fotoDiariaVacia}>{TXT.fotoDiariaVacia}</Text>
+      )}
+    </View>
+  );
+}
+
 export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
   const categoriasOrdenadas = [...new Map(data.respuestas.map((r) => [r.checklistItem.category.id, r.checklistItem.category])).values()].sort(
     (a, b) => a.orden - b.orden,
@@ -353,6 +437,15 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
   const novedades: Novedad[] = data.novedades;
   const novedadesConFotos = novedades.filter((n) => n.photos.length > 0);
 
+  // Fase soporte-moto-carro, Slice 5 (A7): las 2 fotos diarias obligatorias.
+  const fotoLateral = fotoPorTipo(data.fotos, "LATERAL");
+  const fotoPlaca = fotoPorTipo(data.fotos, "PLACA");
+
+  // Fase soporte-moto-carro, Slice 5 (A6/D8): informativo únicamente — no
+  // cambia ninguna lógica de aprobación (eso ya vive del lado del servidor,
+  // ver lib/inspections/estado-conductor.ts).
+  const alertaEstadoConductor = requiereAtencionEstadoConductor(data);
+
   const estadoAprobacionLabel = ESTADO_APROBACION_LABELS[data.status] ?? data.status;
   const decidida = data.reviewedAt !== null;
 
@@ -369,14 +462,17 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
   return (
     <Document>
       <Page size="A4" style={styles.page} wrap>
-        {/* ENCABEZADO */}
-        <View style={styles.header}>
+        {/* ENCABEZADO — `fixed` para que se repita en cada página generada
+            por el `wrap` de <Page> (Slice 5, D2): a 11pt el contenido ya no
+            entra en una sola página, así que el encabezado tiene que
+            reaparecer arriba de cada una. */}
+        <View style={styles.header} fixed>
           <View style={styles.headerLogoCell}>
             {logoBuffer ? (
               // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image no acepta alt
               <Image src={logoBuffer} style={styles.headerLogo} />
             ) : (
-              <Text style={{ fontSize: 6 }}>ESS LTDA</Text>
+              <Text style={{ fontSize: 8 }}>ESS LTDA</Text>
             )}
           </View>
           <View style={styles.headerTitleCell}>
@@ -467,11 +563,11 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
           <Text style={styles.bannerFullText}>{TXT.nivelesBanner}</Text>
         </View>
 
-        {/* CHECKLIST — bloque MOTOS a todo el ancho (ver comentario en
-            styles.checklistBand sobre por qué ya no se deja el hueco de
-            CARROS acá). */}
+        {/* CHECKLIST — bloque único a todo el ancho (ver comentario de
+            RESULTADO_IZQ_PCT sobre por qué ya no hay bloque CARROS/MOTOS
+            separado acá: `data.respuestas` ya llega filtrada por tipo). */}
         <View style={styles.checklistBand}>
-          <View style={styles.motosBlock}>
+          <View style={styles.checklistBlock}>
             <Text style={styles.seccionSubtitulo}>{TXT.subtituloLuces}</Text>
             {lucesItems.map((r) => (
               <ChecklistItemRow key={r.id} respuesta={r} />
@@ -492,6 +588,41 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
                 ))}
               </View>
             ))}
+          </View>
+        </View>
+
+        {/* FOTOS DIARIAS (Slice 5, A7) — lateral + placa, obligatorias por
+            inspección, independientes del resultado del checklist. */}
+        <View style={styles.fotosSeccion} wrap={false}>
+          <Text style={styles.fotosTitulo}>{TXT.fotosDiariasTitulo}</Text>
+          <View style={styles.fotosRow}>
+            <FotoDiariaBloque label={TXT.fotoLateralLabel} foto={fotoLateral} />
+            <FotoDiariaBloque label={TXT.fotoPlacaLabel} foto={fotoPlaca} />
+          </View>
+        </View>
+
+        {/* DECLARACIÓN DE ESTADO DEL CONDUCTOR (Slice 5, A6) — informativo:
+            una respuesta preocupante no bloquea ni cambia el estado (D8,
+            confirmado), solo se marca acá con el mismo lenguaje visual de
+            advertencia que el resto del documento. */}
+        <View style={styles.declaracionEstadoSeccion} wrap={false}>
+          <View style={styles.declaracionEstadoTituloRow}>
+            <Text style={styles.declaracionEstadoTitulo}>{TXT.declaracionEstadoTitulo}</Text>
+            {alertaEstadoConductor && (
+              <Text style={styles.declaracionEstadoAlerta}>{TXT.declaracionEstadoAlerta}</Text>
+            )}
+          </View>
+          <View style={styles.declaracionEstadoFila}>
+            <Text style={styles.declaracionEstadoPregunta}>{TXT.preguntaMedicamentos}</Text>
+            <Text style={styles.declaracionEstadoRespuesta}>{formatSiNoPdf(data.tomaMedicamentos)}</Text>
+          </View>
+          <View style={styles.declaracionEstadoFila}>
+            <Text style={styles.declaracionEstadoPregunta}>{TXT.preguntaCondiciones}</Text>
+            <Text style={styles.declaracionEstadoRespuesta}>{formatSiNoPdf(data.condicionesAptas)}</Text>
+          </View>
+          <View style={styles.declaracionEstadoFila}>
+            <Text style={styles.declaracionEstadoPregunta}>{TXT.preguntaAlcohol}</Text>
+            <Text style={styles.declaracionEstadoRespuesta}>{formatSiNoPdf(data.consumioAlcohol)}</Text>
           </View>
         </View>
 
