@@ -15,6 +15,20 @@ sustituirla).
 - `LiberationSansNarrow-Bold.ttf` (el formato usa texto en negrita en varias
   secciones — ver `lib/pdf/InspeccionPdfDocument.tsx`)
 
+## Integridad (SHA256)
+
+`esArchivoFuenteValido` (`lib/pdf/fonts.ts`) solo valida que el archivo
+exista y pese más de 50KB — no valida el contenido. Los hashes de abajo son
+el registro de procedencia de los bytes realmente commiteados en este repo
+(calculados con `certutil -hashfile <archivo> SHA256` en Windows), para que
+una futura re-descarga o reemplazo del release `1.07.6` se pueda diffear
+contra un valor conocido-bueno:
+
+```
+LiberationSansNarrow-Regular.ttf  546e8957e5dccece4ac07ea02f57a5cdb3dc3b0e902ea75a837a7784ba4b7eef
+LiberationSansNarrow-Bold.ttf     8e5eb5090ef4a3143794c230b82f174f7f2fbbfcd6cb789ccfa1f90bf8795d54
+```
+
 Registrados en `@react-pdf/renderer` vía `lib/pdf/fonts.ts`
 (`Font.register`), como familias `"Liberation Sans Narrow"` /
 `"Liberation Sans Narrow Bold"`, a 11pt base en todo el documento.
