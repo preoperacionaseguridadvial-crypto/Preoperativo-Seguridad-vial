@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { RespuestaChecklist } from "@/generated/prisma/client";
+import { PLACEHOLDER_FECHA_VIGENCIA } from "@/lib/settings/queries";
 import {
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
+  formatFechaVigenciaPdf,
   formatoValorItemPdf,
 } from "@/lib/pdf/pdf-helpers";
 
@@ -123,5 +125,27 @@ describe("formatoValorItemPdf", () => {
 
     const textos = new Set([bueno.texto, bajo.texto, malo.texto, "✓ OK.", "X FALLA, DAÑO, FALTANTE"]);
     expect(textos.size).toBe(5);
+  });
+});
+
+// Corrección Slice 4 (hallazgo CRITICAL #1): `InspeccionPdfDocument`
+// imprimía `data.fechaVigencia` tal cual, sin distinguir el placeholder
+// sembrado por el seed de una fecha real configurada por un Administrador —
+// en el PDF oficial firmado, ambos se veían idénticos. `formatFechaVigenciaPdf`
+// marca el placeholder de forma inequívoca para que el componente lo
+// resalte visualmente.
+describe("formatFechaVigenciaPdf", () => {
+  it("marca el placeholder con un sufijo inequívoco y esPlaceholder=true", () => {
+    const resultado = formatFechaVigenciaPdf(PLACEHOLDER_FECHA_VIGENCIA);
+
+    expect(resultado.esPlaceholder).toBe(true);
+    expect(resultado.texto).toBe(`${PLACEHOLDER_FECHA_VIGENCIA} (SIN CONFIGURAR)`);
+  });
+
+  it("devuelve una fecha real configurada tal cual, sin marcar", () => {
+    const resultado = formatFechaVigenciaPdf("31/12/2027");
+
+    expect(resultado.esPlaceholder).toBe(false);
+    expect(resultado.texto).toBe("31/12/2027");
   });
 });

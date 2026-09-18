@@ -1,5 +1,6 @@
 import "server-only";
 import type { RespuestaChecklist } from "@/generated/prisma/client";
+import { PLACEHOLDER_FECHA_VIGENCIA } from "@/lib/settings/queries";
 
 // Lógica pura (sin JSX, sin Prisma) que extrae del componente del PDF
 // (InspeccionPdfDocument.tsx) las dos reglas que la corrección de Slice 2
@@ -68,4 +69,26 @@ export function formatoValorItemPdf(valor: RespuestaChecklist): { texto: string;
     default:
       return { texto: "X FALLA, DAÑO, FALTANTE", estilo: "falla" };
   }
+}
+
+/**
+ * Texto + bandera para el campo "Fecha vigencia" del encabezado del PDF
+ * (fase soporte-moto-carro, Slice 4, ADR A5, corrección CRITICAL #1). Antes
+ * de este fix, `data.fechaVigencia` se imprimía tal cual en el documento
+ * oficial firmado sin ningún resguardo: si ningún Administrador configuró
+ * todavía la fecha real, el placeholder sembrado por el seed
+ * (`PLACEHOLDER_FECHA_VIGENCIA`) se veía indistinguible de una fecha real
+ * configurada — nadie generando o revisando el PDF lo notaría
+ * necesariamente. Cuando `valor` es el placeholder, se le agrega un marcador
+ * inequívoco ("(SIN CONFIGURAR)") para que el componente lo distinga y lo
+ * pinte con el mismo lenguaje visual de advertencia que ya usa
+ * `itemValorWarn` (ítems TRIESTADO en BAJO) en vez de inventar un estilo
+ * nuevo.
+ */
+export function formatFechaVigenciaPdf(valor: string): { texto: string; esPlaceholder: boolean } {
+  const esPlaceholder = valor === PLACEHOLDER_FECHA_VIGENCIA;
+  return {
+    texto: esPlaceholder ? `${valor} (SIN CONFIGURAR)` : valor,
+    esPlaceholder,
+  };
 }

@@ -4,7 +4,12 @@ import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/render
 import type { Style } from "@react-pdf/types";
 import type { InspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
-import { categoriasGenericasPdf, clasificarInspeccionVisual, formatoValorItemPdf } from "@/lib/pdf/pdf-helpers";
+import {
+  categoriasGenericasPdf,
+  clasificarInspeccionVisual,
+  formatFechaVigenciaPdf,
+  formatoValorItemPdf,
+} from "@/lib/pdf/pdf-helpers";
 
 // Componente de presentación puro: recibe los datos ya resueltos por
 // `getInspeccionParaPdf` (lib/inspections/pdf-queries.ts). No accede a
@@ -105,6 +110,12 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 11, textAlign: "center", marginTop: 2 },
   headerMetaCell: { width: "30%", justifyContent: "center", padding: 4, gap: 2 },
   headerMetaText: { fontSize: 8 },
+  // Corrección Slice 4 (hallazgo CRITICAL #1): "Fecha vigencia" sin
+  // configurar (placeholder) no puede verse igual que una fecha real en el
+  // documento oficial firmado — mismo lenguaje visual de advertencia (ámbar,
+  // negrita) que `itemValorWarn` (ítems TRIESTADO en BAJO), reusado acá para
+  // consistencia en vez de un estilo nuevo.
+  headerMetaTextWarn: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#B45309" },
 
   // Datos de la inspección
   datosGrid: { borderWidth: 1, borderColor: "#111111", marginBottom: 4 },
@@ -351,6 +362,10 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
   // haya decisión, no se puede afirmar SI ni NO todavía.
   const decisionSupervisor = data.status === "APROBADA" ? "SI" : data.status === "RECHAZADA" ? "NO" : "PENDIENTE";
 
+  // Corrección Slice 4 (hallazgo CRITICAL #1): ver formatFechaVigenciaPdf en
+  // lib/pdf/pdf-helpers.ts.
+  const fechaVigencia = formatFechaVigenciaPdf(data.fechaVigencia);
+
   return (
     <Document>
       <Page size="A4" style={styles.page} wrap>
@@ -375,8 +390,15 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
                 ("Fecha vigencia: 30/08/2016"), ahora viene de la
                 configuración AppSetting resuelta en getInspeccionParaPdf
                 (lib/inspections/pdf-queries.ts) — nunca vacía, cae al
-                placeholder sembrado por el seed si nadie la configuró. */}
-            <Text style={styles.headerMetaText}>Fecha vigencia: {data.fechaVigencia}</Text>
+                placeholder sembrado por el seed si nadie la configuró.
+                Corrección Slice 4 (hallazgo CRITICAL #1): si sigue siendo
+                el placeholder, se marca con estilo de advertencia y el
+                sufijo "(SIN CONFIGURAR)" (formatFechaVigenciaPdf,
+                lib/pdf/pdf-helpers.ts) para que nunca se confunda con una
+                fecha real en el documento oficial firmado. */}
+            <Text style={fechaVigencia.esPlaceholder ? styles.headerMetaTextWarn : styles.headerMetaText}>
+              Fecha vigencia: {fechaVigencia.texto}
+            </Text>
           </View>
         </View>
 
