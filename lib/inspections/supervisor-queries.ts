@@ -92,8 +92,31 @@ export async function getInspectionForSupervisor(inspectionId: string) {
 
   // Mismo criterio que las fotos de Novedad: URL de lectura firmada
   // on-demand, nunca persistida (fase soporte-moto-carro, Slice 5, A7).
+  //
+  // Corrección Slice 5 (hallazgo WARNING resilience): a diferencia de las
+  // fotos de Novedad (solo se disparan si hay una novedad reportada), las
+  // fotos diarias son obligatorias en casi el 100% de las inspecciones —
+  // este mapeo está en el hot path de prácticamente toda generación de PDF
+  // (app/api/inspecciones/[id]/pdf/route.ts, también sin try/catch propio).
+  // `getSignedReadUrl` solo lanza si falta `S3_BUCKET`, pero un
+  // desconfiguración de esa variable ya no puede tumbar el PDF entero.
+  // Mismo patrón que `resolverFechaVigencia` (lib/inspections/pdf-queries.ts,
+  // corrección Slice 4): se degrada foto por foto (sin `url`) en vez de
+  // propagar el error y abortar toda la inspección.
   const fotos = await Promise.all(
-    inspection.fotos.map(async (foto) => ({ ...foto, url: await getSignedReadUrl(foto.s3Key) })),
+    inspection.fotos.map(async (foto) => {
+      try {
+        return { ...foto, url: await getSignedReadUrl(foto.s3Key) };
+      } catch (err) {
+        console.error("Fallo al firmar la URL de lectura de una foto diaria; se omite su url.", {
+          inspectionId,
+          fotoId: foto.id,
+          tipo: foto.tipo,
+          err,
+        });
+        return { ...foto, url: undefined };
+      }
+    }),
   );
 
   return { ...inspection, novedades, fotos };

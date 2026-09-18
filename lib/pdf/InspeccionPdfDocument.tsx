@@ -383,11 +383,17 @@ function FirmaCaja({
   );
 }
 
-function FotoDiariaBloque({ label, foto }: { label: string; foto: { url: string } | null }) {
+function FotoDiariaBloque({ label, foto }: { label: string; foto: { url?: string } | null }) {
+  // `foto.url` puede venir `undefined` (no solo el bloque `foto` venir
+  // `null`) desde que `getInspectionForSupervisor`
+  // (lib/inspections/supervisor-queries.ts, corrección Slice 5 WARNING
+  // resilience) degrada foto por foto ante un fallo al firmar la URL en vez
+  // de abortar todo el PDF — se trata igual que "sin foto registrada" en vez
+  // de intentar renderizar una <Image> sin src.
   return (
     <View style={styles.fotoDiariaBloque}>
       <Text style={styles.fotoDiariaLabel}>{label}</Text>
-      {foto ? (
+      {foto?.url ? (
         // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image no acepta alt
         <Image src={foto.url} style={styles.fotoDiariaImagen} />
       ) : (
