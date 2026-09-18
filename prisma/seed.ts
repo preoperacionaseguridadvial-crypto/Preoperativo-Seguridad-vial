@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { PrismaClient, Role, TipoVehiculo, TipoRespuestaItem } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { CLAVE_FECHA_VIGENCIA, PLACEHOLDER_FECHA_VIGENCIA } from "../lib/settings/constants";
 
 const adapter = new PrismaPg(process.env.DATABASE_URL ?? "");
 const prisma = new PrismaClient({ adapter });
@@ -329,14 +330,14 @@ async function main() {
   // real desde /admin/configuracion (ver lib/settings/actions.ts). `create`
   // siembra el placeholder; `update` queda vacío a propósito para no pisar
   // un valor real ya configurado por un Administrador si el seed se corre
-  // de nuevo. Literales duplicados de `CLAVE_FECHA_VIGENCIA`/
-  // `PLACEHOLDER_FECHA_VIGENCIA` (lib/settings/queries.ts) — este script no
-  // importa de `lib/` (usa su propio PrismaClient/adapter, ver arriba), así
-  // que si esos literales cambian hay que actualizarlos acá también.
+  // de nuevo. `CLAVE_FECHA_VIGENCIA`/`PLACEHOLDER_FECHA_VIGENCIA` vienen de
+  // lib/settings/constants.ts (sin "server-only", a diferencia de
+  // lib/settings/queries.ts) para que este script pueda importarlas sin
+  // arrastrar esa dependencia, manteniendo una sola fuente de verdad.
   await prisma.appSetting.upsert({
-    where: { clave: "formato.fechaVigencia" },
+    where: { clave: CLAVE_FECHA_VIGENCIA },
     update: {},
-    create: { clave: "formato.fechaVigencia", valor: "Pendiente de definir" },
+    create: { clave: CLAVE_FECHA_VIGENCIA, valor: PLACEHOLDER_FECHA_VIGENCIA },
   });
   console.log('Seed OK: configuración "formato.fechaVigencia" sembrada con placeholder.');
 }

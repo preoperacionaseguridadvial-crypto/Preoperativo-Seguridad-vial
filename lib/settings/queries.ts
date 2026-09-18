@@ -1,18 +1,16 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { CLAVE_FECHA_VIGENCIA, PLACEHOLDER_FECHA_VIGENCIA } from "@/lib/settings/constants";
 
 // Almacén genérico de configuración (fase soporte-moto-carro, Slice 4, ADR
 // A5) — ver lib/admin/queries.ts para el mismo espíritu de "solo lectura
 // acá, mutaciones en *-actions.ts".
-
-export const CLAVE_FECHA_VIGENCIA = "formato.fechaVigencia";
-
-// Placeholder sembrado por prisma/seed.ts cuando ningún Administrador
-// definió todavía la fecha real (spec: "Vigencia no configurada" — MUST
-// mostrar un placeholder claramente marcado, nunca una fecha inventada).
-// También sirve de resguardo defensivo si la fila llegara a faltar (ej. un
-// deploy que corrió la migración pero no el seed).
-export const PLACEHOLDER_FECHA_VIGENCIA = "Pendiente de definir";
+//
+// CLAVE_FECHA_VIGENCIA/PLACEHOLDER_FECHA_VIGENCIA viven en
+// lib/settings/constants.ts (sin "server-only") para que prisma/seed.ts
+// pueda importarlas sin arrastrar esa dependencia; se reexportan acá para
+// no romper a los consumidores existentes de este módulo.
+export { CLAVE_FECHA_VIGENCIA, PLACEHOLDER_FECHA_VIGENCIA };
 
 const VALORES_POR_DEFECTO: Record<string, string> = {
   [CLAVE_FECHA_VIGENCIA]: PLACEHOLDER_FECHA_VIGENCIA,
