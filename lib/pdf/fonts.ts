@@ -28,6 +28,14 @@ export const FONT_FAMILY_BOLD = "Liberation Sans Narrow Bold";
 // Mismo patrón que LOGO_PATH (lib/pdf/InspeccionPdfDocument.tsx): ruta
 // absoluta de filesystem resuelta desde process.cwd(), nunca una URL remota
 // — @react-pdf/renderer/fontkit lee el archivo directamente.
+// Corrección Slice 5 (hallazgo WARNING risk): SHA256 de los bytes
+// realmente commiteados (ver public/fonts/README.md, sección "Integridad",
+// para el criterio completo) — `esArchivoFuenteValido` de abajo solo valida
+// existencia + tamaño, no contenido; estos hashes son el registro de
+// procedencia contra el que se puede diffear una futura re-descarga del
+// release 1.07.6.
+// LiberationSansNarrow-Regular.ttf: 546e8957e5dccece4ac07ea02f57a5cdb3dc3b0e902ea75a837a7784ba4b7eef
+// LiberationSansNarrow-Bold.ttf:    8e5eb5090ef4a3143794c230b82f174f7f2fbbfcd6cb789ccfa1f90bf8795d54
 export const FONT_REGULAR_PATH = path.join(
   process.cwd(),
   "public",
@@ -64,9 +72,32 @@ let registrado = false;
  * más barato que reprocesar el TTF en cada request del route handler
  * (app/api/inspecciones/[id]/pdf/route.ts). Llamada a nivel de módulo desde
  * InspeccionPdfDocument.tsx, igual que la lectura de LOGO_PATH.
+ *
+ * Corrección Slice 5 (hallazgo WARNING reliability): antes de este fix se
+ * llamaba a `Font.register` sin resguardo, aunque `fuentesPdfDisponibles()`
+ * ya existía como guard — un TTF faltante/corrupto en el deploy solo se
+ * hubiera notado como una falla opaca dentro de
+ * @react-pdf/renderer/fontkit en el momento real de `renderToBuffer`, para
+ * cada request del PDF. Mismo espíritu que el fallback de `LOGO_PATH` en
+ * InspeccionPdfDocument.tsx (fs.existsSync ? leer : null, con fallback a
+ * texto): si las fuentes no están disponibles/son válidas, no se llama a
+ * `Font.register` y el documento sigue con el manejo por defecto de
+ * @react-pdf/renderer (Helvetica) en vez de Liberation Sans Narrow. Se
+ * loguea con `console.error` (mismo criterio que
+ * lib/inspections/foto-actions.ts) porque implica que el documento oficial
+ * no está usando la fuente correcta.
  */
 export function registrarFuentesPdf(): void {
   if (registrado) return;
+  if (!fuentesPdfDisponibles()) {
+    console.error(
+      "No se pudo registrar Liberation Sans Narrow: el/los archivo(s) TTF no existen o son inválidos. " +
+        "El PDF oficial se generará con la fuente por defecto de @react-pdf/renderer en vez de la fuente correcta.",
+      { FONT_REGULAR_PATH, FONT_BOLD_PATH },
+    );
+    registrado = true;
+    return;
+  }
   Font.register({ family: FONT_FAMILY_REGULAR, src: FONT_REGULAR_PATH });
   Font.register({ family: FONT_FAMILY_BOLD, src: FONT_BOLD_PATH });
   registrado = true;

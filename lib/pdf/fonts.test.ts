@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { esArchivoFuenteValido, fuentesPdfDisponibles, FONT_REGULAR_PATH, FONT_BOLD_PATH } from "@/lib/pdf/fonts";
 
 // Fase soporte-moto-carro, Slice 5 (D1): Arial Narrow es propietaria y no
@@ -28,5 +28,57 @@ describe("fuentesPdfDisponibles", () => {
     expect(fuentesPdfDisponibles()).toBe(true);
     expect(fs.statSync(FONT_REGULAR_PATH).size).toBeGreaterThan(50_000);
     expect(fs.statSync(FONT_BOLD_PATH).size).toBeGreaterThan(50_000);
+  });
+});
+
+// Corrección Slice 5 (hallazgo WARNING reliability): `registrarFuentesPdf`
+// llamaba a `Font.register` sin usar el guard `fuentesPdfDisponibles()` que
+// ya existía en este mismo archivo — un TTF faltante/corrupto en el deploy
+// solo se hubiera notado como una falla opaca de
+// @react-pdf/renderer/fontkit en el momento real de `renderToBuffer`, para
+// cada request de PDF. Se testea acá vía un wrapper: `Font.register` se
+// mockea (no tiene sentido registrar una fuente real en un test unitario) y
+// el estado interno de `registrado` (module-level, no exportado) se resetea
+// con `vi.resetModules()` + re-import dinámico entre casos, para que cada
+// test ejercite `registrarFuentesPdf` desde cero.
+describe("registrarFuentesPdf — guarda con fuentesPdfDisponibles() antes de registrar", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.doUnmock("@react-pdf/renderer");
+  });
+
+  it("con los TTF bundleados reales (válidos), registra ambas familias vía Font.register", async () => {
+    const registerMock = vi.fn();
+    vi.doMock("@react-pdf/renderer", () => ({ Font: { register: registerMock } }));
+
+    const { registrarFuentesPdf } = await import("@/lib/pdf/fonts");
+    registrarFuentesPdf();
+
+    expect(registerMock).toHaveBeenCalledTimes(2);
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ family: "Liberation Sans Narrow" }),
+    );
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ family: "Liberation Sans Narrow Bold" }),
+    );
+  });
+
+  it("si el TTF Regular falta/es inválido, NO llama a Font.register (evita el fallo opaco en renderToBuffer) y loguea una advertencia clara", async () => {
+    const registerMock = vi.fn();
+    vi.doMock("@react-pdf/renderer", () => ({ Font: { register: registerMock } }));
+    const existsSyncSpy = vi.spyOn(fs, "existsSync").mockReturnValue(false);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { registrarFuentesPdf } = await import("@/lib/pdf/fonts");
+    registrarFuentesPdf();
+
+    expect(registerMock).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+
+    existsSyncSpy.mockRestore();
   });
 });
