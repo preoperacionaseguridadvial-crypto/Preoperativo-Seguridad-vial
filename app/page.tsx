@@ -45,7 +45,7 @@ export default async function Home() {
               Ir al dashboard
             </Link>
           )}
-          {user.role === "ADMINISTRADOR" && (
+          {(user.role === "ADMINISTRADOR" || user.role === "SST") && (
             <Link
               href="/admin/usuarios"
               className="rounded-md bg-[#0B3B60] px-4 py-2 text-sm font-medium text-white hover:bg-[#0B3B60]/90"

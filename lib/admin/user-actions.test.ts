@@ -10,7 +10,7 @@ vi.mock("@/lib/auth/config", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { Role, TipoVehiculo } from "@/generated/prisma/client";
-import { actualizarUsuario, crearUsuario } from "@/lib/admin/user-actions";
+import { actualizarUsuario, crearUsuario, restablecerPassword } from "@/lib/admin/user-actions";
 import { crearUsuario as crearUsuarioDeTest, limpiarBaseDeTest } from "@/test/helpers/db";
 
 function loginComoAdmin() {
@@ -18,6 +18,10 @@ function loginComoAdmin() {
     mockAuth.mockResolvedValue({ user: { id: admin.id, role: admin.role } });
     return admin;
   });
+}
+
+function loginComo(user: { id: string; role: Role }) {
+  mockAuth.mockResolvedValue({ user: { id: user.id, role: user.role } });
 }
 
 beforeEach(async () => {
@@ -128,5 +132,85 @@ describe("actualizarUsuario — soporte-moto-carro (Slice 1)", () => {
 
     expect(actualizado.tipoVehiculo).toBe(TipoVehiculo.MOTO);
     expect(actualizado.puestoAsignado).toBe("Mensajero");
+  });
+});
+
+describe("crearUsuario/actualizarUsuario/restablecerPassword — SST con paridad total de ADMINISTRADOR", () => {
+  it("SST puede crear un TRABAJADOR (mismo camino que ADMINISTRADOR)", async () => {
+    const sst = await crearUsuarioDeTest(Role.SST);
+    loginComo(sst);
+
+    const usuario = await crearUsuario({
+      name: "Trabajador Creado Por SST",
+      email: `trabajador-sst-${Date.now()}@test.local`,
+      password: "password123",
+      passwordConfirmacion: "password123",
+      role: Role.TRABAJADOR,
+      cedula: "1234567890",
+      tipoVehiculo: TipoVehiculo.MOTO,
+    });
+
+    expect(usuario.role).toBe(Role.TRABAJADOR);
+  });
+
+  it("SST puede crear un ADMINISTRADOR (paridad total, no solo trabajadores)", async () => {
+    const sst = await crearUsuarioDeTest(Role.SST);
+    loginComo(sst);
+
+    const usuario = await crearUsuario({
+      name: "Admin Creado Por SST",
+      email: `admin-sst-${Date.now()}@test.local`,
+      password: "password123",
+      passwordConfirmacion: "password123",
+      role: Role.ADMINISTRADOR,
+    });
+
+    expect(usuario.role).toBe(Role.ADMINISTRADOR);
+  });
+
+  it("SST puede editar cualquier usuario", async () => {
+    const sst = await crearUsuarioDeTest(Role.SST);
+    loginComo(sst);
+    const supervisor = await crearUsuarioDeTest(Role.SUPERVISOR, { name: "Antes" });
+
+    const actualizado = await actualizarUsuario(supervisor.id, {
+      name: "Después",
+      email: supervisor.email,
+      role: Role.SUPERVISOR,
+      activo: true,
+    });
+
+    expect(actualizado.name).toBe("Después");
+  });
+
+  it("SST puede restablecer la contraseña de cualquier usuario", async () => {
+    const sst = await crearUsuarioDeTest(Role.SST);
+    loginComo(sst);
+    const trabajador = await crearUsuarioDeTest(Role.TRABAJADOR);
+
+    await expect(
+      restablecerPassword(trabajador.id, "nuevaPassword123", "nuevaPassword123"),
+    ).resolves.not.toThrow();
+  });
+
+  it("rechaza crear/editar/resetear a un TRABAJADOR, SUPERVISOR o DIRECTOR (no tienen este permiso)", async () => {
+    const supervisor = await crearUsuarioDeTest(Role.SUPERVISOR);
+    loginComo(supervisor);
+
+    await expect(
+      crearUsuario({
+        name: "No Deberia Crearse",
+        email: `no-deberia-${Date.now()}@test.local`,
+        password: "password123",
+        passwordConfirmacion: "password123",
+        role: Role.TRABAJADOR,
+        cedula: "1",
+        tipoVehiculo: TipoVehiculo.MOTO,
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      restablecerPassword(supervisor.id, "nuevaPassword123", "nuevaPassword123"),
+    ).rejects.toThrow();
   });
 });

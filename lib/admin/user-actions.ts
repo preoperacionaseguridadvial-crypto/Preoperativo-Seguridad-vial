@@ -6,12 +6,15 @@ import { logAudit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/requireRole";
 import { Role, Prisma, TipoVehiculo } from "@/generated/prisma/client";
 
-// Server actions del panel de administración (Administrador): crear/editar
-// usuarios de cualquier rol y restablecer contraseñas. Ningún usuario se
-// borra nunca (mismo principio de inmutabilidad que ya rige inspecciones) —
-// se desactiva con `activo`. La contraseña nunca viaja a `logAudit`, ni
-// hasheada ni en texto plano — el audit log solo registra QUE se restableció,
-// nunca el valor.
+// Server actions del panel de administración: crear/editar usuarios de
+// cualquier rol y restablecer contraseñas. ADMINISTRADOR y SST tienen
+// paridad total acá (SST se encarga en la práctica de dar de alta
+// trabajadores y resetear contraseñas, tanto como el propio Administrador —
+// decisión explícita del usuario, no una restricción a "solo trabajadores").
+// Ningún usuario se borra nunca (mismo principio de inmutabilidad que ya
+// rige inspecciones) — se desactiva con `activo`. La contraseña nunca viaja
+// a `logAudit`, ni hasheada ni en texto plano — el audit log solo registra
+// QUE se restableció, nunca el valor.
 
 const COSTO_BCRYPT = 10;
 
@@ -33,7 +36,7 @@ export async function crearUsuario(data: {
   fechaVencimientoPase?: Date;
   conductorActivo?: boolean;
 }) {
-  const session = await requireRole([Role.ADMINISTRADOR]);
+  const session = await requireRole([Role.ADMINISTRADOR, Role.SST]);
 
   const nombreLimpio = data.name.trim();
   const emailLimpio = data.email.trim().toLowerCase();
@@ -115,7 +118,7 @@ export async function actualizarUsuario(
     conductorActivo?: boolean;
   },
 ) {
-  const session = await requireRole([Role.ADMINISTRADOR]);
+  const session = await requireRole([Role.ADMINISTRADOR, Role.SST]);
 
   const nombreLimpio = data.name.trim();
   const emailLimpio = data.email.trim().toLowerCase();
@@ -183,7 +186,7 @@ export async function restablecerPassword(
   newPassword: string,
   newPasswordConfirmacion: string,
 ) {
-  const session = await requireRole([Role.ADMINISTRADOR]);
+  const session = await requireRole([Role.ADMINISTRADOR, Role.SST]);
 
   if (newPassword.length < 8) {
     throw new Error("La contraseña debe tener al menos 8 caracteres.");
