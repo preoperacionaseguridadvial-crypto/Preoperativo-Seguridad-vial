@@ -42,7 +42,6 @@ const TXT = {
   formatoSubtitulo: "Inspeccion Vehiculos",
   codigo: "Codigo:  FO-SVS-23",
   version: "Versión: 1",
-  vigencia: "Fecha vigencia: 30/08/2016",
   nivelesBanner: "ANTES DE PRENDER EL MOTOR REVISE NIVELES",
   subtituloLuces: "ENCIENDA LAS LUCES DEL VEHICULO Y VERIFIQUE",
   subtituloEstadoGeneral: "ESTADO GENERAL DEL VEHICULO",
@@ -372,7 +371,12 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
           <View style={styles.headerMetaCell}>
             <Text style={styles.headerMetaText}>{TXT.codigo}</Text>
             <Text style={styles.headerMetaText}>{TXT.version}</Text>
-            <Text style={styles.headerMetaText}>{TXT.vigencia}</Text>
+            {/* Fase soporte-moto-carro (Slice 4, ADR A5): antes hardcodeada
+                ("Fecha vigencia: 30/08/2016"), ahora viene de la
+                configuración AppSetting resuelta en getInspeccionParaPdf
+                (lib/inspections/pdf-queries.ts) — nunca vacía, cae al
+                placeholder sembrado por el seed si nadie la configuró. */}
+            <Text style={styles.headerMetaText}>Fecha vigencia: {data.fechaVigencia}</Text>
           </View>
         </View>
 
