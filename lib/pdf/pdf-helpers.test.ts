@@ -4,8 +4,10 @@ import { PLACEHOLDER_FECHA_VIGENCIA } from "@/lib/settings/queries";
 import {
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
+  fotoPorTipo,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
+  formatSiNoPdf,
 } from "@/lib/pdf/pdf-helpers";
 
 // Corrección Slice 2 (hallazgo CRITICAL #3): el PDF partía "Inspección
@@ -147,5 +149,46 @@ describe("formatFechaVigenciaPdf", () => {
 
     expect(resultado.esPlaceholder).toBe(false);
     expect(resultado.texto).toBe("31/12/2027");
+  });
+});
+
+// Fase soporte-moto-carro, Slice 5 (A6/A7): las fotos diarias (LATERAL,
+// PLACA) y la declaración de estado del conductor no tenían ninguna
+// representación en el PDF. `fotoPorTipo` y `formatSiNoPdf` son la lógica
+// pura que el componente necesita para dibujarlas, separada para poder
+// testearla sin renderizar PDF/React (mismo criterio que el resto de este
+// archivo).
+describe("fotoPorTipo", () => {
+  function foto(tipo: string) {
+    return { id: tipo, tipo, s3Key: `key-${tipo}`, url: `https://s3.example/${tipo}` };
+  }
+
+  it("encuentra la foto LATERAL cuando existen ambas", () => {
+    const fotos = [foto("LATERAL"), foto("PLACA")];
+    expect(fotoPorTipo(fotos, "LATERAL")).toEqual(foto("LATERAL"));
+  });
+
+  it("encuentra la foto PLACA cuando existen ambas", () => {
+    const fotos = [foto("LATERAL"), foto("PLACA")];
+    expect(fotoPorTipo(fotos, "PLACA")).toEqual(foto("PLACA"));
+  });
+
+  it("devuelve null si el tipo pedido todavía no se subió", () => {
+    const fotos = [foto("LATERAL")];
+    expect(fotoPorTipo(fotos, "PLACA")).toBeNull();
+  });
+});
+
+describe("formatSiNoPdf", () => {
+  it("true -> Sí", () => {
+    expect(formatSiNoPdf(true)).toBe("Sí");
+  });
+
+  it("false -> No", () => {
+    expect(formatSiNoPdf(false)).toBe("No");
+  });
+
+  it("null (todavía sin responder) -> raya", () => {
+    expect(formatSiNoPdf(null)).toBe("—");
   });
 });

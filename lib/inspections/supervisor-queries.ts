@@ -58,6 +58,11 @@ function getInspectionForSupervisorRaw(inspectionId: string) {
           inspectionItemResponse: { include: { checklistItem: true } },
         },
       },
+      // Fase soporte-moto-carro (Slice 5, A7): fotos diarias obligatorias
+      // (LATERAL/PLACA, modelo FotoInspeccion) — antes no se incluían acá,
+      // así que ni el Supervisor ni el PDF (getInspeccionParaPdf, que envuelve
+      // esta función) tenían forma de mostrarlas.
+      fotos: true,
     },
   });
 }
@@ -85,7 +90,13 @@ export async function getInspectionForSupervisor(inspectionId: string) {
     })),
   );
 
-  return { ...inspection, novedades };
+  // Mismo criterio que las fotos de Novedad: URL de lectura firmada
+  // on-demand, nunca persistida (fase soporte-moto-carro, Slice 5, A7).
+  const fotos = await Promise.all(
+    inspection.fotos.map(async (foto) => ({ ...foto, url: await getSignedReadUrl(foto.s3Key) })),
+  );
+
+  return { ...inspection, novedades, fotos };
 }
 
 export type InspectionForSupervisorConFotos = NonNullable<

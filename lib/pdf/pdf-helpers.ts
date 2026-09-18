@@ -92,3 +92,26 @@ export function formatFechaVigenciaPdf(valor: string): { texto: string; esPlaceh
     esPlaceholder,
   };
 }
+
+/**
+ * Busca la foto diaria de un tipo (LATERAL/PLACA) dentro del arreglo de
+ * `data.fotos` (fase soporte-moto-carro, Slice 5, A7) — `null` si esa foto
+ * todavía no se subió. Genérica en el tipo de elemento (no depende de la
+ * forma exacta del objeto foto con URL firmada) para no acoplar esta función
+ * pura al tipo de Prisma/queries.
+ */
+export function fotoPorTipo<T extends { tipo: string }>(fotos: T[], tipo: string): T | null {
+  return fotos.find((foto) => foto.tipo === tipo) ?? null;
+}
+
+/**
+ * Texto Sí/No/— para una respuesta booleana-o-sin-responder de la
+ * declaración de estado del conductor (fase soporte-moto-carro, Slice 5,
+ * A6) — mismo criterio que `siNoOTexto` en
+ * app/(supervisor)/aprobaciones/[id]/page.tsx, reimplementado acá como
+ * función pura y testeable en vez de importar desde un Server Component.
+ */
+export function formatSiNoPdf(valor: boolean | null): string {
+  if (valor === null) return "—";
+  return valor ? "Sí" : "No";
+}

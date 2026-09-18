@@ -19,3 +19,11 @@
 // a otra base.
 process.env.DATABASE_URL ??=
   "postgresql://preop:preop@localhost:5433/preoperacional_test";
+
+// Mismo motivo que DATABASE_URL de arriba: no se puede usar `.env.test` en
+// este entorno. `getSignedReadUrl` (lib/storage/s3.ts) solo firma una URL de
+// forma local (no hace ninguna llamada de red real), pero igual exige
+// `S3_BUCKET` seteada o lanza — necesario desde que
+// `getInspectionForSupervisor` empezó a firmar la URL de las fotos diarias
+// también (fase soporte-moto-carro, Slice 5, A7), no solo las de Novedad.
+process.env.S3_BUCKET ??= "preop-test-bucket";
