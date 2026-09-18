@@ -1,7 +1,7 @@
 import "server-only";
 import { getInspectionForSupervisor, type InspectionForSupervisorConFotos } from "@/lib/inspections/supervisor-queries";
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
-import { getSetting, CLAVE_FECHA_VIGENCIA } from "@/lib/settings/queries";
+import { getSetting, CLAVE_FECHA_VIGENCIA, PLACEHOLDER_FECHA_VIGENCIA } from "@/lib/settings/queries";
 
 /**
  * Todo lo que necesita el PDF FO-SVS-23 de una inspección puntual, en una
@@ -31,7 +31,28 @@ export async function getInspeccionParaPdf(inspectionId: string): Promise<Inspec
   }
 
   const firmas = await getFirmasInspeccion(inspectionId);
-  const fechaVigencia = await getSetting(CLAVE_FECHA_VIGENCIA);
+  const fechaVigencia = await resolverFechaVigencia();
 
   return { ...inspection, firmas, fechaVigencia };
+}
+
+/**
+ * Corrección Slice 4 (hallazgo WARNING resiliencia): antes, cualquier error
+ * transitorio de la tabla `AppSetting` (problema de conexión puntual,
+ * migración corrida pero seed no, etc.) tumbaba la generación completa del
+ * PDF de toda inspección, aunque `getSetting` documenta que "siempre
+ * devuelve algo mostrable". Se degrada al placeholder en vez de propagar el
+ * error, con el mismo criterio de logging que
+ * lib/inspections/foto-actions.ts (`console.error` con contexto).
+ */
+async function resolverFechaVigencia(): Promise<string> {
+  try {
+    return await getSetting(CLAVE_FECHA_VIGENCIA);
+  } catch (err) {
+    console.error("Fallo al leer la configuracion de fecha de vigencia (AppSetting); se usa el placeholder.", {
+      clave: CLAVE_FECHA_VIGENCIA,
+      err,
+    });
+    return PLACEHOLDER_FECHA_VIGENCIA;
+  }
 }
