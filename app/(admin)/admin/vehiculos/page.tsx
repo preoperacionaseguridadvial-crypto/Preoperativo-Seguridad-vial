@@ -26,6 +26,12 @@ export default async function AdminVehiculosPage() {
             Ver usuarios
           </Link>
           <Link
+            href="/admin/configuracion"
+            className="rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
+          >
+            Configuración
+          </Link>
+          <Link
             href="/admin/vehiculos/nuevo"
             className="rounded-md bg-[#0B3B60] px-3 py-2 text-sm font-medium text-white hover:bg-[#0B3B60]/90"
           >
