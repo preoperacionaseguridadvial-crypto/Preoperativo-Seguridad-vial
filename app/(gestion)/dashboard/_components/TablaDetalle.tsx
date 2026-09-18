@@ -17,10 +17,12 @@ export function TablaDetalle({
   inspecciones,
   page,
   searchParams,
+  role,
 }: {
   inspecciones: Inspeccion[];
   page: number;
   searchParams: Record<string, string | undefined>;
+  role: string;
 }) {
   const totalPaginas = Math.max(1, Math.ceil(inspecciones.length / FILAS_POR_PAGINA));
   const paginaActual = Math.min(Math.max(1, page), totalPaginas);
@@ -75,10 +77,14 @@ export function TablaDetalle({
                       <Link href={`/consulta-inspecciones/${insp.id}`} className="text-[#2E9BD6] hover:underline">
                         Ver
                       </Link>
-                      {" · "}
-                      <a href={`/api/inspecciones/${insp.id}/pdf`} className="text-[#2E9BD6] hover:underline">
-                        PDF
-                      </a>
+                      {role === "SST" && (
+                        <>
+                          {" · "}
+                          <a href={`/api/inspecciones/${insp.id}/pdf`} className="text-[#2E9BD6] hover:underline">
+                            PDF
+                          </a>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

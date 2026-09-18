@@ -89,12 +89,14 @@ export default async function InspeccionEnviadaPage({
         </section>
       )}
 
-      <a
-        href={`/api/inspecciones/${id}/pdf`}
-        className="mt-2 rounded-md border border-[#0B3B60] px-4 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
-      >
-        Descargar PDF
-      </a>
+      {session.user.role === "SST" && (
+        <a
+          href={`/api/inspecciones/${id}/pdf`}
+          className="mt-2 rounded-md border border-[#0B3B60] px-4 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
+        >
+          Descargar PDF
+        </a>
+      )}
 
       <Link
         href="/inspecciones"

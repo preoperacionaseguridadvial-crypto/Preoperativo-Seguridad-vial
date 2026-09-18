@@ -68,14 +68,16 @@ export default async function ConsultaInspeccionDetallePage({
             <span className="ml-2 text-base font-normal text-gray-500">{inspection.vehicle.tipo}</span>
           </h1>
         </div>
-        {inspection.status !== "EN_PROCESO" && inspection.status !== "CANCELADA" && (
-          <a
-            href={`/api/inspecciones/${id}/pdf`}
-            className="shrink-0 rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
-          >
-            Descargar PDF
-          </a>
-        )}
+        {session.user.role === "SST" &&
+          inspection.status !== "EN_PROCESO" &&
+          inspection.status !== "CANCELADA" && (
+            <a
+              href={`/api/inspecciones/${id}/pdf`}
+              className="shrink-0 rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
+            >
+              Descargar PDF
+            </a>
+          )}
       </div>
 
       <section className="rounded-md border border-gray-200 p-4 text-sm">

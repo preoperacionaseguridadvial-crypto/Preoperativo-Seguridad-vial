@@ -175,7 +175,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       <Top5 filasTrabajador={filasTrabajadorSinFiltrar} filasVehiculo={filasVehiculo} fallasPorItem={fallasPorItem} />
 
-      <TablaDetalle inspecciones={inspeccionesDetalle} page={page} searchParams={sp} />
+      <TablaDetalle
+        inspecciones={inspeccionesDetalle}
+        page={page}
+        searchParams={sp}
+        role={session.user.role}
+      />
     </main>
   );
 }
