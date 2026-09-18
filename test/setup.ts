@@ -27,3 +27,21 @@ process.env.DATABASE_URL ??=
 // `getInspectionForSupervisor` empezó a firmar la URL de las fotos diarias
 // también (fase soporte-moto-carro, Slice 5, A7), no solo las de Novedad.
 process.env.S3_BUCKET ??= "preop-test-bucket";
+
+// Corrección Slice 5 (hallazgo WARNING reliability — test de render
+// permanente de InspeccionPdfDocument): a diferencia de `getSignedReadUrl`
+// de arriba, @react-pdf/renderer SÍ intenta un fetch real de red por cada
+// <Image src={url}> al renderizar un PDF (aunque el fallo de esa carga se
+// atrapa y degrada con un console.warn — ver @react-pdf/layout,
+// fetchImage — nunca tumba el render). Sin `S3_ENDPOINT`, el cliente S3 usa
+// el endpoint público real de AWS (lib/storage/s3.ts, createS3Client) y ese
+// fetch intentaría salir a Internet real, algo que no se puede garantizar
+// en todos los entornos de CI/sandbox. Se apunta al mismo contenedor MinIO
+// local (docker-compose.yml, `preop-minio`, puerto 9010) que ya usa este
+// proyecto en desarrollo (ver `.env`), para que ese fetch sea local y
+// rápido (éxito o 403/404, nunca un cuelgue de red externa) sin necesidad
+// de subir ningún objeto real: alcanza con que la URL firmada resuelva a un
+// host local.
+process.env.S3_ENDPOINT ??= "http://localhost:9010";
+process.env.S3_ACCESS_KEY_ID ??= "preopadmin";
+process.env.S3_SECRET_ACCESS_KEY ??= "preopadmin123";
