@@ -62,7 +62,15 @@ export function formatoValorItemPdf(valor: RespuestaChecklist): { texto: string;
     case "BUENO":
       return { texto: "✓ BUENO", estilo: "ok" };
     case "BAJO":
-      return { texto: "⚠ BAJO", estilo: "warn" };
+      // Corrección Slice 5 (hallazgo WARNING resilience): "⚠" (U+26A0) no
+      // está mapeado ni en Liberation Sans Narrow (fuente bundleada, ver
+      // lib/pdf/fonts.ts) ni en la tabla WIN_ANSI_MAP de fallback de
+      // @react-pdf/pdfkit — muy probablemente rendereaba como glifo
+      // faltante/en blanco. Se retira el símbolo y se confía en el color
+      // ámbar + negrita (estilo "warn") + la palabra misma para transmitir
+      // la advertencia, sin depender de que ningún glifo Unicode especial
+      // esté presente en la fuente.
+      return { texto: "BAJO", estilo: "warn" };
     case "MALO":
       return { texto: "X MALO", estilo: "falla" };
     case "FALLA":

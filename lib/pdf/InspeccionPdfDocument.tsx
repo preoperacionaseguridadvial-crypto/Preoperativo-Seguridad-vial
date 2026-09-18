@@ -85,7 +85,13 @@ const TXT = {
   fotoPlacaLabel: "Placa",
   fotoDiariaVacia: "Sin foto registrada",
   declaracionEstadoTitulo: "DECLARACIÓN DE ESTADO DEL CONDUCTOR",
-  declaracionEstadoAlerta: "⚠ REQUIERE ATENCIÓN",
+  // Corrección Slice 5 (hallazgo WARNING resilience): "⚠" (U+26A0) no está
+  // mapeado ni en Liberation Sans Narrow ni en la tabla WIN_ANSI_MAP de
+  // fallback de @react-pdf/pdfkit — muy probablemente rendereaba como glifo
+  // faltante/en blanco. Se retira el símbolo (ver mismo criterio en
+  // lib/pdf/pdf-helpers.ts, formatoValorItemPdf/BAJO) y se confía en el
+  // color ámbar + negrita (declaracionEstadoAlerta) + el texto mismo.
+  declaracionEstadoAlerta: "REQUIERE ATENCIÓN",
   preguntaMedicamentos: "¿Medicamento/sustancia/condición que afecte su capacidad?",
   preguntaCondiciones: "¿Condiciones físicas y mentales adecuadas?",
   preguntaAlcohol: "¿Consumió alcohol u otra sustancia?",
