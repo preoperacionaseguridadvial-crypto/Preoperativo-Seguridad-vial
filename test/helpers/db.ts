@@ -15,6 +15,11 @@ export async function limpiarBaseDeTest() {
   await prisma.firma.deleteMany({});
   await prisma.fotoInspeccion.deleteMany({});
   await prisma.auditLog.deleteMany({});
+  // Fase soporte-moto-carro (Slice 4): AppSetting tiene un FK opcional a
+  // User (`updatedById`, ON DELETE SET NULL) — no bloquea el borrado de
+  // usuarios, pero se limpia igual para que cada test arranque sin ninguna
+  // clave configurada (ver lib/settings/queries.test.ts).
+  await prisma.appSetting.deleteMany({});
   await prisma.inspection.deleteMany({});
   await prisma.checklistItem.deleteMany({});
   await prisma.checklistCategory.deleteMany({});

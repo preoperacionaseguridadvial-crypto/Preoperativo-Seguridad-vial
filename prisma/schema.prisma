@@ -166,6 +166,7 @@ model User {
   inspectionsAsConductor  Inspection[] @relation("InspectionConductor")
   auditLogs               AuditLog[]
   firmas                  Firma[]
+  configuracionesActualizadas AppSetting[]
 
   @@index([role])
 }
@@ -442,6 +443,28 @@ model FotoInspeccion {
   createdAt    DateTime           @default(now())
 
   @@unique([inspectionId, tipo])
+}
+
+// Almacén genérico de configuración editable por un Administrador sin
+// redeploy (fase soporte-moto-carro, Slice 4, ADR A5). Se verificó que no
+// existía ningún mecanismo de configuración en el proyecto (sin modelo
+// Setting/Config, nada en lib/) antes de introducir este modelo — clave/valor
+// simples en vez de una tabla con una columna por setting, para no migrar el
+// schema cada vez que se agregue una configuración nueva. Primer uso:
+// `formato.fechaVigencia` (ver lib/settings/queries.ts), sembrado con un
+// placeholder explícito hasta que un Administrador defina la fecha real.
+model AppSetting {
+  clave     String   @id
+  valor     String
+  // Generado por Prisma (`@updatedAt`), nunca recibido del cliente — mismo
+  // criterio de timestamps del resto del schema.
+  updatedAt DateTime @updatedAt
+
+  // Quién hizo el último cambio, para el rastro de auditoría (además del
+  // registro en AuditLog vía `logAudit`, ver lib/settings/actions.ts).
+  // Nullable: la fila sembrada por el seed no tiene un Administrador autor.
+  updatedById String?
+  updatedBy   User?   @relation(fields: [updatedById], references: [id])
 }
 
 model AuditLog {

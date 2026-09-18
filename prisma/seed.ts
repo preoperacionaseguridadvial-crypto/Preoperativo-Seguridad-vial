@@ -323,6 +323,22 @@ async function main() {
     },
   });
   console.log('Seed OK: vehículo demo "XYZ789" (CARRO) creado/actualizado.');
+
+  // Fase soporte-moto-carro (Slice 4, ADR A5): placeholder de
+  // "Fecha vigencia" del PDF hasta que un Administrador defina la fecha
+  // real desde /admin/configuracion (ver lib/settings/actions.ts). `create`
+  // siembra el placeholder; `update` queda vacío a propósito para no pisar
+  // un valor real ya configurado por un Administrador si el seed se corre
+  // de nuevo. Literales duplicados de `CLAVE_FECHA_VIGENCIA`/
+  // `PLACEHOLDER_FECHA_VIGENCIA` (lib/settings/queries.ts) — este script no
+  // importa de `lib/` (usa su propio PrismaClient/adapter, ver arriba), así
+  // que si esos literales cambian hay que actualizarlos acá también.
+  await prisma.appSetting.upsert({
+    where: { clave: "formato.fechaVigencia" },
+    update: {},
+    create: { clave: "formato.fechaVigencia", valor: "Pendiente de definir" },
+  });
+  console.log('Seed OK: configuración "formato.fechaVigencia" sembrada con placeholder.');
 }
 
 main()
