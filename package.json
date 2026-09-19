@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:test": "node -e \"require('child_process').execSync('prisma migrate deploy',{stdio:'inherit',env:{...process.env,DATABASE_URL:'postgresql://preop:preop@localhost:5433/preoperacional_test'}})\"",
     "prisma:seed": "prisma db seed",
-    "test": "vitest run"
+    "test": "vitest run",
+    "imagenes:optimizar": "node scripts/optimizar-imagenes.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1110.0",

@@ -26,6 +26,7 @@ import {
   enviarInspeccion,
   iniciarInspeccion,
   registrarEstadoConductor,
+  registrarRespuestaEstadoConductor,
   registrarKilometraje,
   registrarResultado,
   responderItem,
@@ -302,6 +303,84 @@ describe("registrarEstadoConductor", () => {
   });
 });
 
+// La declaración se contesta pregunta por pregunta (una pantalla por pregunta,
+// pedido del dueño de producto, 2026-09-18): cada respuesta se guarda sola.
+describe("registrarRespuestaEstadoConductor", () => {
+  it("guarda solo la respuesta indicada y deja las otras sin contestar", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+
+    const resultado = await registrarRespuestaEstadoConductor(inspection.id, "tomaMedicamentos", true);
+
+    expect(resultado.tomaMedicamentos).toBe(true);
+    expect(resultado.condicionesAptas).toBeNull();
+    expect(resultado.consumioAlcohol).toBeNull();
+    expect(resultado.declaracionEstadoAt).toBeNull();
+  });
+
+  it("fija declaracionEstadoAt server-side recién cuando la tercera respuesta completa la declaración", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+
+    await registrarRespuestaEstadoConductor(inspection.id, "tomaMedicamentos", false);
+    const segunda = await registrarRespuestaEstadoConductor(inspection.id, "condicionesAptas", true);
+    expect(segunda.declaracionEstadoAt).toBeNull();
+
+    const antes = Date.now();
+    const tercera = await registrarRespuestaEstadoConductor(inspection.id, "consumioAlcohol", false);
+    const despues = Date.now();
+
+    expect(tercera).toMatchObject({ tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false });
+    const ms = tercera.declaracionEstadoAt!.getTime();
+    expect(ms).toBeGreaterThanOrEqual(antes);
+    expect(ms).toBeLessThanOrEqual(despues);
+  });
+
+  it("permite corregir una respuesta ya dada mientras la inspección siga EN_PROCESO", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+
+    await registrarRespuestaEstadoConductor(inspection.id, "consumioAlcohol", true);
+    const corregida = await registrarRespuestaEstadoConductor(inspection.id, "consumioAlcohol", false);
+
+    expect(corregida.consumioAlcohol).toBe(false);
+  });
+
+  it("rechaza un campo que no es una pregunta de la declaración (no escribe columnas arbitrarias)", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+
+    await expect(
+      registrarRespuestaEstadoConductor(inspection.id, "puedeOperar" as never, true),
+    ).rejects.toThrow(/pregunta/i);
+    const sinCambios = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(sinCambios.puedeOperar).toBeNull();
+  });
+
+  it("rechaza sobre una inspección de otro trabajador", async () => {
+    const { inspection } = await crearInspeccionEnProceso();
+    const otro = await crearUsuario(Role.TRABAJADOR);
+    loginComo(otro);
+
+    await expect(
+      registrarRespuestaEstadoConductor(inspection.id, "tomaMedicamentos", false),
+    ).rejects.toThrow(/no pertenece al usuario autenticado/i);
+  });
+
+  it("rechaza sobre una inspección ya enviada", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: { status: InspectionStatus.PENDIENTE_APROBACION },
+    });
+    loginComo(worker);
+
+    await expect(
+      registrarRespuestaEstadoConductor(inspection.id, "tomaMedicamentos", false),
+    ).rejects.toThrow(/ya no está en proceso/i);
+  });
+});
+
 describe("cancelarInspeccion", () => {
   it("cancela una inspección propia EN_PROCESO (no la borra, pasa a CANCELADA)", async () => {
     const { worker, inspection } = await crearInspeccionEnProceso();
@@ -514,44 +593,86 @@ describe("responderItem — valores según tipoRespuesta", () => {
   });
 });
 
-// A1 del design: `iniciarInspeccion` re-valida en el servidor que el tipo del
-// vehículo coincida con el tipo declarado del trabajador (defensa en
-// profundidad — no confía en que `getVehiculosActivos` ya haya filtrado la
-// lista en la pantalla anterior).
-describe("iniciarInspeccion — tipo de vehículo debe coincidir con el del trabajador", () => {
-  it("rechaza si el trabajador es MOTO y el vehículo es CARRO", async () => {
-    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.MOTO });
+// Modelo 1:1 (decisión del usuario, 2026-09-18): cada trabajador tiene UN
+// vehículo (`User.vehicleId`). `iniciarInspeccion` re-valida en el servidor
+// (defensa en profundidad: no confía en que la pantalla ya haya mostrado solo
+// su vehículo) que el vehículo pedido sea el suyo; el tipo sigue validándose
+// además (A1 del design) por si los datos quedaran inconsistentes.
+describe("iniciarInspeccion — el vehículo debe ser el asignado al trabajador", () => {
+  it("acepta el vehículo asignado", async () => {
     const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.CARRO });
-    loginComo(worker);
-
-    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
-  });
-
-  // Corrección Slice 2 (hallazgo WARNING #6): la misma guarda es simétrica —
-  // antes de este test solo se cubría MOTO trabajador vs CARRO vehículo.
-  it("rechaza si el trabajador es CARRO y el vehículo es MOTO", async () => {
-    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.CARRO });
-    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
-    loginComo(worker);
-
-    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
-  });
-
-  it("rechaza si el trabajador no tiene tipo asignado (null)", async () => {
-    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: null });
-    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
-    loginComo(worker);
-
-    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
-  });
-
-  it("acepta cuando el tipo del trabajador coincide con el del vehículo", async () => {
-    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.CARRO });
-    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.CARRO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.CARRO,
+      vehicleId: vehicle.id,
+    });
     loginComo(worker);
 
     const inspection = await iniciarInspeccion(vehicle.id);
     expect(inspection.vehicleId).toBe(vehicle.id);
+  });
+
+  it("rechaza iniciar una inspección sobre OTRO vehículo (aunque sea del mismo tipo)", async () => {
+    const asignado = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const ajeno = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: asignado.id,
+    });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(ajeno.id)).rejects.toThrow(/vehículo asignado/i);
+    expect(await prisma.inspection.count({ where: { workerId: worker.id } })).toBe(0);
+  });
+
+  it("rechaza a un trabajador legacy sin vehículo con un mensaje de asignación pendiente", async () => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.MOTO });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/pendiente de asignación/i);
+    expect(await prisma.inspection.count({ where: { workerId: worker.id } })).toBe(0);
+  });
+
+  it("rechaza si su vehículo asignado está inactivo", async () => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO, activo: false });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+    });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/inactivo/i);
+  });
+
+  it("rechaza si el tipo del trabajador (MOTO) no coincide con el de su vehículo (CARRO)", async () => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.CARRO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+    });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
+  });
+
+  // Corrección Slice 2 (hallazgo WARNING #6): la misma guarda es simétrica.
+  it("rechaza si el tipo del trabajador (CARRO) no coincide con el de su vehículo (MOTO)", async () => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.CARRO,
+      vehicleId: vehicle.id,
+    });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
+  });
+
+  it("rechaza si el trabajador no tiene tipo asignado (null), aunque tenga vehículo", async () => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: null, vehicleId: vehicle.id });
+    loginComo(worker);
+
+    await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
   });
 });
 

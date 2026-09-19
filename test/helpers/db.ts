@@ -34,6 +34,8 @@ export async function crearUsuario(
     name: string;
     cedula: string;
     tipoVehiculo: TipoVehiculo | null;
+    // Vehículo fijo asignado (placa). Sin override queda null: usuario legacy.
+    vehicleId: string | null;
   }> = {},
 ) {
   return prisma.user.create({
@@ -43,6 +45,7 @@ export async function crearUsuario(
       role,
       passwordHash: "no-se-usa-en-tests",
       cedula: overrides.cedula,
+      vehicleId: overrides.vehicleId,
       // Fase soporte-moto-carro: default MOTO (el sistema era moto-only),
       // overridable para tests de CARRO — ver Testing Strategy en el
       // design del cambio. `overrides.tipoVehiculo === null` permite

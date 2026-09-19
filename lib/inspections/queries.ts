@@ -64,19 +64,6 @@ async function getTipoVehiculoDeInspeccion(inspectionId: string): Promise<TipoVe
   return inspection.vehicle.tipoVehiculo ?? TipoVehiculo.MOTO;
 }
 
-/**
- * Tipo de vehículo declarado para un trabajador (`User.tipoVehiculo`), o
- * `null` si todavía no tiene uno asignado (usuario legacy "pendiente de
- * asignación"). Filtra la lista de vehículos que puede elegir
- * (`getVehiculosActivos`) y se re-valida en `iniciarInspeccion`
- * (lib/inspections/actions.ts) como defensa en profundidad — no alcanza con
- * que esta pantalla ya haya filtrado la lista.
- */
-export async function getTipoVehiculoDelTrabajador(workerId: string): Promise<TipoVehiculo | null> {
-  const user = await prisma.user.findUnique({ where: { id: workerId }, select: { tipoVehiculo: true } });
-  return user?.tipoVehiculo ?? null;
-}
-
 /** Estado de un ítem para una inspección puntual: la respuesta ya dada, o
  * `"PENDIENTE"` si todavía no tiene `InspectionItemResponse`.
  *
@@ -122,6 +109,24 @@ export async function getChecklistEstadoCompleto(inspectionId: string) {
 // novedad para reportar el que falte o esté vencido. Ver
 // DocumentoCheckItem.tsx y ChecklistListPage.
 export const CATEGORIA_SIN_PANTALLA_PROPIA = "Documentación";
+
+/**
+ * Categorías que muestra la pantalla de lista (`/checklist`): solo
+ * Documentación, y únicamente mientras tenga documentos pendientes. El resto
+ * del checklist (Inspección Visual, Fluidos, Equipo de prevención) se recorre
+ * ítem por ítem con el flujo guiado (`getNextStepPath`); desplegarlo todo
+ * junto en la lista obligaba al trabajador a buscar cada ítem a mano (pedido
+ * del dueño de producto, 2026-09-18).
+ */
+export function categoriasParaLista<T extends { nombre: string; items: { estado: EstadoChecklistItem }[] }>(
+  catalogo: T[],
+): T[] {
+  return catalogo.filter(
+    (categoria) =>
+      categoria.nombre === CATEGORIA_SIN_PANTALLA_PROPIA &&
+      categoria.items.some((item) => item.estado === "PENDIENTE"),
+  );
+}
 
 /**
  * Siguiente ChecklistItem sin responder (en orden de catálogo), con el
@@ -186,7 +191,7 @@ export async function getAdjacentChecklistItemIds(
  * Inspección con sus relaciones necesarias para la UI del flujo del
  * trabajador (vehículo, conductor, respuestas + novedad + fotos, ítem del
  * checklist). Se incluye `conductor` para poder mostrar en la pantalla de
- * confirmar los datos de vigencia del pase (formato oficial FO-SVS-23).
+ * confirmar los datos del conductor (formato oficial FO-SVS-23).
  */
 export function getInspectionForWorker(inspectionId: string) {
   return prisma.inspection.findUnique({
@@ -210,20 +215,14 @@ export function getInspectionForWorker(inspectionId: string) {
 }
 
 /**
- * Vehículos activos que un trabajador puede elegir para iniciar una
- * inspección, filtrados por su `tipoVehiculo` declarado (spec: "Vehicle
- * selection filtered by worker type"). `null` (trabajador legacy sin tipo
- * asignado, "pendiente de asignación") devuelve lista vacía a propósito: no
- * hay forma segura de inferir qué catálogo debería ver.
+ * Vehículo único del trabajador (`User.vehicleId`, relación 1:1 — decisión del
+ * usuario, 2026-09-18), o `null` si todavía no tiene uno (usuario legacy
+ * "pendiente de asignación"). Se devuelve aunque esté inactivo: la pantalla de
+ * inicio decide qué mensaje mostrar según `activo`. Reemplaza al listado por
+ * tipo de vehículo (`getVehiculosActivos`): el trabajador ya no elige.
  */
-export async function getVehiculosActivos(tipoVehiculo: TipoVehiculo | null) {
-  if (!tipoVehiculo) {
-    return [];
-  }
-  return prisma.vehicle.findMany({
-    where: { activo: true, tipoVehiculo },
-    orderBy: { placa: "asc" },
-  });
+export function getVehiculoDelTrabajador(workerId: string) {
+  return prisma.vehicle.findFirst({ where: { conductor: { id: workerId } } });
 }
 
 /**
@@ -349,23 +348,23 @@ export async function getNextStepPath(inspectionId: string): Promise<string> {
       : `${base}/checklist/${nextItem.id}`;
   }
 
-  // Fase soporte-moto-carro (Slice 3): 2 paradas nuevas en el flujo guiado,
-  // después del checklist y antes de confirmar — fotos diarias (A7,
-  // independiente del resultado del checklist) y declaración de estado del
-  // conductor (A6, va justo antes de confirmar/firmar, mismo espíritu que
-  // "resultado": declaración personal del conductor).
-  if (!(await tieneFotosDiariasCompletas(inspectionId))) {
-    return `${base}/fotos`;
-  }
-  if (inspection.puedeOperar === null) {
-    return `${base}/resultado`;
-  }
+  // Paradas después del checklist (pedido del dueño de producto, 2026-09-18):
+  // declaración de estado del conductor (A6, 3 preguntas de a una) → fotos
+  // diarias (A7, independientes del resultado del checklist) → resultado →
+  // confirmar/firmar. Antes las fotos iban primero y la declaración después
+  // del resultado.
   const declaracionCompleta =
     inspection.tomaMedicamentos !== null &&
     inspection.condicionesAptas !== null &&
     inspection.consumioAlcohol !== null;
   if (!declaracionCompleta) {
     return `${base}/estado-conductor`;
+  }
+  if (!(await tieneFotosDiariasCompletas(inspectionId))) {
+    return `${base}/fotos`;
+  }
+  if (inspection.puedeOperar === null) {
+    return `${base}/resultado`;
   }
   return `${base}/confirmar`;
 }

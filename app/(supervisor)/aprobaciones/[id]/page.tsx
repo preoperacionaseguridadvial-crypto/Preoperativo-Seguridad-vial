@@ -67,9 +67,6 @@ export default async function AprobacionDetallePage({
   const alertaEstadoConductor = requiereAtencionEstadoConductor(inspection);
 
   const ahora = new Date();
-  const paseVencido = Boolean(
-    inspection.conductor.fechaVencimientoPase && inspection.conductor.fechaVencimientoPase < ahora,
-  );
   const tecnicomecanicaVencida = Boolean(
     inspection.vehicle.fechaVencimientoTecnicomecanica &&
       inspection.vehicle.fechaVencimientoTecnicomecanica < ahora,
@@ -133,17 +130,6 @@ export default async function AprobacionDetallePage({
           <div className="flex justify-between">
             <dt className="text-gray-500">Conductor</dt>
             <dd className="font-medium">{inspection.conductor.name}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-gray-500">Vencimiento pase</dt>
-            <dd className={`font-medium ${paseVencido ? "text-red-600" : ""}`}>
-              {formatFecha(inspection.conductor.fechaVencimientoPase)}
-              {paseVencido && (
-                <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-                  Vencido
-                </span>
-              )}
-            </dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-gray-500">Conductor activo</dt>

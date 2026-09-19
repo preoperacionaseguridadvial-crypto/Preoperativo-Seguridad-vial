@@ -62,14 +62,33 @@ describe("actualizarConfiguracion — soporte-moto-carro (Slice 4, ADR A5)", () 
     expect(entrada?.action).toBe("ACTUALIZAR_CONFIGURACION");
   });
 
-  it("rechaza a un rol distinto de Administrador (ej. Trabajador)", async () => {
-    await loginComo(Role.TRABAJADOR);
+  // SST tiene los mismos permisos que ADMINISTRADOR (decisión del usuario,
+  // 2026-09-18), configuración incluida.
+  it("permite a SST actualizar formato.fechaVigencia y queda registrado como autor", async () => {
+    const sst = await loginComo(Role.SST);
 
-    await expect(actualizarConfiguracion(CLAVE_FECHA_VIGENCIA, "31/12/2027")).rejects.toThrow();
+    await actualizarConfiguracion(CLAVE_FECHA_VIGENCIA, "31/12/2028");
 
-    const valor = await getSetting(CLAVE_FECHA_VIGENCIA);
-    expect(valor).toBe(PLACEHOLDER_FECHA_VIGENCIA);
+    expect(await getSetting(CLAVE_FECHA_VIGENCIA)).toBe("31/12/2028");
+    const fila = await prisma.appSetting.findUnique({ where: { clave: CLAVE_FECHA_VIGENCIA } });
+    expect(fila?.updatedById).toBe(sst.id);
+    const entrada = await prisma.auditLog.findFirst({
+      where: { entityType: "AppSetting", entityId: CLAVE_FECHA_VIGENCIA },
+    });
+    expect(entrada?.userId).toBe(sst.id);
   });
+
+  it.each([Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR] as const)(
+    "rechaza a %s (solo ADMINISTRADOR y SST pueden configurar)",
+    async (rol) => {
+      await loginComo(rol);
+
+      await expect(actualizarConfiguracion(CLAVE_FECHA_VIGENCIA, "31/12/2027")).rejects.toThrow();
+
+      const valor = await getSetting(CLAVE_FECHA_VIGENCIA);
+      expect(valor).toBe(PLACEHOLDER_FECHA_VIGENCIA);
+    },
+  );
 
   it("rechaza sin sesión", async () => {
     mockAuth.mockResolvedValue(null);

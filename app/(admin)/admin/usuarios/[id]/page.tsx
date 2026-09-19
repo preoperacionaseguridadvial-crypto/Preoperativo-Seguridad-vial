@@ -3,10 +3,12 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getUsuarioPorId } from "@/lib/admin/queries";
 import { actualizarUsuario, restablecerPassword } from "@/lib/admin/user-actions";
+import { leerVehiculoDeFormulario } from "@/lib/admin/hoja-de-vida";
+import { getSignedReadUrl } from "@/lib/storage/s3";
 import { Role, TipoVehiculo } from "@/generated/prisma/client";
+import { CamposVehiculo } from "../_components/CamposVehiculo";
 
 const ROLES: Role[] = [Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR, Role.SST, Role.ADMINISTRADOR];
-const TIPOS_VEHICULO: TipoVehiculo[] = [TipoVehiculo.MOTO, TipoVehiculo.CARRO];
 
 function toDateInputValue(date: Date | null): string {
   if (!date) return "";
@@ -36,9 +38,24 @@ export default async function EditarUsuarioPage({
     notFound();
   }
 
+  // URL prefirmada de corta vida (solo se guarda el s3Key). Si falla la
+  // firma, la edición sigue funcionando sin mostrar la foto actual.
+  const fotoActualUrl = usuario.vehicle?.fotoS3Key
+    ? await getSignedReadUrl(usuario.vehicle.fotoS3Key).catch(() => null)
+    : null;
+  const vehiculo = usuario.vehicle;
+  const valoresVehiculo: Record<string, string> = {
+    tipoVehiculo: usuario.tipoVehiculo ?? "",
+    placa: vehiculo?.placa ?? "",
+    marca: vehiculo?.marca ?? "",
+    modelo: vehiculo?.modelo ?? "",
+    color: vehiculo?.color ?? "",
+    fechaVencimientoSoat: toDateInputValue(vehiculo?.fechaVencimientoSoat ?? null),
+    fechaVencimientoTecnicomecanica: toDateInputValue(vehiculo?.fechaVencimientoTecnicomecanica ?? null),
+  };
+
   async function actualizarAction(formData: FormData) {
     "use server";
-    const fechaVencimientoPaseRaw = formData.get("fechaVencimientoPase")?.toString();
     try {
       await actualizarUsuario(id, {
         name: formData.get("name")?.toString() ?? "",
@@ -50,7 +67,7 @@ export default async function EditarUsuarioPage({
         cargo: formData.get("cargo")?.toString(),
         puestoAsignado: formData.get("puestoAsignado")?.toString(),
         tipoVehiculo: (formData.get("tipoVehiculo")?.toString() || null) as TipoVehiculo | null,
-        fechaVencimientoPase: fechaVencimientoPaseRaw ? new Date(fechaVencimientoPaseRaw) : null,
+        vehiculo: leerVehiculoDeFormulario(formData),
         conductorActivo: formData.get("conductorActivo") === "on",
       });
     } catch (err) {
@@ -81,11 +98,21 @@ export default async function EditarUsuarioPage({
         </Link>
         <h1 className="mt-2 text-xl font-semibold text-[#0B3B60]">{usuario.name}</h1>
         <p className="text-sm text-gray-500">{usuario.email}</p>
+        <Link
+          href={`/admin/usuarios/${usuario.id}/hoja-de-vida`}
+          className="mt-2 inline-block text-sm text-[#005B96] hover:underline"
+        >
+          Ver hoja de vida
+        </Link>
       </div>
 
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <form action={actualizarAction} className="flex flex-col gap-4 rounded-md border border-gray-200 bg-white p-4">
+      <form
+        action={actualizarAction}
+        encType="multipart/form-data"
+        className="flex flex-col gap-4 rounded-md border border-gray-200 bg-white p-4"
+      >
         <div>
           <label htmlFor="name" className="mb-1 block text-sm font-medium text-gray-700">
             Nombre completo
@@ -149,27 +176,15 @@ export default async function EditarUsuarioPage({
           )}
         </div>
 
-        <div>
-          <label htmlFor="tipoVehiculo" className="mb-1 block text-sm font-medium text-gray-700">
-            Tipo de vehículo
-          </label>
-          <select
-            id="tipoVehiculo"
-            name="tipoVehiculo"
-            defaultValue={usuario.tipoVehiculo ?? ""}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          >
-            <option value="">Sin asignar</option>
-            {TIPOS_VEHICULO.map((tipo) => (
-              <option key={tipo} value={tipo}>
-                {tipo}
-              </option>
-            ))}
-          </select>
-          {!usuario.tipoVehiculo && usuario.role === Role.TRABAJADOR && (
-            <p className="mt-1 text-xs font-medium text-amber-600">Pendiente de asignación.</p>
-          )}
-        </div>
+        {/* Sección de vehículo (1:1). Siempre visible porque el rol puede
+            cambiar en este mismo envío; solo aplica a TRABAJADOR y un legacy sin
+            vehículo puede dejarla vacía (la validación real es la del servidor). */}
+        {usuario.role === Role.TRABAJADOR && !vehiculo && (
+          <p className="text-xs font-medium text-amber-600">
+            Pendiente de asignación de vehículo: completa la hoja de vida del vehículo abajo.
+          </p>
+        )}
+        <CamposVehiculo valores={valoresVehiculo} modo="edicion" fotoActualUrl={fotoActualUrl} />
 
         <div>
           <label htmlFor="puestoAsignado" className="mb-1 block text-sm font-medium text-gray-700">
@@ -206,19 +221,6 @@ export default async function EditarUsuarioPage({
             name="cargo"
             type="text"
             defaultValue={usuario.cargo ?? ""}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="fechaVencimientoPase" className="mb-1 block text-sm font-medium text-gray-700">
-            Fecha vencimiento pase
-          </label>
-          <input
-            id="fechaVencimientoPase"
-            name="fechaVencimientoPase"
-            type="date"
-            defaultValue={toDateInputValue(usuario.fechaVencimientoPase)}
             className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
           />
         </div>

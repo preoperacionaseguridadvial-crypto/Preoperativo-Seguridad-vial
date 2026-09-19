@@ -208,4 +208,61 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
     const buffer = await renderizarPdfDe(TipoVehiculo.CARRO);
     esperarPdfValido(buffer);
   });
+
+  // Layout del bloque final (pedido del dueño de producto, 2026-09-18): el
+  // texto instructivo ("LA UNIDAD DEBE SER REVISADA...") va DEBAJO de las
+  // firmas, a todo el ancho. A la derecha le quitaba espacio a las firmas.
+  // El PDF no se puede leer píxel a píxel acá, así que se inspecciona el árbol
+  // de elementos que produce el componente (sin renderizarlo).
+  describe("bloque de resultado y firmas", () => {
+    type Elemento = { props?: { style?: unknown; children?: unknown; titulo?: string } };
+    type Visita = { elemento: Elemento; ancestros: Elemento[] };
+
+    function recorrer(nodo: unknown, ancestros: Elemento[] = [], visitas: Visita[] = []): Visita[] {
+      if (Array.isArray(nodo)) {
+        nodo.forEach((hijo) => recorrer(hijo, ancestros, visitas));
+      } else if (nodo && typeof nodo === "object" && "props" in nodo) {
+        const elemento = nodo as Elemento;
+        visitas.push({ elemento, ancestros });
+        recorrer(elemento.props?.children, [...ancestros, elemento], visitas);
+      }
+      return visitas;
+    }
+
+    const estiloDe = (elemento: Elemento): Record<string, unknown> => {
+      const estilo = elemento.props?.style;
+      return Array.isArray(estilo) ? Object.assign({}, ...estilo.flat()) : ((estilo as Record<string, unknown>) ?? {});
+    };
+    const hijosDe = (elemento: Elemento): unknown[] => [elemento.props?.children].flat(Infinity);
+    const contiene = (raiz: unknown, objetivo: Elemento): boolean =>
+      raiz === objetivo || (typeof raiz === "object" && raiz !== null && recorrer(raiz).some((v) => v.elemento === objetivo));
+
+    it("pone el texto instructivo debajo de las firmas, a todo el ancho", async () => {
+      const inspection = await crearInspeccionCompleta(TipoVehiculo.MOTO);
+      const data = await getInspeccionParaPdf(inspection.id);
+      if (!data) throw new Error("getInspeccionParaPdf devolvió null para una inspección recién creada.");
+
+      const visitas = recorrer(InspeccionPdfDocument({ data }));
+      const instructivo = visitas.find(
+        (v) => typeof v.elemento.props?.children === "string" && v.elemento.props.children.startsWith("LA UNIDAD DEBE SER REVISADA"),
+      );
+      const firmaConductor = visitas.find((v) => v.elemento.props?.titulo === "NOMBRE Y FIRMA DEL CONDUCTOR");
+      expect(instructivo, "texto instructivo").toBeDefined();
+      expect(firmaConductor, "firma del conductor").toBeDefined();
+
+      // El bloque es el ancestro común más cercano de las firmas y el texto.
+      const banda = [...instructivo!.ancestros].reverse().find((a) => firmaConductor!.ancestros.includes(a));
+      expect(banda, "bloque de resultado").toBeDefined();
+      expect(estiloDe(banda!).flexDirection, "el bloque no debe ser una fila (texto a la derecha)").not.toBe("row");
+
+      // Cada rama directa del bloque: la de las firmas va antes que la del texto…
+      const ramas = hijosDe(banda!).filter((r): r is Elemento => typeof r === "object" && r !== null);
+      const ramaFirmas = ramas.findIndex((r) => contiene(r, firmaConductor!.elemento));
+      const ramaTexto = ramas.findIndex((r) => contiene(r, instructivo!.elemento));
+      expect(ramaFirmas).toBeGreaterThanOrEqual(0);
+      expect(ramaTexto).toBeGreaterThan(ramaFirmas);
+      // …y la rama de las firmas ocupa todo el ancho (sin un porcentaje fijo).
+      expect(estiloDe(ramas[ramaFirmas]).width).toBeUndefined();
+    });
+  });
 });

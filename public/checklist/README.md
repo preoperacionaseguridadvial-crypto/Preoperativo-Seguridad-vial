@@ -25,6 +25,38 @@ Mientras un archivo no exista, la pantalla muestra automáticamente
 - `llantas.jpg` → Llantas en buen estado
 - `carroceria-latoneria.jpg` → Estado de la latonería / Rayones (misma foto para ambos ítems)
 
+- `frenos.jpg` → Frenos
+- `casco.jpg` → Casco (MOTO)
+
+### Checklist — Fluidos
+- `nivel-aceite.jpg` → Nivel de aceite
+- `nivel-liquido-frenos.jpg` → Nivel líquido de frenos
+- `nivel-refrigerante.jpg` → Nivel refrigerante
+
+### Checklist — Equipo de prevención
+- `canguro-emergencia.jpg` → Canguro de emergencia vial (MOTO)
+
+### Imágenes para CARRO (formato WebP)
+
+Las preguntas compartidas con moto tienen una imagen aparte para carro
+(`ChecklistItem.imagenesCarroUrl`, se muestra solo si el vehículo es CARRO):
+- `espejos-carro.webp` → Espejos
+- `frenos-carro.webp` → Frenos
+- `nivel-aceite-carro.webp`, `nivel-liquido-frenos-carro.webp` y
+  `nivel-refrigerante-carro.webp` → Fluidos
+- `kilometraje-carro.webp` → pantalla de kilometraje (el de moto es
+  `kilometraje.png`)
+
+Las preguntas exclusivas de CARRO usan su imagen como imagen principal:
+- `luces-carro.webp` → Luces altas, bajas, reversa e internas con direccionales
+- `llantas-repuesto.webp` → Llantas, incluye repuesto
+- `cinturones-seguridad.webp`, `limpiabrisas.webp`, `botiquin.webp` y
+  `extintor.webp`
+
+La declaración del conductor usa sus propias ilustraciones en
+`public/estado-conductor/` (`medicamentos.jpg`, `condiciones-aptas.jpg` y
+`alcohol.jpg`, una por pregunta).
+
 ### Checklist — Documentación
 
 Sin foto de referencia en el formato oficial (10 ítems: SOAT, Cédula de

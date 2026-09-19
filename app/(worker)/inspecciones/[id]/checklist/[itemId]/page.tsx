@@ -11,6 +11,7 @@ import {
   getChecklistEstadoCompleto,
 } from "@/lib/inspections/queries";
 import { responderItem } from "@/lib/inspections/actions";
+import { imagenesDelItem } from "@/lib/inspections/imagenes";
 import { GaleriaReferencia } from "@/app/(worker)/inspecciones/_components/GaleriaReferencia";
 import { RespuestaChecklistItem } from "@/app/(worker)/inspecciones/_components/RespuestaChecklistItem";
 import { RespuestaTriestadoItem } from "@/app/(worker)/inspecciones/_components/RespuestaTriestadoItem";
@@ -126,7 +127,10 @@ export default async function ChecklistItemPage({
       />
 
       <div className="flex flex-col gap-5 rounded-[14px] border border-[#D9E2EA] bg-white p-4 shadow-sm">
-        <GaleriaReferencia srcs={item.imagenesUrl} alt={`Referencia visual: ${item.nombre}`} />
+        <GaleriaReferencia
+          srcs={imagenesDelItem(item, inspection.vehicle.tipoVehiculo)}
+          alt={`Referencia visual: ${item.nombre}`}
+        />
 
         <div>
           <p className="text-xs uppercase text-[#66788A]">{item.category.nombre}</p>

@@ -6,8 +6,9 @@ import { Role } from "@/generated/prisma/client";
 import { setSetting } from "@/lib/settings/queries";
 
 // Server action del panel de Administrador (fase soporte-moto-carro, Slice
-// 4, ADR A5) — mismo patrón que lib/admin/vehicle-actions.ts:
-// `requireRole` primero, mutación de Prisma, `logAudit` al final.
+// 4, ADR A5) — mismo patrón que lib/admin/user-actions.ts: `requireRole`
+// primero, mutación de Prisma, `logAudit` al final. SST tiene los mismos
+// permisos que ADMINISTRADOR (decisión del usuario, 2026-09-18).
 
 /**
  * Actualiza una configuración de `AppSetting` (hoy solo
@@ -16,7 +17,7 @@ import { setSetting } from "@/lib/settings/queries";
  * nada específico de esa clave acá).
  */
 export async function actualizarConfiguracion(clave: string, valor: string) {
-  const session = await requireRole([Role.ADMINISTRADOR]);
+  const session = await requireRole([Role.ADMINISTRADOR, Role.SST]);
 
   const valorLimpio = valor.trim();
   if (!valorLimpio) {

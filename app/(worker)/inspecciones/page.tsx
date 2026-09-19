@@ -3,13 +3,13 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { iniciarInspeccion, cancelarInspeccion } from "@/lib/inspections/actions";
 import {
-  getVehiculosActivos,
+  getVehiculoDelTrabajador,
   getInspeccionesEnProcesoDelTrabajador,
-  getTipoVehiculoDelTrabajador,
 } from "@/lib/inspections/queries";
 
-// Punto de entrada del flujo del trabajador (Fase 2): elegir un vehículo
-// para iniciar una inspección nueva, o retomar una que quedó EN_PROCESO.
+// Punto de entrada del flujo del trabajador (Fase 2): iniciar una inspección
+// nueva sobre SU vehículo (1:1, ya no elige entre varios), o retomar una que
+// quedó EN_PROCESO.
 export default async function InspeccionesPage({
   searchParams,
 }: {
@@ -21,9 +21,8 @@ export default async function InspeccionesPage({
     redirect("/login");
   }
 
-  const tipoVehiculo = await getTipoVehiculoDelTrabajador(session.user.id);
-  const [vehiculos, enProceso] = await Promise.all([
-    getVehiculosActivos(tipoVehiculo),
+  const [vehiculo, enProceso] = await Promise.all([
+    getVehiculoDelTrabajador(session.user.id),
     getInspeccionesEnProcesoDelTrabajador(session.user.id),
   ]);
 
@@ -52,20 +51,29 @@ export default async function InspeccionesPage({
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-gray-500">Iniciar nueva inspección</h2>
-        {vehiculos.length === 0 && (
-          <p className="text-sm text-gray-500">No hay vehículos activos disponibles.</p>
+        {!vehiculo && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Pendiente de asignación de vehículo: solicita a SST o al Administrador que complete tu hoja
+            de vida.
+          </p>
         )}
-        {vehiculos.map((vehicle) => (
-          <form key={vehicle.id} action={iniciarAction.bind(null, vehicle.id)}>
+        {vehiculo && !vehiculo.activo && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Tu vehículo {vehiculo.placa} está inactivo. Solicita a SST o al Administrador que lo
+            reactive.
+          </p>
+        )}
+        {vehiculo?.activo && (
+          <form action={iniciarAction.bind(null, vehiculo.id)}>
             <button
               type="submit"
               className="w-full rounded-md bg-[#0B3B60] px-4 py-4 text-left text-sm font-medium text-white hover:bg-[#0B3B60]/90"
             >
-              {vehicle.placa}
-              <span className="block text-xs font-normal text-white/70">{vehicle.tipo}</span>
+              {vehiculo.placa}
+              <span className="block text-xs font-normal text-white/70">{vehiculo.tipo}</span>
             </button>
           </form>
-        ))}
+        )}
       </section>
 
       {enProceso.length > 0 && (

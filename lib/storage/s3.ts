@@ -73,9 +73,9 @@ export async function uploadObject(params: {
 /**
  * Borra un objeto del bucket configurado. Usado como acción compensatoria
  * cuando una foto ya se subió a S3 pero la escritura en base de datos que
- * la referenciaba falla después (ej. `crearVehiculo`/`actualizarVehiculo`
- * en lib/admin/vehicle-actions.ts) — evita dejar objetos huérfanos en el
- * bucket compartido.
+ * la referenciaba falla después (ej. el alta/edición de usuario con su
+ * vehículo en lib/admin/user-actions.ts) — evita dejar objetos huérfanos en
+ * el bucket compartido.
  */
 export async function deleteObject(key: string): Promise<void> {
   await s3Client.send(new DeleteObjectCommand({ Bucket: getBucket(), Key: key }));

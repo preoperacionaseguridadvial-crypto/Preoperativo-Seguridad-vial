@@ -46,15 +46,15 @@ registrarFuentesPdf();
 // constantes CARROS_PCT/MOTOS_PCT (heredadas del layout original de un solo
 // tipo) se eliminan: el único lugar que todavía usaba esos porcentajes es la
 // franja de resultado + firmas de abajo, que es un split fijo NO relacionado
-// con tipo de vehículo (ver RESULTADO_IZQ_PCT/RESULTADO_DER_PCT).
-const RESULTADO_IZQ_PCT = 54; // 69.99 / 130.55 — bloque declaración + firmas
-const RESULTADO_DER_PCT = 46; // 60.55 / 130.55 — texto instructivo fijo
+// con tipo de vehículo (ver FIRMA_CONDUCTOR_PCT/FIRMA_SUPERVISOR_PCT).
 
 // La zona de resultado + firmas (filas 71-74 del Excel) NO está dividida
-// por tipo de vehículo: es un único bloque compartido de ancho A:F (mismo
-// 54% de arriba), con el texto instructivo fijo ocupando G:J (46%) al
-// lado. Dentro de ese bloque A:F, conductor = A:C (32.10) y
-// supervisor = D:F (37.89).
+// por tipo de vehículo: es un único bloque compartido. El texto instructivo
+// fijo ("LA UNIDAD DEBE SER REVISADA...") va DEBAJO de las firmas, a todo el
+// ancho (pedido del dueño de producto, 2026-09-18): a la derecha, como en el
+// Excel original, le quitaba espacio a las firmas. Conductor y supervisor
+// conservan la proporción del Excel (A:C = 32.10 y D:F = 37.89), ahora sobre
+// el ancho completo.
 const FIRMA_CONDUCTOR_PCT = 46; // 32.10 / 69.99
 const FIRMA_SUPERVISOR_PCT = 54; // 37.89 / 69.99
 
@@ -254,8 +254,7 @@ const styles = StyleSheet.create({
   novedadCampo: { fontSize: 11, marginTop: 1 },
 
   // Resultado + firmas
-  resultadoBand: { flexDirection: "row", borderWidth: 1, borderColor: "#111111" },
-  resultadoBloqueIzq: { width: `${RESULTADO_IZQ_PCT}%` },
+  resultadoBand: { borderWidth: 1, borderColor: "#111111" },
   resultadoTituloRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -272,7 +271,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: "#111111",
   },
-  firmasRow: { flexDirection: "row" },
+  firmasRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: "#111111" },
   firmaCajaConductor: {
     width: `${FIRMA_CONDUCTOR_PCT}%`,
     borderRightWidth: 1,
@@ -287,12 +286,7 @@ const styles = StyleSheet.create({
   firmaCedula: { fontSize: 11, color: "#444444", textAlign: "center" },
   firmaFecha: { fontSize: 11, color: "#444444", textAlign: "center" },
   firmaVacia: { fontSize: 11, color: "#888888", textAlign: "center", marginTop: 20 },
-  resultadoBloqueDer: {
-    width: `${RESULTADO_DER_PCT}%`,
-    borderLeftWidth: 1,
-    borderColor: "#111111",
-    padding: 5,
-  },
+  resultadoInstructivo: { padding: 5 },
   textoInstructivo: { fontSize: 11, lineHeight: 1.3 },
 
   // Estado de aprobación (fuera del cuerpo oficial del formato)
@@ -528,10 +522,8 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
               <Text style={styles.datosValue}>{data.conductor.name}</Text>
             </View>
             <View style={styles.datosCellLast}>
-              <Text style={styles.datosLabel}>Fecha Vencimiento Pase / Conductor Activo</Text>
-              <Text style={styles.datosValue}>
-                {formatFecha(data.conductor.fechaVencimientoPase)} — {data.conductor.conductorActivo ? "Activo" : "Inactivo"}
-              </Text>
+              <Text style={styles.datosLabel}>Conductor Activo</Text>
+              <Text style={styles.datosValue}>{data.conductor.conductorActivo ? "Activo" : "Inactivo"}</Text>
             </View>
           </View>
           <View style={styles.datosRowLast}>
@@ -664,32 +656,30 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
 
         {/* RESULTADO + FIRMAS (bloque compartido, no dividido por tipo de vehículo) */}
         <View style={styles.resultadoBand} wrap={false}>
-          <View style={styles.resultadoBloqueIzq}>
-            <View style={styles.resultadoTituloRow}>
-              <Text style={styles.resultadoTexto}>{TXT.resultadoTitulo}</Text>
-              <Text style={styles.resultadoSiNo}>{decisionSupervisor}</Text>
-            </View>
-            <Text style={styles.declaracionTexto}>
-              {TXT.declaracion} {data.puedeOperar === null ? "" : data.puedeOperar ? "(Declaró: SÍ)" : "(Declaró: NO)"}
-            </Text>
-            <View style={styles.firmasRow}>
-              <FirmaCaja
-                titulo={TXT.firmaConductor}
-                nombre={data.conductor.name}
-                cedula={data.conductor.cedula}
-                firma={data.firmas.conductor}
-                estilo={styles.firmaCajaConductor}
-              />
-              <FirmaCaja
-                titulo={TXT.firmaSupervisor}
-                nombre={data.supervisor?.name ?? null}
-                cedula={data.supervisor?.cedula}
-                firma={data.firmas.supervisor}
-                estilo={styles.firmaCajaSupervisor}
-              />
-            </View>
+          <View style={styles.resultadoTituloRow}>
+            <Text style={styles.resultadoTexto}>{TXT.resultadoTitulo}</Text>
+            <Text style={styles.resultadoSiNo}>{decisionSupervisor}</Text>
           </View>
-          <View style={styles.resultadoBloqueDer}>
+          <Text style={styles.declaracionTexto}>
+            {TXT.declaracion} {data.puedeOperar === null ? "" : data.puedeOperar ? "(Declaró: SÍ)" : "(Declaró: NO)"}
+          </Text>
+          <View style={styles.firmasRow}>
+            <FirmaCaja
+              titulo={TXT.firmaConductor}
+              nombre={data.conductor.name}
+              cedula={data.conductor.cedula}
+              firma={data.firmas.conductor}
+              estilo={styles.firmaCajaConductor}
+            />
+            <FirmaCaja
+              titulo={TXT.firmaSupervisor}
+              nombre={data.supervisor?.name ?? null}
+              cedula={data.supervisor?.cedula}
+              firma={data.firmas.supervisor}
+              estilo={styles.firmaCajaSupervisor}
+            />
+          </View>
+          <View style={styles.resultadoInstructivo}>
             <Text style={styles.textoInstructivo}>{TXT.textoInstructivo}</Text>
           </View>
         </View>

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound, getNextStepPath } from "@/lib/inspections/queries";
 import { registrarKilometraje } from "@/lib/inspections/actions";
+import { imagenKilometraje } from "@/lib/inspections/imagenes";
 import { ImagenReferencia } from "@/app/(worker)/inspecciones/_components/ImagenReferencia";
 
 // Primer paso del flujo guiado: medida directa de la inspección
@@ -31,15 +32,15 @@ export default async function MedidasPage({ params }: { params: Promise<{ id: st
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
-        <h1 className="text-xl font-semibold text-[#0B3B60]">Medidas del vehículo</h1>
+        <h1 className="text-xl font-semibold text-[#0B3B60]">Kilometraje del vehículo</h1>
       </div>
 
       <form action={guardarMedidas} className="flex flex-col gap-5">
         <div>
           <ImagenReferencia
-            src="/checklist/kilometraje.png"
+            src={imagenKilometraje(inspection.vehicle.tipoVehiculo)}
             alt="Referencia visual: kilometraje"
-            className="mb-2 aspect-[16/9] max-h-40"
+            className="mb-2 max-h-[28rem]"
           />
           <label htmlFor="kilometraje" className="mb-1 block text-sm font-medium text-gray-700">
             Kilometraje

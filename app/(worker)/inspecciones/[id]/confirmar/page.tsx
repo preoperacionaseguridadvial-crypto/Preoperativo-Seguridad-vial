@@ -42,10 +42,10 @@ export default async function ConfirmarPage({
   }
 
   // Fix (Slice 3, resiliencia): `getNextStepPath` es la única fuente de
-  // verdad de qué falta (checklist, fotos diarias A7, declaración de estado
-  // del conductor A6, en ese orden) — una inspección que ya estaba
-  // EN_PROCESO antes de que estas dos paradas existieran nunca pasó por
-  // `/fotos` ni `/estado-conductor`, así que acá se vuelve a preguntar en
+  // verdad de qué falta (checklist, declaración de estado del conductor A6,
+  // fotos diarias A7 y resultado, en ese orden) — una inspección que ya estaba
+  // EN_PROCESO antes de que estas paradas existieran nunca pasó por
+  // `/estado-conductor` ni `/fotos`, así que acá se vuelve a preguntar en
   // vez de asumir que, por estar EN_PROCESO, ya está lista para confirmar.
   // Sin este chequeo, esta pantalla renderizaba igual y el gate solo
   // aparecía recién al enviar (`enviarInspeccion`), con un error de texto
@@ -67,9 +67,6 @@ export default async function ConfirmarPage({
   const noConformes = filtrarNoConformes(inspection.respuestas);
 
   const ahora = new Date();
-  const paseVencido = Boolean(
-    inspection.conductor.fechaVencimientoPase && inspection.conductor.fechaVencimientoPase < ahora,
-  );
   const tecnicomecanicaVencida = Boolean(
     inspection.vehicle.fechaVencimientoTecnicomecanica &&
       inspection.vehicle.fechaVencimientoTecnicomecanica < ahora,
@@ -109,13 +106,6 @@ export default async function ConfirmarPage({
           <div className="flex justify-between">
             <dt className="text-xs text-gray-500">Conductor</dt>
             <dd className="font-medium">{inspection.conductor.name}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-xs text-gray-500">Vencimiento pase</dt>
-            <dd className={`font-medium ${paseVencido ? "text-red-600" : ""}`}>
-              {formatFecha(inspection.conductor.fechaVencimientoPase)}
-              {paseVencido && " (vencido)"}
-            </dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-xs text-gray-500">Conductor activo</dt>

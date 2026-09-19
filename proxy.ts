@@ -30,7 +30,11 @@ const ROLE_ROUTE_PREFIXES: Record<string, Role[]> = {
   "/aprobaciones": ["SUPERVISOR"],
   "/consulta-inspecciones": ["DIRECTOR", "SST", "SUPERVISOR", "ADMINISTRADOR"],
   "/dashboard": ["DIRECTOR", "SST", "ADMINISTRADOR"],
-  "/admin": ["ADMINISTRADOR"],
+  // SST tiene los mismos permisos que ADMINISTRADOR en todo el panel
+  // (decisión del usuario, 2026-09-18): usuarios, hoja de vida y
+  // configuración. Si se agrega un permiso nuevo a ADMINISTRADOR, agregarlo
+  // también a SST (y a su requireRole).
+  "/admin": ["ADMINISTRADOR", "SST"],
 };
 
 function isPublicPath(pathname: string) {

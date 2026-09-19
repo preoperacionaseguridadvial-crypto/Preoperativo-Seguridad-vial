@@ -7,9 +7,9 @@ import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
+import { PREGUNTAS_ESTADO_CONDUCTOR, type CampoEstadoConductor } from "@/lib/inspections/estado-conductor";
 import {
   getChecklistCatalog,
-  getTipoVehiculoDelTrabajador,
   FOTOS_DIARIAS_REQUERIDAS,
 } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
@@ -61,21 +61,36 @@ async function getOwnInspeccionEnProceso(inspectionId: string, workerId: string)
 export async function iniciarInspeccion(vehicleId: string) {
   const session = await requireRole([Role.TRABAJADOR]);
 
+  // Cada trabajador tiene UN vehículo (1:1, `User.vehicleId`, decisión del
+  // usuario 2026-09-18). Defensa en profundidad: la pantalla de inicio
+  // (app/(worker)/inspecciones/page.tsx) ya muestra solo ese vehículo, pero
+  // acá se re-valida en el servidor, nunca se confía en que el frontend haya
+  // mandado el correcto. Un trabajador legacy sin vehículo no puede iniciar
+  // ninguna inspección hasta que SST/Administrador complete su hoja de vida.
+  const trabajador = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { vehicleId: true, tipoVehiculo: true },
+  });
+  if (!trabajador?.vehicleId) {
+    throw new Error(
+      "Pendiente de asignación de vehículo: solicita a SST o al Administrador que complete tu hoja de vida.",
+    );
+  }
+  if (trabajador.vehicleId !== vehicleId) {
+    throw new Error("Este vehículo no es el vehículo asignado al trabajador.");
+  }
+
   const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
   if (!vehicle || !vehicle.activo) {
     throw new Error("Vehículo no encontrado o inactivo.");
   }
 
-  // Fase soporte-moto-carro (A1): defensa en profundidad — la pantalla de
-  // inicio (app/(worker)/inspecciones/page.tsx) ya filtra la lista de
-  // vehículos por `getVehiculosActivos(tipoVehiculo)`, pero acá se re-valida
-  // en el servidor, nunca se confía en que el frontend haya mandado un
-  // vehículo del tipo correcto. Vehículos legacy sin tipo resuelven a MOTO
-  // (mismo backfill del Slice 1); un trabajador sin tipo asignado nunca
-  // puede iniciar ninguna inspección.
-  const tipoTrabajador = await getTipoVehiculoDelTrabajador(session.user.id);
+  // Fase soporte-moto-carro (A1): el tipo del trabajador debe coincidir con
+  // el de su vehículo (datos inconsistentes no abren ningún catálogo).
+  // Vehículos legacy sin tipo resuelven a MOTO (mismo backfill del Slice 1);
+  // un trabajador sin tipo asignado nunca puede iniciar ninguna inspección.
   const tipoVehiculo = vehicle.tipoVehiculo ?? TipoVehiculo.MOTO;
-  if (tipoTrabajador === null || tipoTrabajador !== tipoVehiculo) {
+  if (trabajador.tipoVehiculo === null || trabajador.tipoVehiculo !== tipoVehiculo) {
     throw new Error("Este vehículo no corresponde al tipo de vehículo asignado al trabajador.");
   }
 
@@ -405,6 +420,45 @@ export async function registrarEstadoConductor(
       condicionesAptas: data.condicionesAptas,
       consumioAlcohol: data.consumioAlcohol,
       declaracionEstadoAt: new Date(),
+    },
+  });
+}
+
+/**
+ * Registra UNA respuesta de la declaración de estado del conductor: la
+ * pantalla las muestra de a una (pedido del dueño de producto, 2026-09-18) y
+ * cada respuesta se guarda sola, así se puede retomar a mitad de camino y
+ * corregir una respuesta mientras la inspección siga EN_PROCESO. `campo` se
+ * valida contra la lista de preguntas (nunca se escribe una columna arbitraria
+ * de `Inspection`). `declaracionEstadoAt` se fija con la hora del servidor
+ * cuando la respuesta deja completas las 3 preguntas. Ninguna combinación
+ * bloquea nada (D8), igual que en `registrarEstadoConductor`.
+ */
+export async function registrarRespuestaEstadoConductor(
+  inspectionId: string,
+  campo: CampoEstadoConductor,
+  valor: boolean,
+) {
+  const session = await requireRole([Role.TRABAJADOR]);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+
+  if (!PREGUNTAS_ESTADO_CONDUCTOR.some((pregunta) => pregunta.campo === campo)) {
+    throw new Error("La pregunta indicada no es parte de la declaración del conductor.");
+  }
+
+  const respuestas = {
+    tomaMedicamentos: inspection.tomaMedicamentos,
+    condicionesAptas: inspection.condicionesAptas,
+    consumioAlcohol: inspection.consumioAlcohol,
+    [campo]: valor,
+  };
+  const declaracionCompleta = Object.values(respuestas).every((respuesta) => respuesta !== null);
+
+  return prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      [campo]: valor,
+      ...(declaracionCompleta ? { declaracionEstadoAt: new Date() } : {}),
     },
   });
 }

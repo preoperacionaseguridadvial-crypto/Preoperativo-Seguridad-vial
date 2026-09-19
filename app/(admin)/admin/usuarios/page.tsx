@@ -38,12 +38,6 @@ export default async function AdminUsuariosPage({
         </div>
         <div className="flex gap-2">
           <Link
-            href="/admin/vehiculos"
-            className="rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
-          >
-            Ver vehículos
-          </Link>
-          <Link
             href="/admin/configuracion"
             className="rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
           >
@@ -68,7 +62,7 @@ export default async function AdminUsuariosPage({
             name="q"
             type="text"
             defaultValue={q ?? ""}
-            placeholder="Nombre, email o cédula"
+            placeholder="Nombre, email, cédula o placa"
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#005B96] focus:outline-none"
           />
         </div>
@@ -132,7 +126,7 @@ export default async function AdminUsuariosPage({
                   <th className="py-2 pr-2 font-medium">Email</th>
                   <th className="py-2 pr-2 font-medium">Rol</th>
                   <th className="py-2 pr-2 font-medium">Cédula</th>
-                  <th className="py-2 pr-2 font-medium">Tipo de vehículo</th>
+                  <th className="py-2 pr-2 font-medium">Vehículo</th>
                   <th className="py-2 pr-2 font-medium">Cargo</th>
                   <th className="py-2 pr-2 font-medium">Activo</th>
                   <th className="py-2 pr-2 font-medium">Acciones</th>
@@ -146,14 +140,20 @@ export default async function AdminUsuariosPage({
                     <td className="py-2 pr-2 font-mono text-xs">{usuario.role}</td>
                     <td className="py-2 pr-2">{usuario.cedula ?? "—"}</td>
                     <td className="py-2 pr-2">
-                      {usuario.tipoVehiculo ??
-                        (usuario.role === Role.TRABAJADOR ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                            Pendiente de asignación
-                          </span>
-                        ) : (
-                          "—"
-                        ))}
+                      {usuario.vehicle ? (
+                        <>
+                          <span className="font-mono text-xs font-semibold">{usuario.vehicle.placa}</span>
+                          {usuario.tipoVehiculo && (
+                            <span className="ml-1 text-xs text-gray-500">{usuario.tipoVehiculo}</span>
+                          )}
+                        </>
+                      ) : usuario.role === Role.TRABAJADOR ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                          Sin vehículo · pendiente de asignación
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="py-2 pr-2">{usuario.cargo ?? "—"}</td>
                     <td className="py-2 pr-2">
@@ -166,6 +166,13 @@ export default async function AdminUsuariosPage({
                       )}
                     </td>
                     <td className="py-2 pr-2 whitespace-nowrap">
+                      <Link
+                        href={`/admin/usuarios/${usuario.id}/hoja-de-vida`}
+                        className="text-[#005B96] hover:underline"
+                      >
+                        Hoja de vida
+                      </Link>
+                      <span className="px-1 text-gray-300">·</span>
                       <Link href={`/admin/usuarios/${usuario.id}`} className="text-[#005B96] hover:underline">
                         Editar
                       </Link>

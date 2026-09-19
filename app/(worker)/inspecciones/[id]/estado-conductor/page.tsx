@@ -1,23 +1,31 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound, getNextStepPath } from "@/lib/inspections/queries";
-import { registrarEstadoConductor } from "@/lib/inspections/actions";
+import { registrarRespuestaEstadoConductor } from "@/lib/inspections/actions";
+import { GaleriaReferencia } from "@/app/(worker)/inspecciones/_components/GaleriaReferencia";
+import {
+  PREGUNTAS_ESTADO_CONDUCTOR,
+  siguientePreguntaEstadoConductor,
+} from "@/lib/inspections/estado-conductor";
 
 // Declaración de estado del conductor (Fase soporte-moto-carro, Slice 3,
-// A6): 3 preguntas sí/no del formato, textuales — ver spec. Ninguna
-// respuesta bloquea el paso (D8, confirmado): el botón siempre continúa una
-// vez las 3 están contestadas, la única advertencia que genera una
-// respuesta "preocupante" es para el Supervisor más adelante (ver
-// lib/inspections/estado-conductor.ts), nunca acá.
+// A6): 3 preguntas sí/no del formato, textuales — ver spec. Se muestran de a
+// una, una pantalla por pregunta y en orden (pedido del dueño de producto,
+// 2026-09-18): `?paso=N` elige cuál; sin `paso` se abre la primera sin
+// responder, así se puede retomar a mitad de camino. Cada respuesta se guarda
+// sola. Ninguna respuesta bloquea el paso (D8, confirmado): la única
+// advertencia que genera una respuesta "preocupante" es para el Supervisor más
+// adelante (ver lib/inspections/estado-conductor.ts), nunca acá.
 export default async function EstadoConductorPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ paso?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const { paso, error } = await searchParams;
   const session = await auth();
   if (!session?.user) {
     redirect("/login");
@@ -28,17 +36,30 @@ export default async function EstadoConductorPage({
     redirect(await getNextStepPath(id));
   }
 
-  async function guardarEstadoAction(formData: FormData) {
+  const numero = Number(paso);
+  const pregunta = Number.isInteger(numero) ? PREGUNTAS_ESTADO_CONDUCTOR[numero - 1] : undefined;
+  if (!pregunta) {
+    const siguiente = siguientePreguntaEstadoConductor(inspection);
+    redirect(
+      siguiente === null ? await getNextStepPath(id) : `/inspecciones/${id}/estado-conductor?paso=${siguiente}`,
+    );
+  }
+
+  const campo = pregunta.campo;
+  const respuestaActual = inspection[campo];
+
+  async function guardarRespuestaAction(formData: FormData) {
     "use server";
-    const tomaMedicamentos = formData.get("tomaMedicamentos") === "si";
-    const condicionesAptas = formData.get("condicionesAptas") === "si";
-    const consumioAlcohol = formData.get("consumioAlcohol") === "si";
+    const respuesta = formData.get("respuesta");
 
     try {
-      await registrarEstadoConductor(id, { tomaMedicamentos, condicionesAptas, consumioAlcohol });
+      if (respuesta !== "si" && respuesta !== "no") {
+        throw new Error("Selecciona una respuesta para continuar.");
+      }
+      await registrarRespuestaEstadoConductor(id, campo, respuesta === "si");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo guardar la declaración.";
-      redirect(`/inspecciones/${id}/estado-conductor?error=${encodeURIComponent(message)}`);
+      const message = err instanceof Error ? err.message : "No se pudo guardar la respuesta.";
+      redirect(`/inspecciones/${id}/estado-conductor?paso=${numero}&error=${encodeURIComponent(message)}`);
     }
     redirect(await getNextStepPath(id));
   }
@@ -48,24 +69,43 @@ export default async function EstadoConductorPage({
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Declaración del conductor</h1>
+        <p className="mt-1 text-xs text-gray-500">
+          Pregunta {numero} de {PREGUNTAS_ESTADO_CONDUCTOR.length}
+        </p>
       </div>
 
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      <form action={guardarEstadoAction} className="flex flex-col gap-6">
-        <PreguntaSiNo
-          name="tomaMedicamentos"
-          pregunta="¿Se encuentra bajo los efectos de algún medicamento, sustancia o condición que pueda afectar su capacidad para conducir de manera segura?"
-          ayudaSi='Si respondió "Sí": informar al responsable antes de iniciar el recorrido.'
-        />
-        <PreguntaSiNo
-          name="condicionesAptas"
-          pregunta="¿Se encuentra en condiciones físicas y mentales adecuadas para conducir de manera segura?"
-        />
-        <PreguntaSiNo
-          name="consumioAlcohol"
-          pregunta="¿Ha consumido alcohol o alguna sustancia que pueda afectar su capacidad para conducir?"
-        />
+      <GaleriaReferencia srcs={[pregunta.imagen]} alt="Ilustración de la pregunta" />
+
+      <form action={guardarRespuestaAction} className="flex flex-col gap-6">
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-sm font-medium text-gray-700">{pregunta.texto}</legend>
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="respuesta"
+                value="no"
+                required
+                defaultChecked={respuestaActual === false}
+                className="h-4 w-4"
+              />{" "}
+              No
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="respuesta"
+                value="si"
+                defaultChecked={respuestaActual === true}
+                className="h-4 w-4"
+              />{" "}
+              Sí
+            </label>
+          </div>
+          {pregunta.ayudaSi && <p className="text-xs text-amber-700">{pregunta.ayudaSi}</p>}
+        </fieldset>
 
         <button
           type="submit"
@@ -74,31 +114,15 @@ export default async function EstadoConductorPage({
           Continuar
         </button>
       </form>
-    </main>
-  );
-}
 
-function PreguntaSiNo({
-  name,
-  pregunta,
-  ayudaSi,
-}: {
-  name: string;
-  pregunta: string;
-  ayudaSi?: string;
-}) {
-  return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-medium text-gray-700">{pregunta}</legend>
-      <div className="flex gap-6">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="radio" name={name} value="no" required className="h-4 w-4" /> No
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="radio" name={name} value="si" className="h-4 w-4" /> Sí
-        </label>
-      </div>
-      {ayudaSi && <p className="text-xs text-amber-700">{ayudaSi}</p>}
-    </fieldset>
+      {numero > 1 && (
+        <Link
+          href={`/inspecciones/${id}/estado-conductor?paso=${numero - 1}`}
+          className="text-sm text-[#005B96] hover:underline"
+        >
+          ← Pregunta anterior
+        </Link>
+      )}
+    </main>
   );
 }

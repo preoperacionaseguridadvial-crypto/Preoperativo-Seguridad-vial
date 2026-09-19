@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { Role, TipoVehiculo, TipoFotoInspeccion } from "@/generated/prisma/client";
 import {
   getChecklistCatalog,
-  getVehiculosActivos,
+  getVehiculoDelTrabajador,
   getAdjacentChecklistItemIds,
   getFotosInspeccion,
   getNextStepPath,
+  categoriasParaLista,
 } from "@/lib/inspections/queries";
 import {
   crearCatalogoMinimo,
@@ -84,26 +85,33 @@ describe("getChecklistCatalog", () => {
   });
 });
 
-describe("getVehiculosActivos", () => {
-  it("filtra por tipoVehiculo", async () => {
-    const moto = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
-    const carro = await crearVehiculo({ tipoVehiculo: TipoVehiculo.CARRO });
+// Modelo 1:1: cada trabajador tiene UN vehículo (`User.vehicleId`) y ve solo
+// ese; ya no elige entre los vehículos activos de su tipo.
+describe("getVehiculoDelTrabajador", () => {
+  it("devuelve el vehículo del trabajador y no los de otros, aunque sean del mismo tipo", async () => {
+    const propio = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const trabajador = await crearUsuario(Role.TRABAJADOR, { vehicleId: propio.id });
 
-    const motos = await getVehiculosActivos(TipoVehiculo.MOTO);
-    const carros = await getVehiculosActivos(TipoVehiculo.CARRO);
+    const vehiculo = await getVehiculoDelTrabajador(trabajador.id);
 
-    expect(motos.map((v) => v.id)).toContain(moto.id);
-    expect(motos.map((v) => v.id)).not.toContain(carro.id);
-    expect(carros.map((v) => v.id)).toContain(carro.id);
-    expect(carros.map((v) => v.id)).not.toContain(moto.id);
+    expect(vehiculo?.id).toBe(propio.id);
   });
 
-  it("devuelve lista vacía cuando el trabajador no tiene tipo asignado (null)", async () => {
+  it("devuelve null para un trabajador legacy sin vehículo (aunque existan vehículos de su tipo)", async () => {
     await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const legacy = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.MOTO });
 
-    const vehiculos = await getVehiculosActivos(null);
+    expect(await getVehiculoDelTrabajador(legacy.id)).toBeNull();
+  });
 
-    expect(vehiculos).toEqual([]);
+  it("devuelve el vehículo aunque esté inactivo (la pantalla decide qué mostrar con `activo`)", async () => {
+    const inactivo = await crearVehiculo({ activo: false });
+    const trabajador = await crearUsuario(Role.TRABAJADOR, { vehicleId: inactivo.id });
+
+    const vehiculo = await getVehiculoDelTrabajador(trabajador.id);
+
+    expect(vehiculo?.activo).toBe(false);
   });
 });
 
@@ -166,10 +174,11 @@ describe("getFotosInspeccion", () => {
   });
 });
 
-// Slice 3: `getNextStepPath` gana dos paradas nuevas en el flujo guiado
-// (fotos diarias tras terminar el checklist, declaración de estado del
-// conductor tras el resultado) — ver Data Flow del design.
-describe("getNextStepPath — nuevas paradas de Slice 3", () => {
+// Paradas posteriores al checklist (pedido del dueño de producto,
+// 2026-09-18): declaración del conductor (3 preguntas) → fotos diarias →
+// resultado → confirmar. Antes las fotos iban primero y la declaración después
+// del resultado.
+describe("getNextStepPath — paradas después del checklist", () => {
   async function crearInspeccionConChecklistCompleto() {
     const { item } = await crearCatalogoMinimo();
     const inspection = await crearInspeccionEnProceso();
@@ -180,90 +189,162 @@ describe("getNextStepPath — nuevas paradas de Slice 3", () => {
     return inspection;
   }
 
-  it("manda a /fotos cuando el checklist está completo pero faltan las fotos diarias", async () => {
+  async function crearFotosDiarias(inspectionId: string) {
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+  }
+
+  const declaracionCompleta = { tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false };
+
+  it("manda a /estado-conductor apenas termina el checklist, antes de las fotos", async () => {
     const inspection = await crearInspeccionConChecklistCompleto();
-
-    const path = await getNextStepPath(inspection.id);
-
-    expect(path).toBe(`/inspecciones/${inspection.id}/fotos`);
-  });
-
-  it("manda a /resultado cuando ya están las 2 fotos", async () => {
-    const inspection = await crearInspeccionConChecklistCompleto();
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
-    });
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
-    });
-
-    const path = await getNextStepPath(inspection.id);
-
-    expect(path).toBe(`/inspecciones/${inspection.id}/resultado`);
-  });
-
-  it("manda a /estado-conductor cuando ya hay resultado pero falta la declaración del conductor", async () => {
-    const inspection = await crearInspeccionConChecklistCompleto();
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
-    });
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
-    });
-    await prisma.inspection.update({ where: { id: inspection.id }, data: { puedeOperar: true } });
 
     const path = await getNextStepPath(inspection.id);
 
     expect(path).toBe(`/inspecciones/${inspection.id}/estado-conductor`);
   });
 
-  // Fix (WARNING resilience, "worsened" por Slice 3): `confirmar/page.tsx`
-  // vuelve a llamar `getNextStepPath` para redirigir a la primera parada
-  // incompleta en vez de renderizar el resumen sin haber pasado por
-  // `/fotos`/`/estado-conductor` — este test prueba la función que hace ese
-  // gating (no hay patrón establecido en este proyecto para testear el
-  // redirect de una página de App Router directamente; no hay ningún
-  // `page.test.tsx` en el repo).
-  it("NUNCA devuelve /confirmar si faltan las fotos diarias o la declaración del conductor, aunque el checklist ya esté completo (gate reforzado tras el fix de confirmar/page.tsx)", async () => {
+  it("sigue en /estado-conductor mientras falte alguna de las 3 preguntas", async () => {
     const inspection = await crearInspeccionConChecklistCompleto();
-
-    // Checklist completo mas nada de Slice 3 todavía: no debe llegar a /confirmar.
-    expect(await getNextStepPath(inspection.id)).not.toBe(`/inspecciones/${inspection.id}/confirmar`);
-
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: { tomaMedicamentos: false, condicionesAptas: true },
     });
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
-    });
-    await prisma.inspection.update({ where: { id: inspection.id }, data: { puedeOperar: true } });
 
-    // Fotos y resultado completos, pero falta la declaración del conductor:
-    // sigue sin poder llegar a /confirmar.
-    expect(await getNextStepPath(inspection.id)).not.toBe(`/inspecciones/${inspection.id}/confirmar`);
     expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/estado-conductor`);
   });
 
-  it("manda a /confirmar cuando checklist, fotos, resultado y declaración del conductor están completos", async () => {
+  it("manda a /fotos cuando la declaración está completa pero faltan las fotos diarias", async () => {
     const inspection = await crearInspeccionConChecklistCompleto();
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
-    });
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
-    });
+    await prisma.inspection.update({ where: { id: inspection.id }, data: declaracionCompleta });
+
+    const path = await getNextStepPath(inspection.id);
+
+    expect(path).toBe(`/inspecciones/${inspection.id}/fotos`);
+  });
+
+  it("manda a /resultado cuando ya están la declaración y las 2 fotos", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+    await prisma.inspection.update({ where: { id: inspection.id }, data: declaracionCompleta });
+    await crearFotosDiarias(inspection.id);
+
+    const path = await getNextStepPath(inspection.id);
+
+    expect(path).toBe(`/inspecciones/${inspection.id}/resultado`);
+  });
+
+  // `confirmar/page.tsx` vuelve a llamar `getNextStepPath` para redirigir a la
+  // primera parada incompleta en vez de renderizar el resumen sin haber pasado
+  // por todas — este test prueba la función que hace ese gating (no hay
+  // patrón establecido en este proyecto para testear el redirect de una
+  // página de App Router directamente).
+  it("NUNCA devuelve /confirmar si falta la declaración, las fotos o el resultado, aunque el checklist ya esté completo", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+    const confirmar = `/inspecciones/${inspection.id}/confirmar`;
+
+    expect(await getNextStepPath(inspection.id)).not.toBe(confirmar);
+
+    await prisma.inspection.update({ where: { id: inspection.id }, data: declaracionCompleta });
+    expect(await getNextStepPath(inspection.id)).not.toBe(confirmar);
+
+    await crearFotosDiarias(inspection.id);
+    expect(await getNextStepPath(inspection.id)).not.toBe(confirmar);
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/resultado`);
+  });
+
+  it("manda a /confirmar cuando checklist, declaración, fotos y resultado están completos", async () => {
+    const inspection = await crearInspeccionConChecklistCompleto();
+    await crearFotosDiarias(inspection.id);
     await prisma.inspection.update({
       where: { id: inspection.id },
-      data: {
-        puedeOperar: true,
-        tomaMedicamentos: false,
-        condicionesAptas: true,
-        consumioAlcohol: false,
-      },
+      data: { puedeOperar: true, ...declaracionCompleta },
     });
 
     const path = await getNextStepPath(inspection.id);
 
     expect(path).toBe(`/inspecciones/${inspection.id}/confirmar`);
+  });
+});
+
+// Recorrido guiado (pedido del dueño de producto, 2026-09-18): Inspección
+// Visual → Fluidos → Equipo de prevención → Documentación → declaración del
+// conductor → fotos. Todo va ítem por ítem salvo Documentación, que es la
+// única lista (`/checklist`).
+describe("getNextStepPath — recorrido guiado del checklist", () => {
+  async function crearCatalogoDelRecorrido() {
+    const visual = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
+    const fluidos = await prisma.checklistCategory.create({ data: { nombre: "Fluidos", orden: 2 } });
+    const equipo = await prisma.checklistCategory.create({ data: { nombre: "Equipo de prevención", orden: 3 } });
+    const documentos = await prisma.checklistCategory.create({ data: { nombre: "Documentación", orden: 4 } });
+    return {
+      espejos: await crearChecklistItem(visual.id, { nombre: "Espejos", orden: 1 }),
+      frenos: await crearChecklistItem(visual.id, { nombre: "Frenos", orden: 2 }),
+      soat: await crearChecklistItem(documentos.id, { nombre: "SOAT", orden: 1 }),
+      cedula: await crearChecklistItem(documentos.id, { nombre: "Cédula", orden: 2 }),
+      nivel: await crearChecklistItem(fluidos.id, { nombre: "Nivel de aceite", orden: 1 }),
+      canguro: await crearChecklistItem(equipo.id, { nombre: "Canguro de emergencia vial", orden: 1 }),
+    };
+  }
+
+  async function responder(inspectionId: string, ...items: { id: string }[]) {
+    for (const item of items) {
+      await prisma.inspectionItemResponse.create({
+        data: { inspectionId, checklistItemId: item.id, valor: "OK" },
+      });
+    }
+  }
+
+  it("una inspección nueva arranca en el primer ítem visual (uno por uno), no en la lista", async () => {
+    const items = await crearCatalogoDelRecorrido();
+    const inspection = await crearInspeccionEnProceso();
+    await prisma.inspection.update({ where: { id: inspection.id }, data: { kilometraje: 100 } });
+
+    const path = await getNextStepPath(inspection.id);
+
+    expect(path).toBe(`/inspecciones/${inspection.id}/checklist/${items.espejos.id}`);
+  });
+
+  it("recorre Visual, Fluidos y Equipo ítem por ítem, y recién al final abre la lista de Documentos", async () => {
+    const items = await crearCatalogoDelRecorrido();
+    const inspection = await crearInspeccionEnProceso();
+    await prisma.inspection.update({ where: { id: inspection.id }, data: { kilometraje: 100 } });
+    const base = `/inspecciones/${inspection.id}`;
+
+    await responder(inspection.id, items.espejos);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.frenos.id}`);
+
+    await responder(inspection.id, items.frenos);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.nivel.id}`);
+
+    await responder(inspection.id, items.nivel);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.canguro.id}`);
+
+    await responder(inspection.id, items.canguro);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist`);
+  });
+});
+
+// La pantalla de lista (`/checklist`) ya no despliega todo el checklist junto:
+// solo muestra Documentación (la única categoría sin pantalla por ítem) y
+// únicamente mientras tenga documentos pendientes.
+describe("categoriasParaLista", () => {
+  const catalogo = (estadoDocumentos: "PENDIENTE" | "OK") => [
+    { nombre: "Inspección Visual", items: [{ estado: "PENDIENTE" as const }] },
+    { nombre: "Documentación", items: [{ estado: estadoDocumentos }, { estado: "OK" as const }] },
+    { nombre: "Fluidos", items: [{ estado: "PENDIENTE" as const }] },
+  ];
+
+  it("muestra solo Documentación cuando tiene documentos pendientes", () => {
+    const visibles = categoriasParaLista(catalogo("PENDIENTE"));
+
+    expect(visibles.map((categoria) => categoria.nombre)).toEqual(["Documentación"]);
+  });
+
+  it("no muestra nada cuando los documentos ya están completos (aunque queden otras categorías pendientes)", () => {
+    expect(categoriasParaLista(catalogo("OK"))).toEqual([]);
   });
 });

@@ -35,8 +35,8 @@ export function getInspeccionesPendientes() {
  * conductor, vehículo, todas las respuestas del checklist (con su ítem y
  * categoría, para agrupar igual que lo vivió el trabajador) y novedades con
  * sus fotos. Se incluye `conductor` (y los campos de vencimiento de
- * `vehicle`) para que el Supervisor pueda detectar pase/tecnicomecánica
- * vencidos al revisar (formato oficial FO-SVS-23).
+ * `vehicle`) para que el Supervisor pueda detectar la tecnicomecánica
+ * vencida al revisar (formato oficial FO-SVS-23).
  */
 function getInspectionForSupervisorRaw(inspectionId: string) {
   return prisma.inspection.findUnique({
@@ -256,17 +256,16 @@ export async function getInspeccionDetalleForOversight(
  * Métricas del dashboard operativo de DIRECTOR/SST: conteo de inspecciones
  * por estado (los 6 valores de `InspectionStatus`, no solo los 3 "visibles"
  * del alcance de negocio — para que el conteo cuadre siempre con el total
- * real de la tabla), vehículos con tecnicomecánica vencida y conductores
- * activos (`conductorActivo = true`) con pase vencido. "Vencida/o" se
+ * real de la tabla) y vehículos con tecnicomecánica vencida. "Vencida" se
  * calcula contra la hora del servidor (`ahora`), nunca con un valor del
- * cliente. Tres consultas independientes (no comparten tabla base, así que
+ * cliente. Dos consultas independientes (no comparten tabla base, así que
  * no hay una sola query relacional razonable que las junte), pero cada una
  * es una única consulta agregada — sin N+1.
  */
 export async function getDashboardMetrics() {
   const ahora = new Date();
 
-  const [porEstado, vehiculosVencidos, conductoresPaseVencido] = await Promise.all([
+  const [porEstado, vehiculosVencidos] = await Promise.all([
     prisma.inspection.groupBy({
       by: ["status"],
       _count: { _all: true },
@@ -275,14 +274,6 @@ export async function getDashboardMetrics() {
       where: { fechaVencimientoTecnicomecanica: { lt: ahora } },
       select: { id: true, placa: true, fechaVencimientoTecnicomecanica: true },
       orderBy: { fechaVencimientoTecnicomecanica: "asc" },
-    }),
-    prisma.user.findMany({
-      where: {
-        conductorActivo: true,
-        fechaVencimientoPase: { lt: ahora },
-      },
-      select: { id: true, name: true, fechaVencimientoPase: true },
-      orderBy: { fechaVencimientoPase: "asc" },
     }),
   ]);
 
@@ -293,6 +284,6 @@ export async function getDashboardMetrics() {
     ]),
   ) as Record<InspectionStatus, number>;
 
-  return { conteoPorEstado, vehiculosVencidos, conductoresPaseVencido };
+  return { conteoPorEstado, vehiculosVencidos };
 }
 

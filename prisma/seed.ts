@@ -17,10 +17,10 @@ const SEED_USERS: Array<{
   name: string;
   role: Role;
   cedula: string;
-  // Fase soporte-moto-carro (Slice 2): solo el TRABAJADOR demo necesita un
-  // tipo asignado para poder probar el flujo de inspección de punta a
-  // punta (getVehiculosActivos filtra por esto) — el resto de los roles no
-  // lo usa para nada.
+  // Fase soporte-moto-carro (Slice 2): solo los TRABAJADORES demo necesitan
+  // un tipo asignado para poder probar el flujo de inspección de punta a
+  // punta — el resto de los roles no lo usa para nada. Cada trabajador queda
+  // además vinculado a SU vehículo (1:1, ver más abajo).
   tipoVehiculo?: TipoVehiculo;
 }> = [
   {
@@ -29,6 +29,13 @@ const SEED_USERS: Array<{
     role: Role.TRABAJADOR,
     cedula: "1001234567",
     tipoVehiculo: TipoVehiculo.MOTO,
+  },
+  {
+    email: "trabajador.carro@ess.local",
+    name: "Trabajador Carro Demo",
+    role: Role.TRABAJADOR,
+    cedula: "1001234568",
+    tipoVehiculo: TipoVehiculo.CARRO,
   },
   { email: "supervisor@ess.local", name: "Supervisor Demo", role: Role.SUPERVISOR, cedula: "1002345678" },
   { email: "director@ess.local", name: "Director Demo", role: Role.DIRECTOR, cedula: "1003456789" },
@@ -39,14 +46,23 @@ const SEED_USERS: Array<{
   { email: "admin@ess.local", name: "Administrador Demo", role: Role.ADMINISTRADOR, cedula: "1005678901" },
 ];
 
-// Datos de conductor (Fase B, FO-SVS-23) para los 4 usuarios seed: fecha de
-// vencimiento del pase futura (no vencida) y activo para operar. Solo el
-// TRABAJADOR opera realmente como conductor en el flujo actual, pero se
-// setean en los 4 para no dejar valores nulos en el ambiente de desarrollo.
-const SEED_FECHA_VENCIMIENTO_PASE = new Date("2027-06-30T00:00:00.000Z");
-
 // Vencimiento de tecnicomecánica del vehículo demo, también futuro.
 const SEED_FECHA_VENCIMIENTO_TECNICOMECANICA = new Date("2027-03-15T00:00:00.000Z");
+
+// Hoja de vida demo de los vehículos (sin foto: la foto real se sube desde el
+// panel de administración al crear/editar el usuario).
+const SEED_HOJA_DE_VIDA_MOTO = {
+  marca: "Yamaha",
+  modelo: "FZ 150",
+  color: "Negro",
+  fechaVencimientoSoat: new Date("2027-04-30T00:00:00.000Z"),
+};
+const SEED_HOJA_DE_VIDA_CARRO = {
+  marca: "Chevrolet",
+  modelo: "Spark GT",
+  color: "Blanco",
+  fechaVencimientoSoat: new Date("2027-05-31T00:00:00.000Z"),
+};
 
 // Catálogo REAL del checklist, auditado contra el formato oficial FO-SVS-23
 // y autorizado por el dueño de producto — reemplaza al catálogo del Slice 1
@@ -71,14 +87,20 @@ const CHECKLIST: Array<{
     nombre: string;
     orden: number;
     slugs: string[];
+    // Imágenes propias para CARRO en preguntas compartidas con moto: si el
+    // vehículo es CARRO reemplazan a `slugs` (ver lib/inspections/imagenes.ts).
+    slugsCarro?: string[];
     pideUbicacion?: boolean;
     tipoVehiculo?: TipoVehiculo;
     tipoRespuesta?: TipoRespuestaItem;
   }>;
 }> = [
+  // Orden del recorrido guiado (pedido del dueño de producto, 2026-09-18):
+  // Inspección Visual → Fluidos → Equipo de prevención (los tres ítem por
+  // ítem) → Documentación (una sola lista) → declaración del conductor.
   {
     nombre: "Documentación",
-    orden: 1,
+    orden: 4,
     items: [
       { nombre: "Tarjeta de propiedad / Licencia de tránsito", orden: 1, slugs: [] },
       { nombre: "SOAT", orden: 2, slugs: [] },
@@ -89,10 +111,10 @@ const CHECKLIST: Array<{
   },
   {
     nombre: "Inspección Visual",
-    orden: 2,
+    orden: 1,
     items: [
-      { nombre: "Espejos", orden: 1, slugs: ["espejos"] },
-      { nombre: "Frenos", orden: 2, slugs: [] },
+      { nombre: "Espejos", orden: 1, slugs: ["espejos"], slugsCarro: ["espejos-carro.webp"] },
+      { nombre: "Frenos", orden: 2, slugs: ["frenos"], slugsCarro: ["frenos-carro.webp"] },
       {
         nombre: "Luces externas con direccionales",
         orden: 3,
@@ -100,49 +122,57 @@ const CHECKLIST: Array<{
         tipoVehiculo: TipoVehiculo.MOTO,
       },
       { nombre: "Llantas", orden: 4, slugs: ["llantas"], tipoVehiculo: TipoVehiculo.MOTO },
-      { nombre: "Casco", orden: 5, slugs: [], tipoVehiculo: TipoVehiculo.MOTO },
+      { nombre: "Casco", orden: 5, slugs: ["casco"], tipoVehiculo: TipoVehiculo.MOTO },
       {
         nombre: "Luces altas, bajas, reversa e internas con direccionales",
         orden: 6,
-        slugs: ["luces-altas", "luces-bajas", "luz-reversa"],
+        slugs: ["luces-carro.webp"],
         tipoVehiculo: TipoVehiculo.CARRO,
       },
       {
         nombre: "Llantas, incluye repuesto",
         orden: 7,
-        slugs: ["llantas"],
+        slugs: ["llantas-repuesto.webp"],
         tipoVehiculo: TipoVehiculo.CARRO,
       },
-      { nombre: "Cinturones de seguridad", orden: 8, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
-      { nombre: "Limpiabrisas", orden: 9, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
+      { nombre: "Cinturones de seguridad", orden: 8, slugs: ["cinturones-seguridad.webp"], tipoVehiculo: TipoVehiculo.CARRO },
+      { nombre: "Limpiabrisas", orden: 9, slugs: ["limpiabrisas.webp"], tipoVehiculo: TipoVehiculo.CARRO },
     ],
   },
   {
     nombre: "Fluidos",
-    orden: 3,
+    orden: 2,
     items: [
-      { nombre: "Nivel de aceite", orden: 1, slugs: [], tipoRespuesta: TipoRespuestaItem.TRIESTADO },
+      {
+        nombre: "Nivel de aceite",
+        orden: 1,
+        slugs: ["nivel-aceite"],
+        slugsCarro: ["nivel-aceite-carro.webp"],
+        tipoRespuesta: TipoRespuestaItem.TRIESTADO,
+      },
       {
         nombre: "Nivel líquido de frenos",
         orden: 2,
-        slugs: [],
+        slugs: ["nivel-liquido-frenos"],
+        slugsCarro: ["nivel-liquido-frenos-carro.webp"],
         tipoRespuesta: TipoRespuestaItem.TRIESTADO,
       },
       {
         nombre: "Nivel refrigerante",
         orden: 3,
-        slugs: [],
+        slugs: ["nivel-refrigerante"],
+        slugsCarro: ["nivel-refrigerante-carro.webp"],
         tipoRespuesta: TipoRespuestaItem.TRIESTADO,
       },
     ],
   },
   {
     nombre: "Equipo de prevención",
-    orden: 4,
+    orden: 3,
     items: [
-      { nombre: "Canguro de emergencia vial", orden: 1, slugs: [], tipoVehiculo: TipoVehiculo.MOTO },
-      { nombre: "Botiquín", orden: 2, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
-      { nombre: "Extintor", orden: 3, slugs: [], tipoVehiculo: TipoVehiculo.CARRO },
+      { nombre: "Canguro de emergencia vial", orden: 1, slugs: ["canguro-emergencia"], tipoVehiculo: TipoVehiculo.MOTO },
+      { nombre: "Botiquín", orden: 2, slugs: ["botiquin.webp"], tipoVehiculo: TipoVehiculo.CARRO },
+      { nombre: "Extintor", orden: 3, slugs: ["extintor.webp"], tipoVehiculo: TipoVehiculo.CARRO },
     ],
   },
 ];
@@ -211,7 +241,6 @@ async function main() {
         cedula,
         role,
         activo: true,
-        fechaVencimientoPase: SEED_FECHA_VENCIMIENTO_PASE,
         conductorActivo: true,
         tipoVehiculo: tipoVehiculo ?? null,
       },
@@ -221,7 +250,6 @@ async function main() {
         cedula,
         role,
         passwordHash,
-        fechaVencimientoPase: SEED_FECHA_VENCIMIENTO_PASE,
         conductorActivo: true,
         tipoVehiculo: tipoVehiculo ?? null,
       },
@@ -248,9 +276,12 @@ async function main() {
       const existing = await prisma.checklistItem.findFirst({
         where: { categoryId: createdCategory.id, nombre: item.nombre },
       });
-      const imagenesUrl = item.slugs.map(
-        (slug) => `/checklist/${slug}.${PNG_SLUGS.has(slug) ? "png" : "jpg"}`,
-      );
+      // Un slug con extensión ("botiquin.webp") se usa tal cual; sin extensión
+      // es jpg, salvo los PNG listados arriba.
+      const urlImagen = (slug: string) =>
+        slug.includes(".") ? `/checklist/${slug}` : `/checklist/${slug}.${PNG_SLUGS.has(slug) ? "png" : "jpg"}`;
+      const imagenesUrl = item.slugs.map(urlImagen);
+      const imagenesCarroUrl = (item.slugsCarro ?? []).map(urlImagen);
       const pideUbicacion = item.pideUbicacion ?? false;
       // `tipoVehiculo` sin declarar en CHECKLIST → null en la base (aplica a
       // MOTO y CARRO, A1 del design). `tipoRespuesta` sin declarar → BINARIO
@@ -261,7 +292,7 @@ async function main() {
       if (existing) {
         await prisma.checklistItem.update({
           where: { id: existing.id },
-          data: { orden: item.orden, imagenesUrl, pideUbicacion, tipoVehiculo, tipoRespuesta },
+          data: { orden: item.orden, imagenesUrl, imagenesCarroUrl, pideUbicacion, tipoVehiculo, tipoRespuesta },
         });
       } else {
         await prisma.checklistItem.create({
@@ -270,6 +301,7 @@ async function main() {
             nombre: item.nombre,
             orden: item.orden,
             imagenesUrl,
+            imagenesCarroUrl,
             pideUbicacion,
             tipoVehiculo,
             tipoRespuesta,
@@ -285,13 +317,15 @@ async function main() {
   );
 
   // Vehículo demo MOTO para poder probar el flujo de inspección de punta a
-  // punta con el trabajador demo (también MOTO, ver SEED_USERS).
+  // punta con el trabajador demo (también MOTO, ver SEED_USERS): se vincula
+  // al final (relación 1:1 `User.vehicleId`).
   await prisma.vehicle.upsert({
     where: { placa: "ABC123" },
     update: {
       activo: true,
       fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
       tipoVehiculo: TipoVehiculo.MOTO,
+      ...SEED_HOJA_DE_VIDA_MOTO,
     },
     create: {
       placa: "ABC123",
@@ -299,21 +333,21 @@ async function main() {
       activo: true,
       fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
       tipoVehiculo: TipoVehiculo.MOTO,
+      ...SEED_HOJA_DE_VIDA_MOTO,
     },
   });
   console.log('Seed OK: vehículo demo "ABC123" (MOTO) creado/actualizado.');
 
-  // Fase soporte-moto-carro (Slice 2): vehículo demo CARRO — el trabajador
-  // demo sigue siendo MOTO (SEED_USERS), así que este vehículo no aparece en
-  // su lista de "Iniciar nueva inspección"; sirve para verificación manual
-  // del catálogo CARRO (crear/loguear un usuario CARRO desde el panel de
-  // Administrador, ver app/(admin)/admin/usuarios).
+  // Fase soporte-moto-carro (Slice 2): vehículo demo CARRO, del trabajador
+  // demo CARRO (SEED_USERS), para verificar el catálogo CARRO de punta a
+  // punta sin tener que crear un usuario desde el panel.
   await prisma.vehicle.upsert({
     where: { placa: "XYZ789" },
     update: {
       activo: true,
       fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
       tipoVehiculo: TipoVehiculo.CARRO,
+      ...SEED_HOJA_DE_VIDA_CARRO,
     },
     create: {
       placa: "XYZ789",
@@ -321,9 +355,22 @@ async function main() {
       activo: true,
       fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
       tipoVehiculo: TipoVehiculo.CARRO,
+      ...SEED_HOJA_DE_VIDA_CARRO,
     },
   });
   console.log('Seed OK: vehículo demo "XYZ789" (CARRO) creado/actualizado.');
+
+  // Relación 1:1 (decisión del usuario, 2026-09-18): cada trabajador demo
+  // queda con su propio vehículo. Idempotente: `vehicleId` es unique y cada
+  // par es fijo, así que correr el seed de nuevo no choca.
+  for (const [email, placa] of [
+    ["trabajador@ess.local", "ABC123"],
+    ["trabajador.carro@ess.local", "XYZ789"],
+  ] as const) {
+    const vehiculo = await prisma.vehicle.findUniqueOrThrow({ where: { placa } });
+    await prisma.user.update({ where: { email }, data: { vehicleId: vehiculo.id } });
+  }
+  console.log("Seed OK: trabajadores demo vinculados a su vehículo (1:1).");
 
   // Fase soporte-moto-carro (Slice 4, ADR A5): placeholder de
   // "Fecha vigencia" del PDF hasta que un Administrador defina la fecha

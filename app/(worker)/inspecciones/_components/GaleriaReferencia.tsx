@@ -13,7 +13,9 @@ export function GaleriaReferencia({ srcs, alt }: { srcs: string[]; alt: string }
   const imagenes = srcs.length > 0 ? srcs : ["/checklist/_placeholder.svg"];
 
   if (imagenes.length === 1) {
-    return <ImagenReferencia src={imagenes[0]} alt={alt} className="aspect-[4/3] max-h-80" />;
+    // Proporción natural (sin caja fija): las tarjetas de carro son verticales y
+    // con texto, en una caja horizontal de 320 px quedaban ilegibles.
+    return <ImagenReferencia src={imagenes[0]} alt={alt} className="max-h-[28rem]" />;
   }
 
   return (
