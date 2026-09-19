@@ -1,5 +1,6 @@
 import type { FilaTrabajador, SortTrabajador } from "@/lib/inspections/reportes-queries";
 import { SortableHeader } from "./SortableHeader";
+import { Tarjeta } from "./Tarjeta";
 
 /**
  * "Cumplimiento por trabajador" = tasa de aprobación por trabajador (no hay
@@ -25,9 +26,9 @@ export function TablaTrabajadores({
   const otrosParams = Object.entries(searchParams).filter(([k]) => k !== "qTrabajador");
 
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-4">
+    <Tarjeta>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-gray-500">Cumplimiento por trabajador</h2>
+        <h2 className="text-sm font-semibold text-ink">Cumplimiento por trabajador</h2>
         <form method="GET" className="flex gap-2">
           {otrosParams.map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
           <input
@@ -35,21 +36,22 @@ export function TablaTrabajadores({
             name="qTrabajador"
             defaultValue={q}
             placeholder="Buscar trabajador…"
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-[#2E9BD6] focus:outline-none"
+            aria-label="Buscar trabajador"
+            className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs focus:border-brand focus:outline-none"
           />
-          <button type="submit" className="rounded-md bg-[#0B3B60] px-3 py-1 text-xs font-medium text-white">
+          <button type="submit" className="rounded-lg bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand/90">
             Buscar
           </button>
         </form>
       </div>
 
       {filas.length === 0 ? (
-        <p className="text-sm text-gray-500">No hay trabajadores con inspecciones en el período seleccionado.</p>
+        <p className="text-sm text-ink-muted">No hay trabajadores con inspecciones en el período seleccionado.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-xs text-gray-500">
+              <tr className="border-b border-border text-xs text-ink-muted">
                 <Th>
                   <SortableHeader label="Trabajador" columnKey="nombre" currentSort={sort} currentDir={dir} sortParam="sortTrabajador" dirParam="dirTrabajador" searchParams={searchParams} />
                 </Th>
@@ -72,8 +74,8 @@ export function TablaTrabajadores({
             </thead>
             <tbody>
               {filas.map((f) => (
-                <tr key={f.workerId} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-2 font-medium text-[#0B3B60]">{f.nombre}</td>
+                <tr key={f.workerId} className="border-b border-border/60 last:border-0">
+                  <td className="py-2 pr-2 font-medium text-ink">{f.nombre}</td>
                   <td className="py-2 text-right">{f.total}</td>
                   <td className="py-2 text-right">{f.aprobadas}</td>
                   <td className="py-2 text-right">{f.rechazadas}</td>
@@ -85,7 +87,7 @@ export function TablaTrabajadores({
           </table>
         </div>
       )}
-    </section>
+    </Tarjeta>
   );
 }
 

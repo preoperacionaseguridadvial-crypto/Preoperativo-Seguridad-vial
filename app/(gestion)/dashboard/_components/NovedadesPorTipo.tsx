@@ -1,26 +1,23 @@
 import type { NovedadPorTipo } from "@/lib/inspections/reportes-queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { BarraRanking } from "./BarraRanking";
+import { Tarjeta } from "./Tarjeta";
 
 /**
- * "Principales novedades detectadas", agrupadas por `TipoNovedad`. Sin link
- * a detalle: `consulta-inspecciones` no filtra por tipo de novedad hoy, y
- * agregarle ese filtro es un cambio aparte, fuera de este pedido.
+ * "Novedades por tipo", agrupadas por `TipoNovedad`, con la cantidad y su
+ * porcentaje. Sin link a detalle: `consulta-inspecciones` no filtra por tipo
+ * de novedad hoy, y agregarle ese filtro es un cambio aparte, fuera de este
+ * pedido. Los tipos son categorías sin orden de gravedad, así que todas las
+ * barras llevan un único color de identidad (azul), no una escala.
  */
-export function NovedadesPorTipo({ datos }: { datos: NovedadPorTipo[] }) {
+export function NovedadesPorTipo({ datos, className = "" }: { datos: NovedadPorTipo[]; className?: string }) {
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-4">
-      <h2 className="text-sm font-medium text-gray-500">Principales novedades detectadas</h2>
+    <Tarjeta titulo="Novedades por tipo" className={className}>
       <BarraRanking
-        data={datos.map((d) => ({ label: TIPO_NOVEDAD_LABELS[d.tipo], value: d.cantidad }))}
-        color="#d03b3b"
+        data={datos.map((d) => ({ label: TIPO_NOVEDAD_LABELS[d.tipo], value: d.cantidad, detalle: `(${d.porcentaje}%)` }))}
+        color="var(--color-viz-blue)"
         emptyMessage="No hay novedades reportadas en el período seleccionado."
       />
-      {datos.length > 0 && (
-        <p className="text-xs text-gray-400">
-          {datos.map((d) => `${TIPO_NOVEDAD_LABELS[d.tipo]}: ${d.porcentaje}%`).join(" · ")}
-        </p>
-      )}
-    </section>
+    </Tarjeta>
   );
 }

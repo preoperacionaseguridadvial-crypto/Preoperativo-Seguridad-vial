@@ -1,63 +1,78 @@
-// Distribución aprobadas/rechazadas/pendientes en una única barra apilada
-// horizontal (en vez de donut): mismo criterio de la guía de dataviz ya
-// aplicada en este dashboard — una barra da lectura más precisa que un
-// donut para comparar 3 valores. Mismos hex de status que el resto del
-// dashboard (verde/rojo/amarillo), siempre con etiqueta al lado, nunca el
-// color solo.
-const SEGMENTOS = [
-  { key: "aprobadas" as const, label: "Aprobadas", color: "#0ca30c" },
-  { key: "rechazadas" as const, label: "Rechazadas", color: "#d03b3b" },
-  { key: "pendientes" as const, label: "Pendientes", color: "#fab219" },
-];
+import { formatoPorcentaje } from "./metricas";
+import { segmentosEstado, type SegmentoEstado } from "./estado";
+import { Tarjeta } from "./Tarjeta";
+
+// Distribución del período en una única barra apilada horizontal (en vez de
+// donut): una barra da lectura más precisa que un donut para comparar pocas
+// partes. Colores de estado (verde/rojo/ámbar) + un gris neutro para "otros
+// estados" (en proceso, enviadas, canceladas…), de modo que las partes
+// sumen el mismo total que muestran las tarjetas. El texto dentro del
+// segmento usa tinta oscura o blanca según el fondo para cumplir el contraste,
+// y solo aparece si cabe (ver `segmentosEstado`); la leyenda siempre lleva
+// valor y porcentaje, así el color nunca es el único canal.
+const CLASES: Record<SegmentoEstado["key"], { fondo: string; texto: string; punto: string }> = {
+  aprobadas: { fondo: "bg-status-ok", texto: "text-viz-ink", punto: "bg-status-ok" },
+  rechazadas: { fondo: "bg-status-crit", texto: "text-white", punto: "bg-status-crit" },
+  pendientes: { fondo: "bg-status-warn", texto: "text-viz-ink", punto: "bg-status-warn" },
+  otros: { fondo: "bg-viz-otros", texto: "text-viz-ink", punto: "bg-viz-otros" },
+};
 
 export function EstadoBarra({
+  total: totalPeriodo,
   aprobadas,
   rechazadas,
   pendientes,
+  className = "",
 }: {
+  total: number;
   aprobadas: number;
   rechazadas: number;
   pendientes: number;
+  className?: string;
 }) {
-  const valores = { aprobadas, rechazadas, pendientes };
-  const total = aprobadas + rechazadas + pendientes;
+  const { total, segmentos } = segmentosEstado({ total: totalPeriodo, aprobadas, rechazadas, pendientes });
 
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-4">
-      <h2 className="text-sm font-medium text-gray-500">Estado de inspecciones</h2>
-
-      <div className="flex items-center gap-4">
-        <span className="text-3xl font-semibold text-[#0B3B60]">{total}</span>
-        <span className="text-xs text-gray-500">inspecciones del período</span>
-      </div>
-
+    <Tarjeta titulo="Resumen de estado de inspecciones" className={className}>
       {total === 0 ? (
-        <p className="text-sm text-gray-500">No hay inspecciones en el período seleccionado.</p>
+        <p className="text-sm text-ink-muted">No hay inspecciones en el período seleccionado.</p>
       ) : (
         <>
-          <div className="flex h-6 w-full overflow-hidden rounded-full bg-gray-100">
-            {SEGMENTOS.map((s) => {
-              const valor = valores[s.key];
-              if (valor === 0) return null;
-              return (
+          <div
+            role="img"
+            aria-label={`Estado de ${total} inspecciones: ${segmentos
+              .filter((s) => s.valor > 0)
+              .map((s) => `${s.label} ${s.valor} (${formatoPorcentaje(s.porcentaje)})`)
+              .join(", ")}`}
+            className="mt-2 flex h-9 w-full gap-0.5"
+          >
+            {segmentos
+              .filter((s) => s.valor > 0)
+              .map((s) => (
                 <div
                   key={s.key}
-                  style={{ width: `${(valor / total) * 100}%`, backgroundColor: s.color }}
-                  title={`${s.label}: ${valor}`}
-                />
-              );
-            })}
+                  style={{ flex: `${s.valor} 1 0%` }}
+                  title={`${s.label}: ${s.valor} (${formatoPorcentaje(s.porcentaje)})`}
+                  className={`flex min-w-0 items-center justify-center text-xs font-semibold first:rounded-l-lg last:rounded-r-lg ${CLASES[s.key].fondo} ${CLASES[s.key].texto}`}
+                >
+                  {s.etiquetaInterna}
+                </div>
+              ))}
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-            {SEGMENTOS.map((s) => (
-              <span key={s.key} className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
-                {s.label}: {valores[s.key]}
-              </span>
+          <p className="text-right text-xs text-ink-muted">Total: {total} inspecciones</p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink">
+            {segmentos.map((s) => (
+              <li key={s.key} className="flex items-center gap-1.5">
+                <span aria-hidden="true" className={`size-2 rounded-full ${CLASES[s.key].punto}`} />
+                {s.label}
+                <span className="text-ink-muted">
+                  {s.valor} ({formatoPorcentaje(s.porcentaje)})
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </>
       )}
-    </section>
+    </Tarjeta>
   );
 }

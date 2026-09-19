@@ -1,76 +1,151 @@
 import Link from "next/link";
 import type { PuntoTendencia } from "@/lib/inspections/reportes-queries";
 import { buildDashboardUrl } from "./dashboard-url";
+import { anchoBarra, formatoDiaMes, indicesEtiquetas, rutaBarra, TICKS_TASA, ticksEje } from "./graficos";
+import { Tarjeta } from "./Tarjeta";
 
-const WIDTH = 600;
-const HEIGHT = 200;
-const PADDING = 24;
+const ANCHO = 480;
+const ALTO = 220;
+const MARGEN = { izq: 32, der: 6, arriba: 10, abajo: 26 };
+// Máximo de etiquetas dd/mm en el eje X: con rangos largos (hasta 400 días) se
+// adelgazan a intervalos regulares en vez de amontonarse.
+const MAX_ETIQUETAS_X = 10;
+const ALTO_MIN_BARRA = 1.5;
 
 /**
- * Gráfico de línea SVG a mano (sin librería): un `<path>` calculado a partir
- * de los puntos de `getTendenciaDiaria`. El toggle cantidad/tasa de
- * aprobación es un link con `?vista=`, no un switch de cliente — el server
- * ya arma el path correcto para la vista pedida.
+ * Gráfico de barras SVG a mano (sin librería): una barra por día a partir de
+ * los puntos de `getTendenciaDiaria`, con líneas de guía y escala en el eje Y
+ * y fechas dd/mm en el X. El toggle cantidad/tasa de aprobación es un link con
+ * `?vista=`, no un switch de cliente — el server ya arma las barras de la
+ * vista pedida. Cada día es una ranura con tooltip nativo (`<title>`) y un
+ * área de hover de alto completo, así los días con barras diminutas también
+ * se pueden leer; debajo va la misma información como tabla.
  */
 export function TendenciaChart({
   datos,
   vista,
   searchParams,
+  className = "",
 }: {
   datos: PuntoTendencia[];
   vista: "cantidad" | "tasa";
   searchParams: Record<string, string | undefined>;
+  className?: string;
 }) {
-  const valores = datos.map((d) => (vista === "cantidad" ? d.total : d.tasaAprobacion));
-  const max = Math.max(1, ...valores);
-  const innerWidth = WIDTH - PADDING * 2;
-  const innerHeight = HEIGHT - PADDING * 2;
+  const hayInspecciones = datos.some((d) => d.total > 0);
+  const subtitulo = vista === "cantidad" ? "Cantidad de inspecciones por día" : "Tasa de aprobación (%) por día";
 
-  const puntos = datos.map((d, i) => {
-    const x = datos.length <= 1 ? PADDING : PADDING + (i / (datos.length - 1)) * innerWidth;
-    const valor = vista === "cantidad" ? d.total : d.tasaAprobacion;
-    const y = PADDING + innerHeight - (valor / max) * innerHeight;
-    return { x, y, d };
-  });
+  const controles = (
+    <div className="flex gap-0.5 rounded-lg bg-page p-0.5 text-xs">
+      <VistaLink label="Cantidad" activo={vista === "cantidad"} valor="cantidad" searchParams={searchParams} />
+      <VistaLink label="Tasa" activo={vista === "tasa"} valor="tasa" searchParams={searchParams} />
+    </div>
+  );
 
-  const path = puntos.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  if (!hayInspecciones) {
+    return (
+      <Tarjeta titulo="Tendencia de inspecciones" subtitulo={subtitulo} acciones={controles} className={className}>
+        <p className="text-sm text-ink-muted">No hay inspecciones en el período seleccionado.</p>
+      </Tarjeta>
+    );
+  }
+
+  const areaAncho = ANCHO - MARGEN.izq - MARGEN.der;
+  const areaAlto = ALTO - MARGEN.arriba - MARGEN.abajo;
+  const valorDe = (d: PuntoTendencia) => (vista === "cantidad" ? d.total : d.tasaAprobacion);
+
+  const ticks = vista === "tasa" ? TICKS_TASA : ticksEje(Math.max(...datos.map((d) => d.total)));
+  const tope = ticks[ticks.length - 1];
+  const yDe = (valor: number) => MARGEN.arriba + areaAlto - (valor / tope) * areaAlto;
+
+  const ranura = areaAncho / datos.length;
+  const ancho = anchoBarra(ranura);
+  const etiquetasX = new Set(indicesEtiquetas(datos.length, MAX_ETIQUETAS_X));
+  const rango = `${formatoDiaMes(datos[0].fecha)} – ${formatoDiaMes(datos[datos.length - 1].fecha)}`;
 
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-gray-500">Cumplimiento de inspecciones</h2>
-        <div className="flex gap-1 text-xs">
-          <VistaLink label="Cantidad" activo={vista === "cantidad"} valor="cantidad" searchParams={searchParams} />
-          <VistaLink label="Tasa de aprobación" activo={vista === "tasa"} valor="tasa" searchParams={searchParams} />
-        </div>
+    <Tarjeta titulo="Tendencia de inspecciones" subtitulo={`${subtitulo} · ${rango}`} acciones={controles} className={className}>
+      <div className="overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${ANCHO} ${ALTO}`}
+          className="h-auto w-full min-w-[360px]"
+          role="img"
+          aria-label={`Gráfico de barras: ${subtitulo.toLowerCase()}, del ${rango}. Los mismos datos están en la tabla de abajo.`}
+        >
+          {ticks.map((t) => (
+            <g key={t}>
+              <line
+                x1={MARGEN.izq}
+                x2={ANCHO - MARGEN.der}
+                y1={yDe(t)}
+                y2={yDe(t)}
+                strokeWidth={1}
+                className={t === 0 ? "stroke-viz-axis" : "stroke-viz-grid"}
+              />
+              <text x={MARGEN.izq - 6} y={yDe(t) + 3.5} textAnchor="end" className="fill-ink-muted text-[10px]">
+                {vista === "tasa" ? `${t}%` : t}
+              </text>
+            </g>
+          ))}
+
+          {datos.map((d, i) => {
+            const x0 = MARGEN.izq + i * ranura;
+            const valor = valorDe(d);
+            // En la vista de tasa un día sin inspecciones no tiene tasa: sin barra, no una barra en 0%.
+            const conBarra = valor > 0 && d.total > 0;
+            const alto = conBarra ? Math.max((valor / tope) * areaAlto, ALTO_MIN_BARRA) : 0;
+            const ruta = rutaBarra({ x: x0 + (ranura - ancho) / 2, y: MARGEN.arriba + areaAlto - alto, ancho, alto });
+            return (
+              <g key={d.fecha}>
+                <title>
+                  {d.total === 0
+                    ? `${d.fecha} — sin inspecciones`
+                    : `${d.fecha} — ${d.total} inspecciones — ${d.aprobadas} aprobadas — ${d.tasaAprobacion}% tasa de aprobación`}
+                </title>
+                <rect x={x0} y={MARGEN.arriba} width={ranura} height={areaAlto} fill="transparent" />
+                {ruta && <path d={ruta} className="fill-viz-blue" />}
+                {etiquetasX.has(i) && (
+                  <text
+                    x={x0 + ranura / 2}
+                    y={ALTO - MARGEN.abajo + 16}
+                    textAnchor="middle"
+                    className="fill-ink-muted text-[10px]"
+                  >
+                    {formatoDiaMes(d.fecha)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
       </div>
 
-      {datos.length === 0 ? (
-        <p className="text-sm text-gray-500">No hay inspecciones en el período seleccionado.</p>
-      ) : (
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" role="img" aria-label="Tendencia de inspecciones">
-          <line
-            x1={PADDING}
-            y1={HEIGHT - PADDING}
-            x2={WIDTH - PADDING}
-            y2={HEIGHT - PADDING}
-            stroke="#e1e0d9"
-            strokeWidth={1}
-          />
-          <path d={path} fill="none" stroke="#2a78d6" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-          {puntos.map((p) => (
-            <circle key={p.d.fecha} cx={p.x} cy={p.y} r={3} fill="#2a78d6">
-              <title>
-                {`${p.d.fecha} — ${p.d.total} inspecciones — ${p.d.aprobadas} aprobadas — ${p.d.tasaAprobacion}% tasa de aprobación`}
-              </title>
-            </circle>
-          ))}
-        </svg>
-      )}
-      <p className="text-xs text-gray-400">
-        {vista === "cantidad" ? "Cantidad de inspecciones por día." : "Tasa de aprobación (%) por día."}
-      </p>
-    </section>
+      <details className="text-xs">
+        <summary className="cursor-pointer font-medium text-status-info-ink">Ver datos en tabla</summary>
+        <div className="mt-2 max-h-48 overflow-auto">
+          <table className="w-full text-left tabular-nums">
+            <thead className="sticky top-0 bg-surface text-ink-muted">
+              <tr>
+                <th className="py-1 pr-2 font-medium">Fecha</th>
+                <th className="py-1 pr-2 text-right font-medium">Inspecciones</th>
+                <th className="py-1 pr-2 text-right font-medium">Aprobadas</th>
+                <th className="py-1 text-right font-medium">Tasa</th>
+              </tr>
+            </thead>
+            <tbody className="text-ink">
+              {datos.map((d) => (
+                <tr key={d.fecha} className="border-t border-border">
+                  <td className="py-1 pr-2">{d.fecha}</td>
+                  <td className="py-1 pr-2 text-right">{d.total}</td>
+                  <td className="py-1 pr-2 text-right">{d.aprobadas}</td>
+                  <td className="py-1 text-right">{d.total === 0 ? "—" : `${d.tasaAprobacion}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </Tarjeta>
   );
 }
 
@@ -88,7 +163,8 @@ function VistaLink({
   return (
     <Link
       href={buildDashboardUrl("/dashboard", searchParams, { vista: valor })}
-      className={`rounded-md px-2 py-1 ${activo ? "bg-[#0B3B60] text-white" : "text-gray-500 hover:bg-gray-100"}`}
+      aria-current={activo ? "true" : undefined}
+      className={`rounded-md px-2.5 py-1 ${activo ? "bg-surface font-medium text-ink shadow-sm" : "text-ink-muted hover:text-ink"}`}
     >
       {label}
     </Link>

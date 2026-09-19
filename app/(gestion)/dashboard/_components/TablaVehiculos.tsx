@@ -1,5 +1,6 @@
 import type { FilaVehiculo, SortVehiculo } from "@/lib/inspections/reportes-queries";
 import { SortableHeader } from "./SortableHeader";
+import { Tarjeta } from "./Tarjeta";
 
 /** "Estado de vehículos": permite identificar rápido cuáles motos acumulan más novedades. */
 export function TablaVehiculos({
@@ -14,16 +15,16 @@ export function TablaVehiculos({
   searchParams: Record<string, string | undefined>;
 }) {
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-4">
-      <h2 className="text-sm font-medium text-gray-500">Estado de vehículos</h2>
+    <Tarjeta>
+      <h2 className="text-sm font-semibold text-ink">Estado de vehículos</h2>
 
       {filas.length === 0 ? (
-        <p className="text-sm text-gray-500">No hay vehículos con inspecciones en el período seleccionado.</p>
+        <p className="text-sm text-ink-muted">No hay vehículos con inspecciones en el período seleccionado.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-xs text-gray-500">
+              <tr className="border-b border-border text-xs text-ink-muted">
                 <Th>
                   <SortableHeader label="Placa" columnKey="placa" currentSort={sort} currentDir={dir} sortParam="sortVehiculo" dirParam="dirVehiculo" searchParams={searchParams} />
                 </Th>
@@ -46,8 +47,8 @@ export function TablaVehiculos({
             </thead>
             <tbody>
               {filas.map((f) => (
-                <tr key={f.vehicleId} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-2 font-medium text-[#0B3B60]">{f.placa}</td>
+                <tr key={f.vehicleId} className="border-b border-border/60 last:border-0">
+                  <td className="py-2 pr-2 font-medium text-ink">{f.placa}</td>
                   <td className="py-2 text-right">{f.total}</td>
                   <td className="py-2 text-right">{f.aprobadas}</td>
                   <td className="py-2 text-right">{f.rechazadas}</td>
@@ -61,7 +62,7 @@ export function TablaVehiculos({
           </table>
         </div>
       )}
-    </section>
+    </Tarjeta>
   );
 }
 

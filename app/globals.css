@@ -14,6 +14,32 @@
   --color-ink-muted: #66788a;
   --color-ok: #16a34a;
   --color-falla: #dc2626;
+
+  /* Dashboard de gestión (app/(gestion)/dashboard): paleta de estado y de
+     visualización de la guía dataviz. Los tonos "status-*" son fijos (no se
+     re-tematizan) y siempre van acompañados de texto/icono — el color solo
+     nunca lleva el significado. Los "-ink" son la variante de texto legible
+     sobre el fondo "-soft" del mismo tono. */
+  --color-status-ok: #0ca30c;
+  --color-status-warn: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-crit: #d03b3b;
+  --color-status-ok-ink: #006300;
+  --color-status-warn-ink: #7a5200;
+  --color-status-crit-ink: #a12a2a;
+  --color-status-info-ink: #1c5cab;
+  --color-status-neutral-ink: #4a5a6a;
+  --color-status-ok-soft: #e6f6e6;
+  --color-status-warn-soft: #fff4d6;
+  --color-status-crit-soft: #fdecec;
+  --color-status-info-soft: #e8f1fc;
+  --color-status-neutral-soft: #eef1f4;
+  --color-viz-blue: #2a78d6;
+  --color-viz-track: #e8edf2;
+  --color-viz-grid: #e1e0d9;
+  --color-viz-axis: #c3c2b7;
+  --color-viz-otros: #b4bec9;
+  --color-viz-ink: #0b0b0b;
 }
 
 @theme inline {
@@ -27,6 +53,26 @@
   --color-ink-muted: var(--color-ink-muted);
   --color-ok: var(--color-ok);
   --color-falla: var(--color-falla);
+  --color-status-ok: var(--color-status-ok);
+  --color-status-warn: var(--color-status-warn);
+  --color-status-serious: var(--color-status-serious);
+  --color-status-crit: var(--color-status-crit);
+  --color-status-ok-ink: var(--color-status-ok-ink);
+  --color-status-warn-ink: var(--color-status-warn-ink);
+  --color-status-crit-ink: var(--color-status-crit-ink);
+  --color-status-info-ink: var(--color-status-info-ink);
+  --color-status-neutral-ink: var(--color-status-neutral-ink);
+  --color-status-ok-soft: var(--color-status-ok-soft);
+  --color-status-warn-soft: var(--color-status-warn-soft);
+  --color-status-crit-soft: var(--color-status-crit-soft);
+  --color-status-info-soft: var(--color-status-info-soft);
+  --color-status-neutral-soft: var(--color-status-neutral-soft);
+  --color-viz-blue: var(--color-viz-blue);
+  --color-viz-track: var(--color-viz-track);
+  --color-viz-grid: var(--color-viz-grid);
+  --color-viz-axis: var(--color-viz-axis);
+  --color-viz-otros: var(--color-viz-otros);
+  --color-viz-ink: var(--color-viz-ink);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
