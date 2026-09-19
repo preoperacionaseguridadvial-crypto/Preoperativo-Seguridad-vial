@@ -369,7 +369,12 @@ export async function actualizarUsuario(
           plan.accion === "actualizar"
             ? await tx.vehicle.update({
                 where: { id: actual.vehicleId! },
-                data: { placa: plan.placa, ...campos, ...(fotoS3Key ? { fotoS3Key } : {}) },
+                data: {
+                  placa: plan.placa,
+                  ...campos,
+                  ...(fotoS3Key ? { fotoS3Key } : {}),
+                  ...(vehiculoDatos.activo !== undefined ? { activo: vehiculoDatos.activo } : {}),
+                },
               })
             : await tx.vehicle.create({ data: { placa: plan.placa, fotoS3Key, ...campos } });
       }
@@ -416,7 +421,7 @@ export async function actualizarUsuario(
       action: plan.accion === "crear" ? "CREAR_VEHICULO" : "ACTUALIZAR_VEHICULO",
       entityType: "Vehicle",
       entityId: vehiculo.id,
-      metadata: { placa: vehiculo.placa },
+      metadata: { placa: vehiculo.placa, activo: vehiculo.activo },
     });
   }
 

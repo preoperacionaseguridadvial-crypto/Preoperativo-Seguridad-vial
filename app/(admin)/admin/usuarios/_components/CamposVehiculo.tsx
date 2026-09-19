@@ -24,12 +24,15 @@ export function CamposVehiculo({
   valores = {},
   modo,
   fotoActualUrl,
+  activo,
 }: {
   /** Valores iniciales por nombre de campo (repoblado tras un error, o el vehículo actual). */
   valores?: Record<string, string>;
   modo: "alta" | "edicion";
   /** URL prefirmada de la foto actual (solo edición). */
   fotoActualUrl?: string | null;
+  /** Estado actual del vehículo (solo edición de un usuario que ya tiene vehículo). */
+  activo?: boolean;
 }) {
   const [vistaPrevia, setVistaPrevia] = useState<string | null>(null);
   const [errorFoto, setErrorFoto] = useState<string | null>(null);
@@ -187,6 +190,26 @@ export function CamposVehiculo({
           />
         </div>
       ))}
+
+      {modo === "edicion" && activo !== undefined && (
+        <div>
+          {/* Un checkbox desmarcado no viaja en el formulario: este campo avisa
+              que la casilla estaba presente (ver leerVehiculoDeFormulario). */}
+          <input type="hidden" name="vehiculoActivoEnForm" value="1" />
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="vehiculoActivo"
+              defaultChecked={activo}
+              className="h-5 w-5 rounded border-gray-300 text-[#005B96] focus:ring-[#005B96]"
+            />
+            Vehículo activo
+          </label>
+          <p className="mt-1 text-xs text-gray-500">
+            Con el vehículo inactivo el trabajador no puede iniciar inspecciones.
+          </p>
+        </div>
+      )}
     </fieldset>
   );
 }

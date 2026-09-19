@@ -42,6 +42,10 @@ export type DatosVehiculo = {
   color?: string;
   fechaVencimientoSoat?: Date | null;
   fechaVencimientoTecnicomecanica?: Date | null;
+  // Solo se envía al editar un usuario que ya tiene vehículo. `undefined` = no
+  // tocar el estado del vehículo (un vehículo inactivo impide iniciar
+  // inspecciones; ver iniciarInspeccion).
+  activo?: boolean;
 };
 
 export const normalizarPlaca = (placa?: string | null) => placa?.trim().toUpperCase() ?? "";
@@ -171,5 +175,8 @@ export function leerVehiculoDeFormulario(formData: FormData): DatosVehiculo {
     color: texto("color"),
     fechaVencimientoSoat: leerFecha(formData, "fechaVencimientoSoat"),
     fechaVencimientoTecnicomecanica: leerFecha(formData, "fechaVencimientoTecnicomecanica"),
+    // Un checkbox desmarcado no viaja en el FormData: el campo oculto
+    // `vehiculoActivoEnForm` avisa que la casilla estaba en el formulario.
+    activo: formData.has("vehiculoActivoEnForm") ? formData.get("vehiculoActivo") === "on" : undefined,
   };
 }

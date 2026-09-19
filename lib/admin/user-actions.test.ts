@@ -774,4 +774,37 @@ describe("actualizarUsuario — vehículo del trabajador", () => {
     expect(actualizado.vehicleId).toBeNull();
     expect(await prisma.vehicle.count()).toBe(0);
   });
+
+  // Sin el módulo de vehículos aparte, editar al usuario es la única forma de
+  // activar o desactivar su vehículo (y de destrabar a un trabajador cuyo
+  // vehículo quedó inactivo, que no puede iniciar inspecciones).
+  it("desactiva y vuelve a activar el vehículo del trabajador al editarlo", async () => {
+    const trabajador = await trabajadorConVehiculo();
+    const activoEnBase = async () =>
+      (await prisma.vehicle.findUniqueOrThrow({ where: { id: trabajador.vehicleId! } })).activo;
+    const editar = (activo: boolean) =>
+      actualizarUsuario(
+        trabajador.id,
+        datos(trabajador, { vehiculo: datosVehiculo({ placa: "OLD123", foto: undefined, activo }) }),
+      );
+
+    await editar(false);
+    expect(await activoEnBase()).toBe(false);
+
+    await editar(true);
+    expect(await activoEnBase()).toBe(true);
+  });
+
+  it("no cambia el estado del vehículo si el formulario no envía `activo`", async () => {
+    const trabajador = await trabajadorConVehiculo();
+    await prisma.vehicle.update({ where: { id: trabajador.vehicleId! }, data: { activo: false } });
+
+    await actualizarUsuario(
+      trabajador.id,
+      datos(trabajador, { vehiculo: datosVehiculo({ placa: "OLD123", foto: undefined }) }),
+    );
+
+    const vehiculo = await prisma.vehicle.findUniqueOrThrow({ where: { id: trabajador.vehicleId! } });
+    expect(vehiculo.activo).toBe(false);
+  });
 });

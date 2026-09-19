@@ -184,7 +184,12 @@ export default async function EditarUsuarioPage({
             Pendiente de asignación de vehículo: completa la hoja de vida del vehículo abajo.
           </p>
         )}
-        <CamposVehiculo valores={valoresVehiculo} modo="edicion" fotoActualUrl={fotoActualUrl} />
+        <CamposVehiculo
+          valores={valoresVehiculo}
+          modo="edicion"
+          fotoActualUrl={fotoActualUrl}
+          activo={vehiculo?.activo}
+        />
 
         <div>
           <label htmlFor="puestoAsignado" className="mb-1 block text-sm font-medium text-gray-700">
