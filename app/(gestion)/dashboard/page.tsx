@@ -11,6 +11,7 @@ import {
   getSupervisoresParaFiltro,
   getTendenciaDiaria,
   getTrabajadoresParaFiltro,
+  normalizarRango,
   parseFiltrosDesdeQuery,
   type SortTrabajador,
   type SortVehiculo,
@@ -83,6 +84,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const sp = await searchParams;
   const filtrosReporte = parseFiltrosDesdeQuery(sp);
+  const rangoEfectivo = normalizarRango(filtrosReporte);
 
   const vista: "cantidad" | "tasa" = sp.vista === "tasa" ? "tasa" : "cantidad";
   const sortTrabajador: SortTrabajador = SORT_TRABAJADOR_VALIDOS.includes(sp.sortTrabajador as SortTrabajador)
@@ -118,8 +120,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     getAllInspeccionesForOversight({
       placa: sp.placa || undefined,
       estado: filtrosReporte.status,
-      fechaDesde: filtrosReporte.fechaDesde,
-      fechaHasta: filtrosReporte.fechaHasta,
+      // Mismo rango efectivo (30 días por defecto) que KPIs, tendencia y heatmap:
+      // sin esto "Inspecciones recientes" y el detalle mostraban todo el histórico.
+      fechaDesde: rangoEfectivo.desde,
+      fechaHasta: rangoEfectivo.hasta,
       workerId: filtrosReporte.workerId,
       supervisorId: filtrosReporte.supervisorId,
       puedeOperar: filtrosReporte.puedeOperar,

@@ -1,7 +1,7 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { Role, RespuestaChecklist, TipoRespuestaItem } from "@/generated/prisma/client";
-import { getFallasPorItem } from "@/lib/inspections/reportes-queries";
+import { getFallasPorItem, normalizarRango } from "@/lib/inspections/reportes-queries";
 import {
   crearCatalogoMinimo,
   crearChecklistItem,
@@ -73,5 +73,45 @@ describe("getFallasPorItem", () => {
     const fallas = await getFallasPorItem({});
 
     expect(fallas.map((f) => f.nombre)).not.toContain("Nivel refrigerante");
+  });
+});
+
+// "Inspecciones recientes" del dashboard mostraba las 5 más nuevas de todos los
+// tiempos mientras KPIs, tendencia y heatmap miraban solo los últimos 30 días:
+// la página necesita el MISMO rango efectivo que usan las agregaciones.
+describe("normalizarRango", () => {
+  const AHORA = new Date("2026-09-19T15:00:00.000Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(AHORA);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sin fechas explícitas devuelve los últimos 30 días hasta ahora", () => {
+    const { desde, hasta } = normalizarRango({});
+
+    expect(hasta.toISOString()).toBe("2026-09-19T15:00:00.000Z");
+    expect(desde.toISOString()).toBe("2026-08-20T15:00:00.000Z");
+  });
+
+  it("respeta fechaDesde y lleva fechaHasta al final del día UTC", () => {
+    const { desde, hasta } = normalizarRango({
+      fechaDesde: new Date("2026-09-01T00:00:00.000Z"),
+      fechaHasta: new Date("2026-09-10T00:00:00.000Z"),
+    });
+
+    expect(desde.toISOString()).toBe("2026-09-01T00:00:00.000Z");
+    expect(hasta.toISOString()).toBe("2026-09-10T23:59:59.999Z");
+  });
+
+  it("con solo fechaHasta cuenta 30 días hacia atrás desde ese fin de día", () => {
+    const { desde, hasta } = normalizarRango({ fechaHasta: new Date("2026-09-10T00:00:00.000Z") });
+
+    expect(hasta.toISOString()).toBe("2026-09-10T23:59:59.999Z");
+    expect(desde.toISOString()).toBe("2026-08-11T23:59:59.999Z");
   });
 });

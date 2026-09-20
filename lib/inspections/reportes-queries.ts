@@ -42,8 +42,9 @@ function finDelDiaUTC(fecha: Date): Date {
  * Sin `fechaDesde`/`fechaHasta` explícitos, default a los últimos 30 días —
  * así la comparación contra "período anterior" (`getKpisReporte`) siempre
  * tiene un rango equivalente, incluso sin filtro de fecha en la URL.
+ * Exportada para que el dashboard use el mismo rango en su lista de detalle.
  */
-function normalizarRango(filtros: FiltrosReporte): { desde: Date; hasta: Date } {
+export function normalizarRango(filtros: FiltrosReporte): { desde: Date; hasta: Date } {
   const hasta = filtros.fechaHasta ? finDelDiaUTC(filtros.fechaHasta) : new Date();
   const desde = filtros.fechaDesde ?? new Date(hasta.getTime() - TREINTA_DIAS_MS);
   return { desde, hasta };
