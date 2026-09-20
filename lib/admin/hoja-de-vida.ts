@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { TipoVehiculo } from "@/generated/prisma/client";
 import { uploadObject, deleteObject } from "@/lib/storage/s3";
 import { MAX_FOTO_BYTES } from "@/lib/admin/foto-vehiculo";
+import { ErrorDeUsuario } from "@/lib/admin/error-de-usuario";
 
 // Piezas compartidas de la hoja de vida del vehículo de un trabajador: foto
 // (S3/MinIO), validación de los campos obligatorios y lectura desde un
@@ -65,10 +66,10 @@ export function hayDatosDeVehiculo(vehiculo?: DatosVehiculo): boolean {
 /** Valida tipo MIME (solo imágenes) y tamaño, antes de subir nada a S3. */
 export function validarFotoVehiculo(foto: File): void {
   if (!EXTENSION_POR_MIME_VEHICULO[foto.type]) {
-    throw new Error("La foto debe ser una imagen (JPG, PNG o WEBP).");
+    throw new ErrorDeUsuario("La foto debe ser una imagen (JPG, PNG o WEBP).");
   }
   if (foto.size > MAX_FOTO_BYTES) {
-    throw new Error(`La foto no puede superar ${MAX_FOTO_BYTES / (1024 * 1024)} MB.`);
+    throw new ErrorDeUsuario(`La foto no puede superar ${MAX_FOTO_BYTES / (1024 * 1024)} MB.`);
   }
 }
 
@@ -119,16 +120,16 @@ export function validarHojaDeVida(data: {
   color?: string;
 }) {
   if (!data.tipoVehiculo) {
-    throw new Error("El tipo de vehículo es obligatorio.");
+    throw new ErrorDeUsuario("El tipo de vehículo es obligatorio.");
   }
   if (!data.marca?.trim()) {
-    throw new Error("La marca es obligatoria.");
+    throw new ErrorDeUsuario("La marca es obligatoria.");
   }
   if (!data.modelo?.trim()) {
-    throw new Error("El modelo es obligatorio.");
+    throw new ErrorDeUsuario("El modelo es obligatorio.");
   }
   if (!data.color?.trim()) {
-    throw new Error("El color es obligatorio.");
+    throw new ErrorDeUsuario("El color es obligatorio.");
   }
 }
 

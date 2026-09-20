@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mismo patrón que lib/admin/vehicle-actions.test.ts: solo se mockea la
+// Mismo patrón que lib/admin/user-actions.test.ts: solo se mockea la
 // sesión de NextAuth y el cliente de S3/MinIO (subir un `File` real no tiene
 // sentido en un test unitario) — el resto (Prisma, constraints) corre contra
 // Postgres real.
@@ -17,15 +17,21 @@ vi.mock("@/lib/storage/s3", () => ({
 import { prisma } from "@/lib/prisma";
 import { Role, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { subirFotoInspeccion } from "@/lib/inspections/foto-actions";
+import { MAX_FOTO_INSPECCION_BYTES } from "@/lib/storage/validar-archivo";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 
+// Cabeceras mínimas con los magic bytes reales (el validador inspecciona el
+// contenido, no solo `file.type`).
+const JPEG_MINIMO = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+const PNG_MINIMO = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+
 function crearFotoFalsa(nombre = "foto.jpg"): File {
-  return new File([Buffer.from("contenido-de-prueba")], nombre, { type: "image/jpeg" });
+  return new File([JPEG_MINIMO], nombre, { type: "image/jpeg" });
 }
 
-function crearFormDataConFoto(): FormData {
+function crearFormDataConFoto(archivo: File = crearFotoFalsa()): FormData {
   const fd = new FormData();
-  fd.set("file", crearFotoFalsa());
+  fd.set("file", archivo);
   return fd;
 }
 
@@ -53,6 +59,57 @@ afterEach(() => {
 afterAll(async () => {
   await limpiarBaseDeTest();
   await prisma.$disconnect();
+});
+
+// Hardening (#2): tipo, tamaño y contenido real (magic bytes) se validan antes
+// de subir nada a S3; la key y el contentType salen del tipo validado.
+describe("subirFotoInspeccion — validación del archivo", () => {
+  it("sube una foto válida con la key y el contentType derivados del tipo validado, no del nombre", async () => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    const png = new File([PNG_MINIMO], "foto.jpg", { type: "image/png" });
+
+    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LATERAL, crearFormDataConFoto(png));
+
+    expect(mockUploadObject).toHaveBeenCalledTimes(1);
+    expect(mockUploadObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: `fotos-inspeccion/${inspection.id}/LATERAL.png`,
+        contentType: "image/png",
+      }),
+    );
+    const enBase = await prisma.fotoInspeccion.findUniqueOrThrow({
+      where: { inspectionId_tipo: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL } },
+    });
+    expect(enBase.s3Key).toBe(`fotos-inspeccion/${inspection.id}/LATERAL.png`);
+  });
+
+  it.each([
+    ["contenido que no es una imagen aunque declare image/jpeg", "contenido-de-prueba", "image/jpeg", /no corresponde/i],
+    ["SVG", "<svg xmlns='http://www.w3.org/2000/svg'/>", "image/svg+xml", /JPG, PNG o WEBP/],
+    ["GIF", "GIF89a", "image/gif", /JPG, PNG o WEBP/],
+    ["PDF", "%PDF-1.7", "application/pdf", /JPG, PNG o WEBP/],
+  ])("rechaza %s sin subir nada a S3 ni crear el registro", async (_caso, contenido, tipo, mensaje) => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    const archivo = new File([contenido], "foto.jpg", { type: tipo });
+
+    await expect(
+      subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LATERAL, crearFormDataConFoto(archivo)),
+    ).rejects.toThrow(mensaje);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+    expect(await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id } })).toBe(0);
+  });
+
+  it("rechaza una foto de más de 8 MB sin subir nada a S3", async () => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    const enorme = Buffer.alloc(MAX_FOTO_INSPECCION_BYTES + 1);
+    JPEG_MINIMO.copy(enorme);
+    const archivo = new File([enorme], "grande.jpg", { type: "image/jpeg" });
+
+    await expect(
+      subirFotoInspeccion(inspection.id, TipoFotoInspeccion.PLACA, crearFormDataConFoto(archivo)),
+    ).rejects.toThrow(/no puede superar 8 MB/);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
 });
 
 // Fix (WARNING corroborado por resilience + reliability, foto-actions.ts):

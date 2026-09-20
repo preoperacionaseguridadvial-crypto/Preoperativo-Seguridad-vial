@@ -3,7 +3,8 @@
 import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/requireRole";
+import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
+import { ErrorDeUsuario, esErrorDeUsuario } from "@/lib/admin/error-de-usuario";
 import { Role, Prisma, TipoVehiculo, type Vehicle } from "@/generated/prisma/client";
 import {
   TIPO_DESCRIPTIVO,
@@ -49,8 +50,8 @@ function campoDuplicado(err: unknown): "placa" | "email" | null {
 
 function errorDeDuplicado(err: unknown): Error | null {
   const campo = campoDuplicado(err);
-  if (campo === "placa") return new Error("Ya existe un vehículo con esa placa.");
-  if (campo === "email") return new Error("Ya existe un usuario con ese email.");
+  if (campo === "placa") return new ErrorDeUsuario("Ya existe un vehículo con esa placa.");
+  if (campo === "email") return new ErrorDeUsuario("Ya existe un usuario con ese email.");
   return null;
 }
 
@@ -66,11 +67,11 @@ function validarVehiculoParaAlta(
 ): { placa: string; foto: File } {
   const placa = normalizarPlaca(vehiculo?.placa);
   if (!placa) {
-    throw new Error("La placa es obligatoria para un trabajador.");
+    throw new ErrorDeUsuario("La placa es obligatoria para un trabajador.");
   }
   const foto = vehiculo?.foto;
   if (!foto || foto.size === 0) {
-    throw new Error("La foto del vehículo es obligatoria para un trabajador.");
+    throw new ErrorDeUsuario("La foto del vehículo es obligatoria para un trabajador.");
   }
   validarHojaDeVida({ tipoVehiculo, ...vehiculo });
   validarFotoVehiculo(foto);
@@ -111,13 +112,13 @@ export async function crearUsuario(data: {
   const nombreLimpio = data.name.trim();
   const emailLimpio = data.email.trim().toLowerCase();
   if (!nombreLimpio || !emailLimpio) {
-    throw new Error("Nombre y email son obligatorios.");
+    throw new ErrorDeUsuario("Nombre y email son obligatorios.");
   }
   if (data.password.length < 8) {
-    throw new Error("La contraseña debe tener al menos 8 caracteres.");
+    throw new ErrorDeUsuario("La contraseña debe tener al menos 8 caracteres.");
   }
   if (data.password !== data.passwordConfirmacion) {
-    throw new Error("Las contraseñas no coinciden.");
+    throw new ErrorDeUsuario("Las contraseñas no coinciden.");
   }
 
   // Fase soporte-moto-carro: cédula y tipoVehiculo son obligatorios SOLO
@@ -129,10 +130,10 @@ export async function crearUsuario(data: {
   let vehiculoValidado: { placa: string; foto: File } | null = null;
   if (data.role === Role.TRABAJADOR) {
     if (!cedulaLimpia) {
-      throw new Error("La cédula es obligatoria para un trabajador.");
+      throw new ErrorDeUsuario("La cédula es obligatoria para un trabajador.");
     }
     if (!data.tipoVehiculo) {
-      throw new Error("El tipo de vehículo es obligatorio para un trabajador.");
+      throw new ErrorDeUsuario("El tipo de vehículo es obligatorio para un trabajador.");
     }
     vehiculoValidado = validarVehiculoParaAlta(data.vehiculo, data.tipoVehiculo);
   }
@@ -224,6 +225,9 @@ const CAMPOS_REPOBLABLES = [
   "fechaVencimientoTecnicomecanica",
 ] as const;
 
+const MENSAJE_ERROR_INESPERADO_ALTA =
+  "No se pudo crear el usuario. Intenta de nuevo o contacta a soporte.";
+
 export type CrearUsuarioEstado =
   | { ok: false; error: string; valores: Record<string, string> }
   | {
@@ -241,7 +245,8 @@ export type CrearUsuarioEstado =
  * éxito devuelve las credenciales para mostrarlas UNA sola vez en el cliente:
  * la contraseña viaja solo en esta respuesta (nunca en la URL ni en
  * `logAudit`) y en la base solo queda su hash. En error devuelve el mensaje
- * en vez de lanzar, para no perder el formulario con una redirección.
+ * en vez de lanzar, para no perder el formulario con una redirección (solo el
+ * de los errores de dominio; los inesperados devuelven un mensaje genérico).
  */
 export async function crearUsuarioDesdeFormulario(
   _estadoPrevio: CrearUsuarioEstado | null,
@@ -277,11 +282,17 @@ export async function crearUsuarioDesdeFormulario(
       CAMPOS_REPOBLABLES.map((campo) => [campo, texto(campo)]),
     );
     valores.conductorActivo = formData.get("conductorActivo") === "on" ? "on" : "";
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "No se pudo crear el usuario.",
-      valores,
-    };
+
+    // Solo los errores de dominio pensados para el usuario (validaciones,
+    // duplicados, permisos) muestran su mensaje. Cualquier otro (Prisma, S3, un
+    // bug) devuelve un mensaje genérico para no filtrar tablas/columnas a la
+    // pantalla, y se registra en el servidor. Se loguea únicamente el error:
+    // nada de `formData` (contraseña, email, cédula).
+    if (esErrorDeUsuario(err) || err instanceof ForbiddenError) {
+      return { ok: false, error: err.message, valores };
+    }
+    console.error("Fallo inesperado al crear el usuario desde el formulario.", err);
+    return { ok: false, error: MENSAJE_ERROR_INESPERADO_ALTA, valores };
   }
 }
 
@@ -307,7 +318,7 @@ export async function actualizarUsuario(
   const nombreLimpio = data.name.trim();
   const emailLimpio = data.email.trim().toLowerCase();
   if (!nombreLimpio || !emailLimpio) {
-    throw new Error("Nombre y email son obligatorios.");
+    throw new ErrorDeUsuario("Nombre y email son obligatorios.");
   }
 
   // Igual que en `crearUsuario`: solo se exige para TRABAJADOR. Editar un
@@ -316,16 +327,16 @@ export async function actualizarUsuario(
   const cedulaLimpia = data.cedula?.trim() || null;
   if (data.role === Role.TRABAJADOR) {
     if (!cedulaLimpia) {
-      throw new Error("La cédula es obligatoria para un trabajador.");
+      throw new ErrorDeUsuario("La cédula es obligatoria para un trabajador.");
     }
     if (!data.tipoVehiculo) {
-      throw new Error("El tipo de vehículo es obligatorio para un trabajador.");
+      throw new ErrorDeUsuario("El tipo de vehículo es obligatorio para un trabajador.");
     }
   }
 
   const actual = await prisma.user.findUnique({ where: { id: userId }, include: { vehicle: true } });
   if (!actual) {
-    throw new Error("El usuario no existe.");
+    throw new ErrorDeUsuario("El usuario no existe.");
   }
 
   // Vehículo del trabajador. Editar uno existente NO vuelve a exigir la foto
@@ -442,10 +453,10 @@ export async function restablecerPassword(
   const session = await requireRole([Role.ADMINISTRADOR, Role.SST]);
 
   if (newPassword.length < 8) {
-    throw new Error("La contraseña debe tener al menos 8 caracteres.");
+    throw new ErrorDeUsuario("La contraseña debe tener al menos 8 caracteres.");
   }
   if (newPassword !== newPasswordConfirmacion) {
-    throw new Error("Las contraseñas no coinciden.");
+    throw new ErrorDeUsuario("Las contraseñas no coinciden.");
   }
 
   const passwordHash = await bcrypt.hash(newPassword, COSTO_BCRYPT);

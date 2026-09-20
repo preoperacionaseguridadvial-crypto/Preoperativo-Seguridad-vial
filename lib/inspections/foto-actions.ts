@@ -5,9 +5,10 @@ import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, Prisma, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
+import { PERFIL_FOTO_INSPECCION, validarArchivo } from "@/lib/storage/validar-archivo";
 
-// Mismo criterio que `esErrorPlacaDuplicada` en lib/admin/vehicle-actions.ts:
-// solo el código P2002 (violación de restricción única) de Prisma identifica
+// Mismo criterio que `campoDuplicado` en lib/admin/user-actions.ts: solo el
+// código P2002 (violación de restricción única) de Prisma identifica
 // de forma confiable una carrera contra `@@unique([inspectionId, tipo])`.
 function esErrorFotoDuplicada(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
@@ -54,13 +55,13 @@ export async function subirFotoInspeccion(
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("Debés tomar la foto antes de continuar.");
   }
-  if (!file.type.startsWith("image/")) {
-    throw new Error("La foto debe ser una imagen.");
-  }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const key = `fotos-inspeccion/${inspectionId}/${tipo}.jpg`;
-  await uploadObject({ key, body: buffer, contentType: file.type });
+  // Tipo (JPEG/PNG/WebP), tamaño y contenido real (magic bytes) se validan
+  // antes de tocar S3; key y contentType salen del tipo validado, no de lo que
+  // declare el cliente.
+  const { buffer, contentType, extension } = await validarArchivo(file, PERFIL_FOTO_INSPECCION);
+  const key = `fotos-inspeccion/${inspectionId}/${tipo}.${extension}`;
+  await uploadObject({ key, body: buffer, contentType });
 
   try {
     await prisma.fotoInspeccion.create({ data: { inspectionId, tipo, s3Key: key } });
@@ -71,9 +72,9 @@ export async function subirFotoInspeccion(
     // SOLO cuando el error es realmente esa violación de unicidad (P2002).
     // Cualquier otra falla (ej. corte de conectividad con la base justo
     // después de subir la foto a S3) no debe enmascararse como "ya existe":
-    // se registra la causa real y se relanza el error original (mismo
-    // criterio que `crearVehiculo`/`actualizarVehiculo`,
-    // lib/admin/vehicle-actions.ts).
+    // se registra la causa real y se relanza el error original (igual que
+    // `errorDeDuplicado` en lib/admin/user-actions.ts, que solo traduce el
+    // P2002 y deja pasar cualquier otro error).
     if (esErrorFotoDuplicada(err)) {
       throw new Error("Ya existe una foto registrada para esta inspección: no se puede reemplazar.");
     }

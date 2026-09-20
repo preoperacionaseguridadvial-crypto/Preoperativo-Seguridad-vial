@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mismo patrón que lib/inspections/actions.test.ts: se mockea la sesión de
 // NextAuth (lo único que `requireRole` necesita), el resto corre contra
@@ -9,8 +9,7 @@ vi.mock("@/lib/auth/config", () => ({
 }));
 
 // La foto del vehículo se sube a S3/MinIO: acá se mockea el cliente de
-// storage (igual que tenía lib/admin/vehicle-actions.test.ts) para verificar
-// cuántas veces se sube/borra sin depender de MinIO.
+// storage para verificar cuántas veces se sube/borra sin depender de MinIO.
 const mockUploadObject = vi.fn();
 const mockDeleteObject = vi.fn();
 vi.mock("@/lib/storage/s3", () => ({
@@ -422,6 +421,108 @@ describe("crearUsuarioDesdeFormulario — estado para la pantalla de éxito", ()
   });
 });
 
+// Hardening (#5): al formulario solo llegan los errores de dominio pensados
+// para el usuario (validaciones, duplicados, permisos); cualquier otra falla
+// (Prisma, S3, bugs) devuelve un mensaje genérico y se registra en el servidor
+// sin filtrar el texto crudo (tablas, columnas, buckets) a la pantalla.
+describe("crearUsuarioDesdeFormulario — errores de dominio vs. inesperados", () => {
+  const MENSAJE_GENERICO = "No se pudo crear el usuario. Intenta de nuevo o contacta a soporte.";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("un error de dominio conserva su mensaje y no se registra como fallo del servidor", async () => {
+    await loginComoAdmin();
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await crearUsuarioDeTest(Role.TRABAJADOR, { email: "duplicado@test.local" });
+
+    const duplicado = await crearUsuarioDesdeFormulario(
+      null,
+      formularioDeUsuario({ ...CAMPOS_SUPERVISOR, email: "duplicado@test.local" }),
+    );
+    const validacion = await crearUsuarioDesdeFormulario(
+      null,
+      formularioDeUsuario({ ...CAMPOS_SUPERVISOR, passwordConfirmacion: "otra" }),
+    );
+    const hojaDeVida = await crearUsuarioDesdeFormulario(
+      null,
+      formularioDeUsuario({
+        ...CAMPOS_SUPERVISOR,
+        email: "sin.marca@test.local",
+        role: Role.TRABAJADOR,
+        cedula: "123",
+        tipoVehiculo: TipoVehiculo.MOTO,
+        ...CAMPOS_VEHICULO,
+        marca: "",
+      }),
+    );
+
+    expect(duplicado).toMatchObject({ ok: false, error: "Ya existe un usuario con ese email." });
+    expect(validacion).toMatchObject({ ok: false, error: "Las contraseñas no coinciden." });
+    expect(hojaDeVida).toMatchObject({ ok: false, error: "La marca es obligatoria." });
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+  });
+
+  it("un error inesperado de Prisma devuelve el mensaje genérico, no filtra el texto crudo y se registra con console.error", async () => {
+    await loginComoAdmin();
+    const errorCrudo = new Error(
+      'Invalid `prisma.user.create()` invocation: column "passwordHash" of relation "User" does not exist (table public.User)',
+    );
+    vi.spyOn(prisma, "$transaction").mockRejectedValueOnce(errorCrudo);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const estado = await crearUsuarioDesdeFormulario(null, formularioDeUsuario(CAMPOS_SUPERVISOR));
+
+    expect(estado).toMatchObject({ ok: false, error: MENSAJE_GENERICO });
+    expect(JSON.stringify(estado)).not.toMatch(/prisma|passwordHash|relation|table/i);
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    // Se registra el error original (para diagnosticar) pero nada del formulario.
+    const argumentosLog = consoleErrorSpy.mock.calls[0];
+    expect(argumentosLog).toContain(errorCrudo);
+    const otrosArgumentos = JSON.stringify(argumentosLog.filter((argumento) => argumento !== errorCrudo));
+    expect(otrosArgumentos).not.toContain("clave-secreta-123");
+    expect(otrosArgumentos).not.toContain("supervisor.nuevo@test.local");
+    expect(otrosArgumentos).not.toContain("Supervisor Nuevo");
+  });
+
+  it("un fallo inesperado de S3 al subir la foto también devuelve el mensaje genérico", async () => {
+    await loginComoAdmin();
+    mockUploadObject.mockRejectedValueOnce(new Error("AccessDenied: bucket preoperacional-prod, key vehiculos/FRM123"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const estado = await crearUsuarioDesdeFormulario(
+      null,
+      formularioDeUsuario({
+        ...CAMPOS_SUPERVISOR,
+        email: "trabajador.s3@test.local",
+        role: Role.TRABAJADOR,
+        cedula: "1234567890",
+        tipoVehiculo: TipoVehiculo.MOTO,
+        ...CAMPOS_VEHICULO,
+      }),
+    );
+
+    expect(estado).toMatchObject({ ok: false, error: MENSAJE_GENERICO });
+    expect(JSON.stringify(estado)).not.toMatch(/AccessDenied|bucket/i);
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("ante un error inesperado repuebla los campos no sensibles y nunca las contraseñas", async () => {
+    await loginComoAdmin();
+    vi.spyOn(prisma, "$transaction").mockRejectedValueOnce(new Error("boom"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const estado = await crearUsuarioDesdeFormulario(null, formularioDeUsuario(CAMPOS_SUPERVISOR));
+
+    if (estado.ok) throw new Error("se esperaba un estado de error");
+    expect(estado.valores.name).toBe("  Supervisor Nuevo  ");
+    expect(estado.valores.email).toBe("Supervisor.Nuevo@Test.Local");
+    expect(estado.valores.role).toBe(Role.SUPERVISOR);
+    expect(JSON.stringify(estado)).not.toContain("clave-secreta-123");
+  });
+});
+
 // Modelo 1:1 (decisión del usuario, 2026-09-18): cada TRABAJADOR tiene UN
 // vehículo que se crea junto con el usuario, con la hoja de vida completa y
 // la foto obligatoria. Aquí viven, portados desde el ex
@@ -633,6 +734,43 @@ describe("actualizarUsuario — vehículo del trabajador", () => {
       fotoS3Key: keyOriginal,
     });
     expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("audita ACTUALIZAR_VEHICULO con la placa y el estado `activo` resultante al desactivar el vehículo", async () => {
+    const trabajador = await trabajadorConVehiculo();
+    const admin = await prisma.user.findFirstOrThrow({ where: { role: Role.ADMINISTRADOR } });
+
+    await actualizarUsuario(
+      trabajador.id,
+      datos(trabajador, {
+        vehiculo: datosVehiculo({ placa: "OLD123", foto: undefined, activo: false }),
+      }),
+    );
+
+    const registros = await prisma.auditLog.findMany({ where: { action: "ACTUALIZAR_VEHICULO" } });
+    expect(registros).toHaveLength(1);
+    expect(registros[0]).toMatchObject({
+      userId: admin.id,
+      entityType: "Vehicle",
+      entityId: trabajador.vehicleId,
+      metadata: { placa: "OLD123", activo: false },
+    });
+  });
+
+  it("audita ACTUALIZAR_VEHICULO con `activo: true` al reactivar el vehículo", async () => {
+    const trabajador = await trabajadorConVehiculo();
+    await prisma.vehicle.update({ where: { id: trabajador.vehicleId! }, data: { activo: false } });
+
+    await actualizarUsuario(
+      trabajador.id,
+      datos(trabajador, {
+        vehiculo: datosVehiculo({ placa: "OLD123", foto: undefined, activo: true }),
+      }),
+    );
+
+    const registros = await prisma.auditLog.findMany({ where: { action: "ACTUALIZAR_VEHICULO" } });
+    expect(registros).toHaveLength(1);
+    expect(registros[0].metadata).toEqual({ placa: "OLD123", activo: true });
   });
 
   it("reemplaza la foto cuando se sube una nueva", async () => {

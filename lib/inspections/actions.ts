@@ -7,6 +7,7 @@ import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
+import { PERFIL_ADJUNTO_NOVEDAD, validarArchivo } from "@/lib/storage/validar-archivo";
 import { PREGUNTAS_ESTADO_CONDUCTOR, type CampoEstadoConductor } from "@/lib/inspections/estado-conductor";
 import {
   getChecklistCatalog,
@@ -45,9 +46,10 @@ async function getOwnInspeccionEnProceso(inspectionId: string, workerId: string)
 }
 
 /**
- * Crea una nueva inspección para el vehículo indicado. `startedAt` lo pone
- * el default de Prisma (`now()` del servidor). Sin restricción de ventana
- * horaria: puede iniciarse en cualquier momento.
+ * Crea una nueva inspección para el vehículo indicado (o devuelve la que el
+ * trabajador ya tiene EN_PROCESO sobre ese vehículo, ver más abajo).
+ * `startedAt` lo pone el default de Prisma (`now()` del servidor). Sin
+ * restricción de ventana horaria: puede iniciarse en cualquier momento.
  *
  * `conductorId` se setea igual a `workerId`: en el flujo actual, quien hace
  * la inspección es siempre el conductor responsable de la unidad (99% de los
@@ -92,6 +94,30 @@ export async function iniciarInspeccion(vehicleId: string) {
   const tipoVehiculo = vehicle.tipoVehiculo ?? TipoVehiculo.MOTO;
   if (trabajador.tipoVehiculo === null || trabajador.tipoVehiculo !== tipoVehiculo) {
     throw new Error("Este vehículo no corresponde al tipo de vehículo asignado al trabajador.");
+  }
+
+  // Idempotencia ante doble envío (doble tap en el botón de iniciar): si el
+  // trabajador ya tiene una inspección EN_PROCESO sobre este vehículo, se
+  // devuelve esa misma — la pantalla de inicio ya la lista como "Continuar
+  // inspección" y la ✕ permite descartarla (`cancelarInspeccion`). Una
+  // inspección CANCELADA o ya enviada nunca bloquea una nueva.
+  //
+  // Riesgo residual conocido: es un check-then-create sin restricción en base
+  // de datos, así que dos requests verdaderamente simultáneas aún podrían
+  // crear dos filas. Cerrarlo del todo exige un índice único parcial
+  // (`workerId, vehicleId` WHERE status = 'EN_PROCESO'), que necesita una
+  // migración y no está incluido; el botón deshabilitado mientras se envía
+  // (BotonIniciarInspeccion) cubre el doble tap real.
+  const enProceso = await prisma.inspection.findFirst({
+    where: {
+      workerId: session.user.id,
+      vehicleId,
+      status: InspectionStatus.EN_PROCESO,
+    },
+    orderBy: { startedAt: "desc" },
+  });
+  if (enProceso) {
+    return enProceso;
   }
 
   const inspection = await prisma.inspection.create({
@@ -316,15 +342,14 @@ export async function responderItem(
   });
 }
 
-// Además de fotos, se acepta PDF (ej. foto de un documento exportada como
-// PDF desde el celular, o un comprobante ya digital) — pedido del dueño de
-// producto: el conductor reporta la novedad desde el celular y a veces lo
-// que tiene a mano es un documento, no una foto suelta.
-const MIME_TYPES_PERMITIDOS_NOVEDAD = ["application/pdf"];
-
 /**
  * Sube una foto o documento (desde `<input type="file">`, vía FormData con
- * el archivo en el campo "file") y la asocia a una Novedad existente. Los
+ * el archivo en el campo "file") y la asocia a una Novedad existente. Además
+ * de fotos se acepta PDF (ej. un documento exportado desde el celular o un
+ * comprobante ya digital) — pedido del dueño de producto: el conductor
+ * reporta la novedad desde el celular y a veces lo que tiene a mano es un
+ * documento, no una foto suelta. Los formatos permitidos y el tope de tamaño
+ * viven en `PERFIL_ADJUNTO_NOVEDAD` (lib/storage/validar-archivo.ts). Los
  * adjuntos (`Photo`, el modelo no distingue tipo) solo se relacionan a una
  * Novedad, nunca sueltos. Una sola foto por novedad (pedido del dueño de
  * producto, ver app/(worker)/inspecciones/[id]/novedades/[novedadId]/foto/page.tsx
@@ -352,17 +377,14 @@ export async function subirFotoNovedad(novedadId: string, formData: FormData) {
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("Debés seleccionar una foto o documento.");
   }
-  const esImagen = file.type.startsWith("image/");
-  const esDocumentoPermitido = MIME_TYPES_PERMITIDOS_NOVEDAD.includes(file.type);
-  if (!esImagen && !esDocumentoPermitido) {
-    throw new Error("El archivo debe ser una imagen o un PDF.");
-  }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const extension = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
+  // Tipo (JPEG/PNG/WebP o PDF), tamaño y contenido real (magic bytes) se
+  // validan antes de tocar S3; extensión y contentType salen del tipo
+  // validado, nunca de `file.name`.
+  const { buffer, contentType, extension } = await validarArchivo(file, PERFIL_ADJUNTO_NOVEDAD);
   const key = `novedades/${novedadId}/${randomUUID()}.${extension}`;
 
-  await uploadObject({ key, body: buffer, contentType: file.type });
+  await uploadObject({ key, body: buffer, contentType });
 
   return prisma.photo.create({
     data: { novedadId, s3Key: key },
@@ -396,43 +418,17 @@ export async function registrarResultado(
 }
 
 /**
- * Registra la declaración de estado del conductor (Fase soporte-moto-carro,
- * Slice 3, A6): 3 respuestas sí/no, una sola vez por inspección (se puede
- * volver a llamar mientras siga EN_PROCESO para corregir una respuesta, igual
- * que el resto de las mutaciones de este archivo — no hay motivo para
- * tratarla distinto). `declaracionEstadoAt` se fija con la hora del servidor,
- * nunca recibida del cliente. Ninguna combinación de respuestas bloquea nada
- * acá (D8, confirmado): una respuesta "preocupante" solo se refleja como
- * advertencia derivada para el Supervisor, ver
- * lib/inspections/estado-conductor.ts.
- */
-export async function registrarEstadoConductor(
-  inspectionId: string,
-  data: { tomaMedicamentos: boolean; condicionesAptas: boolean; consumioAlcohol: boolean },
-) {
-  const session = await requireRole([Role.TRABAJADOR]);
-  await getOwnInspeccionEnProceso(inspectionId, session.user.id);
-
-  return prisma.inspection.update({
-    where: { id: inspectionId },
-    data: {
-      tomaMedicamentos: data.tomaMedicamentos,
-      condicionesAptas: data.condicionesAptas,
-      consumioAlcohol: data.consumioAlcohol,
-      declaracionEstadoAt: new Date(),
-    },
-  });
-}
-
-/**
- * Registra UNA respuesta de la declaración de estado del conductor: la
- * pantalla las muestra de a una (pedido del dueño de producto, 2026-09-18) y
+ * Registra UNA respuesta de la declaración de estado del conductor (Fase
+ * soporte-moto-carro, Slice 3, A6: 3 preguntas sí/no): la pantalla las
+ * muestra de a una (pedido del dueño de producto, 2026-09-18) y
  * cada respuesta se guarda sola, así se puede retomar a mitad de camino y
  * corregir una respuesta mientras la inspección siga EN_PROCESO. `campo` se
  * valida contra la lista de preguntas (nunca se escribe una columna arbitraria
  * de `Inspection`). `declaracionEstadoAt` se fija con la hora del servidor
- * cuando la respuesta deja completas las 3 preguntas. Ninguna combinación
- * bloquea nada (D8), igual que en `registrarEstadoConductor`.
+ * cuando la respuesta deja completas las 3 preguntas, nunca recibida del
+ * cliente. Ninguna combinación de respuestas bloquea nada (D8, confirmado):
+ * una respuesta "preocupante" solo se refleja como advertencia derivada para
+ * el Supervisor, ver lib/inspections/estado-conductor.ts.
  */
 export async function registrarRespuestaEstadoConductor(
   inspectionId: string,

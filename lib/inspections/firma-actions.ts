@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, TipoFirma } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
+import { PERFIL_FIRMA, validarArchivo } from "@/lib/storage/validar-archivo";
 
 // Server actions de la firma manuscrita digital (Fase D). El formato oficial
 // FO-SVS-23 tiene dos líneas de firma ("NOMBRE Y FIRMA DEL CONDUCTOR" /
@@ -17,17 +18,15 @@ import { uploadObject } from "@/lib/storage/s3";
 // ambos lados la necesitan por igual.
 
 /**
- * Extrae y valida el PNG de la firma del FormData (campo "firma"), generado
- * en el cliente por `FirmaCanvas` (app/_components/FirmaCanvas.tsx) vía
- * `canvas.toBlob`.
+ * Extrae el archivo de la firma del FormData (campo "firma"), generado en el
+ * cliente por `FirmaCanvas` (app/_components/FirmaCanvas.tsx) vía
+ * `canvas.toBlob`. Tipo (solo PNG), tamaño y contenido real se validan
+ * después con `validarArchivo`.
  */
 function extraerArchivoFirma(formData: FormData): File {
   const file = formData.get("firma");
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("Debés dibujar la firma antes de continuar.");
-  }
-  if (!file.type.startsWith("image/")) {
-    throw new Error("La firma debe ser una imagen.");
   }
   return file;
 }
@@ -55,9 +54,9 @@ async function crearFirma(params: {
   }
 
   const file = extraerArchivoFirma(formData);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const key = `firmas/${inspectionId}/${tipo}.png`;
-  await uploadObject({ key, body: buffer, contentType: "image/png" });
+  const { buffer, contentType, extension } = await validarArchivo(file, PERFIL_FIRMA);
+  const key = `firmas/${inspectionId}/${tipo}.${extension}`;
+  await uploadObject({ key, body: buffer, contentType });
 
   try {
     await prisma.firma.create({ data: { inspectionId, userId, tipo, s3Key: key } });

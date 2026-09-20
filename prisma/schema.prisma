@@ -51,9 +51,9 @@ enum RespuestaChecklist {
   FALLA
   // Fase soporte-moto-carro (Slice 2): valores del estado triestado para
   // ítems de fluidos (tipoRespuesta = TRIESTADO). Agregados de forma
-  // aditiva acá porque `ADD VALUE` de Postgres no reescribe nada; quedan
-  // sin uso en este slice — el gate `tipoRespuesta` que los habilita llega
-  // en el slice siguiente (ChecklistItem.tipoRespuesta).
+  // aditiva acá porque `ADD VALUE` de Postgres no reescribe nada; el gate
+  // que los habilita es `ChecklistItem.tipoRespuesta` (validado en
+  // `responderItem` vía lib/inspections/respuesta.ts).
   BUENO
   BAJO
   MALO
@@ -126,9 +126,10 @@ model User {
 
   // Número de documento de identidad (cédula), mostrado junto a la firma
   // manuscrita en el detalle y el PDF para trazabilidad — pedido del dueño
-  // de producto. Opcional: hoy no existe ninguna pantalla de administración
-  // de usuarios (solo se crean vía prisma/seed.ts), así que forzarlo
-  // NOT NULL sin forma de completarlo después sería peor.
+  // de producto. Opcional: los usuarios anteriores a este campo (legacy,
+  // creados vía prisma/seed.ts) no la tienen, así que forzarlo NOT NULL sería
+  // peor; se exige solo en el alta de un TRABAJADOR (lib/admin/user-actions.ts)
+  // y se completa desde el panel de Administrador.
   cedula String?
 
   // Teléfono y cargo: datos administrativos pedidos para el panel de
@@ -139,8 +140,9 @@ model User {
   cargo    String?
 
   // Fase soporte-moto-carro: tipo de vehículo que el trabajador está
-  // habilitado a operar (MOTO/CARRO). Filtra qué vehículos ve en el
-  // arranque de inspección junto con `vehicleId` (más abajo). Nullable:
+  // habilitado a operar (MOTO/CARRO). Debe coincidir con el tipo de su
+  // vehículo (`vehicleId`, más abajo) para poder iniciar una inspección — se
+  // re-valida en `iniciarInspeccion`. Nullable:
   // usuarios legacy (creados antes de este cambio) se muestran como
   // "pendiente de asignación" en el panel de Administrador en vez de
   // bloquearse — se completa desde ahí, igual que `cedula`/`cargo`.
@@ -270,8 +272,9 @@ model Inspection {
   justificacionNoOperar   String?
 
   // Fase soporte-moto-carro (Slice 3, A6): declaración de estado del
-  // conductor — 3 preguntas sí/no del formato, respondidas una sola vez por
-  // inspección (`registrarEstadoConductor`, lib/inspections/actions.ts). Una
+  // conductor — 3 preguntas sí/no del formato, respondidas de a una y
+  // corregibles mientras la inspección siga EN_PROCESO
+  // (`registrarRespuestaEstadoConductor`, lib/inspections/actions.ts). Una
   // respuesta "preocupante" NO bloquea el envío ni transiciona el estado —
   // solo se refleja como advertencia derivada para el Supervisor (ver
   // `requiereAtencionEstadoConductor`, lib/inspections/estado-conductor.ts,

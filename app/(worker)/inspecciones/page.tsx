@@ -6,6 +6,7 @@ import {
   getVehiculoDelTrabajador,
   getInspeccionesEnProcesoDelTrabajador,
 } from "@/lib/inspections/queries";
+import { BotonIniciarInspeccion } from "./_components/BotonIniciarInspeccion";
 
 // Punto de entrada del flujo del trabajador (Fase 2): iniciar una inspección
 // nueva sobre SU vehículo (1:1, ya no elige entre varios), o retomar una que
@@ -65,13 +66,10 @@ export default async function InspeccionesPage({
         )}
         {vehiculo?.activo && (
           <form action={iniciarAction.bind(null, vehiculo.id)}>
-            <button
-              type="submit"
-              className="w-full rounded-md bg-[#0B3B60] px-4 py-4 text-left text-sm font-medium text-white hover:bg-[#0B3B60]/90"
-            >
+            <BotonIniciarInspeccion>
               {vehiculo.placa}
               <span className="block text-xs font-normal text-white/70">{vehiculo.tipo}</span>
-            </button>
+            </BotonIniciarInspeccion>
           </form>
         )}
       </section>

@@ -34,9 +34,9 @@ export async function getSetting(clave: string): Promise<string> {
  * Persiste `valor` para `clave` (upsert: la fila sembrada por el seed ya
  * existe, así que en la práctica esto siempre actualiza). Sin chequeo de
  * rol acá a propósito — esa responsabilidad vive en
- * `lib/settings/actions.ts` (`actualizarConfiguracion`), igual que
- * `lib/admin/vehicle-actions.ts` separa la mutation de Prisma del
- * `requireRole` que la protege.
+ * `lib/settings/actions.ts` (`actualizarConfiguracion`), que es quien llama a
+ * este helper: la mutation de Prisma queda separada del `requireRole` que la
+ * protege.
  */
 export function setSetting(clave: string, valor: string, updatedById: string | null) {
   return prisma.appSetting.upsert({

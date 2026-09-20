@@ -186,8 +186,9 @@ const styles = StyleSheet.create({
   bannerFullText: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, textAlign: "center" },
 
   // Banda del checklist: `data.respuestas` ya llega filtrada por tipo de
-  // vehículo (ver comentario de RESULTADO_IZQ_PCT arriba) — un único bloque
-  // genérico a todo el ancho, sin dividir por MOTO/CARRO.
+  // vehículo (ver el comentario sobre los anchos de columna del Excel al
+  // inicio del archivo, ADR A8) — un único bloque genérico a todo el ancho,
+  // sin dividir por MOTO/CARRO.
   checklistBand: { borderWidth: 1, borderColor: "#111111", marginBottom: 4 },
   checklistBlock: { width: "100%" },
   seccionSubtitulo: {
@@ -567,9 +568,10 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
           <Text style={styles.bannerFullText}>{TXT.nivelesBanner}</Text>
         </View>
 
-        {/* CHECKLIST — bloque único a todo el ancho (ver comentario de
-            RESULTADO_IZQ_PCT sobre por qué ya no hay bloque CARROS/MOTOS
-            separado acá: `data.respuestas` ya llega filtrada por tipo). */}
+        {/* CHECKLIST — bloque único a todo el ancho: ya no hay bloque
+            CARROS/MOTOS separado porque `data.respuestas` llega filtrada por
+            el tipo de vehículo de la inspección (ver el comentario sobre los
+            anchos de columna del Excel al inicio del archivo). */}
         <View style={styles.checklistBand}>
           <View style={styles.checklistBlock}>
             <Text style={styles.seccionSubtitulo}>{TXT.subtituloLuces}</Text>

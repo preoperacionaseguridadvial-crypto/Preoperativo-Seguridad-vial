@@ -11,6 +11,13 @@ vi.mock("@/lib/auth/config", () => ({
   auth: () => mockAuth(),
 }));
 
+// S3/MinIO también se mockea: `subirFotoNovedad` es la única acción de este
+// archivo que sube objetos, y subir un `File` real no aporta a estas pruebas.
+const mockUploadObject = vi.fn();
+vi.mock("@/lib/storage/s3", () => ({
+  uploadObject: (...args: unknown[]) => mockUploadObject(...args),
+}));
+
 import { prisma } from "@/lib/prisma";
 import {
   Role,
@@ -25,11 +32,11 @@ import {
   cancelarInspeccion,
   enviarInspeccion,
   iniciarInspeccion,
-  registrarEstadoConductor,
   registrarRespuestaEstadoConductor,
   registrarKilometraje,
   registrarResultado,
   responderItem,
+  subirFotoNovedad,
 } from "@/lib/inspections/actions";
 import {
   crearCatalogoMinimo,
@@ -39,6 +46,7 @@ import {
   limpiarBaseDeTest,
 } from "@/test/helpers/db";
 import { getChecklistCatalog } from "@/lib/inspections/queries";
+import { MAX_ADJUNTO_NOVEDAD_BYTES } from "@/lib/storage/validar-archivo";
 
 function loginComo(user: { id: string; role: Role }) {
   mockAuth.mockResolvedValue({ user: { id: user.id, role: user.role } });
@@ -63,6 +71,18 @@ async function firmarComoConductor(inspectionId: string, userId: string) {
   await prisma.firma.create({
     data: { inspectionId, userId, tipo: TipoFirma.CONDUCTOR, s3Key: "firmas/test.png" },
   });
+}
+
+// Declaración de estado del conductor completa, contestada con la misma
+// acción que usa la pantalla (una respuesta por llamada). Requiere haber
+// hecho `loginComo` del trabajador dueño de la inspección.
+async function declararEstadoConductor(
+  inspectionId: string,
+  respuestas: { tomaMedicamentos: boolean; condicionesAptas: boolean; consumioAlcohol: boolean },
+) {
+  await registrarRespuestaEstadoConductor(inspectionId, "tomaMedicamentos", respuestas.tomaMedicamentos);
+  await registrarRespuestaEstadoConductor(inspectionId, "condicionesAptas", respuestas.condicionesAptas);
+  await registrarRespuestaEstadoConductor(inspectionId, "consumioAlcohol", respuestas.consumioAlcohol);
 }
 
 // Slice 3: `enviarInspeccion` ahora también exige las 2 fotos diarias y la
@@ -92,6 +112,8 @@ beforeEach(async () => {
   await limpiarBaseDeTest();
   await crearCatalogoMinimo();
   mockAuth.mockReset();
+  mockUploadObject.mockReset();
+  mockUploadObject.mockResolvedValue(undefined);
 });
 
 afterAll(async () => {
@@ -183,11 +205,7 @@ describe("enviarInspeccion — fotos diarias obligatorias", () => {
 
   it("rechaza el envío sin ninguna de las 2 fotos diarias", async () => {
     const { inspection } = await prepararHastaFirma();
-    await registrarEstadoConductor(inspection.id, {
-      tomaMedicamentos: false,
-      condicionesAptas: true,
-      consumioAlcohol: false,
-    });
+    await declararEstadoConductor(inspection.id, { tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false });
 
     await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos/i);
   });
@@ -197,11 +215,7 @@ describe("enviarInspeccion — fotos diarias obligatorias", () => {
     await prisma.fotoInspeccion.create({
       data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "solo-lateral.jpg" },
     });
-    await registrarEstadoConductor(inspection.id, {
-      tomaMedicamentos: false,
-      condicionesAptas: true,
-      consumioAlcohol: false,
-    });
+    await declararEstadoConductor(inspection.id, { tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false });
 
     await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos/i);
   });
@@ -214,11 +228,7 @@ describe("enviarInspeccion — fotos diarias obligatorias", () => {
     await prisma.fotoInspeccion.create({
       data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
     });
-    await registrarEstadoConductor(inspection.id, {
-      tomaMedicamentos: false,
-      condicionesAptas: true,
-      consumioAlcohol: false,
-    });
+    await declararEstadoConductor(inspection.id, { tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false });
 
     await expect(enviarInspeccion(inspection.id)).resolves.not.toThrow();
   });
@@ -255,51 +265,10 @@ describe("enviarInspeccion — declaración de estado del conductor obligatoria,
 
   it("acepta el envío aunque la declaración tenga una respuesta preocupante (no bloquea)", async () => {
     const { inspection } = await prepararHastaFotos();
-    await registrarEstadoConductor(inspection.id, {
-      tomaMedicamentos: true,
-      condicionesAptas: true,
-      consumioAlcohol: false,
-    });
+    await declararEstadoConductor(inspection.id, { tomaMedicamentos: true, condicionesAptas: true, consumioAlcohol: false });
 
     const resultado = await enviarInspeccion(inspection.id);
     expect(resultado.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
-  });
-});
-
-describe("registrarEstadoConductor", () => {
-  it("guarda las 3 respuestas y fija declaracionEstadoAt server-side", async () => {
-    const { worker, inspection } = await crearInspeccionEnProceso();
-    loginComo(worker);
-
-    const antes = Date.now();
-    const resultado = await registrarEstadoConductor(inspection.id, {
-      tomaMedicamentos: false,
-      condicionesAptas: true,
-      consumioAlcohol: false,
-    });
-    const despues = Date.now();
-
-    expect(resultado.tomaMedicamentos).toBe(false);
-    expect(resultado.condicionesAptas).toBe(true);
-    expect(resultado.consumioAlcohol).toBe(false);
-    expect(resultado.declaracionEstadoAt).not.toBeNull();
-    const declaracionMs = resultado.declaracionEstadoAt!.getTime();
-    expect(declaracionMs).toBeGreaterThanOrEqual(antes);
-    expect(declaracionMs).toBeLessThanOrEqual(despues);
-  });
-
-  it("rechaza sobre una inspección de otro trabajador", async () => {
-    const { inspection } = await crearInspeccionEnProceso();
-    const otro = await crearUsuario(Role.TRABAJADOR);
-    loginComo(otro);
-
-    await expect(
-      registrarEstadoConductor(inspection.id, {
-        tomaMedicamentos: false,
-        condicionesAptas: true,
-        consumioAlcohol: false,
-      }),
-    ).rejects.toThrow(/no pertenece al usuario autenticado/i);
   });
 });
 
@@ -378,6 +347,90 @@ describe("registrarRespuestaEstadoConductor", () => {
     await expect(
       registrarRespuestaEstadoConductor(inspection.id, "tomaMedicamentos", false),
     ).rejects.toThrow(/ya no está en proceso/i);
+  });
+});
+
+// Hardening (#2): el adjunto de una novedad acepta JPEG/PNG/WebP o PDF, hasta
+// 8 MB, verificado por contenido real (magic bytes); key y contentType salen
+// del tipo validado, nunca de `file.name`.
+describe("subirFotoNovedad — validación del archivo", () => {
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+  const PDF = Buffer.from("%PDF-1.7\n", "latin1");
+
+  async function crearNovedadEnProceso() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    const { novedad } = await responderItem(
+      inspection.id,
+      item.id,
+      RespuestaChecklist.FALLA,
+      "Se ve la falla",
+      "FALLA",
+    );
+    return { novedad: novedad! };
+  }
+
+  function formDataCon(contenido: BlobPart, nombre: string, tipo: string): FormData {
+    const fd = new FormData();
+    fd.set("file", new File([contenido], nombre, { type: tipo }));
+    return fd;
+  }
+
+  it("sube una imagen válida con key y contentType del tipo validado (ignora la extensión del nombre)", async () => {
+    const { novedad } = await crearNovedadEnProceso();
+
+    const foto = await subirFotoNovedad(novedad.id, formDataCon(JPEG, "foto.exe", "image/jpeg"));
+
+    expect(foto.s3Key).toMatch(new RegExp(`^novedades/${novedad.id}/[0-9a-f-]{36}\\.jpg$`));
+    expect(mockUploadObject).toHaveBeenCalledWith(
+      expect.objectContaining({ key: foto.s3Key, contentType: "image/jpeg" }),
+    );
+  });
+
+  it("sube un PDF válido con extensión .pdf", async () => {
+    const { novedad } = await crearNovedadEnProceso();
+
+    const foto = await subirFotoNovedad(novedad.id, formDataCon(PDF, "comprobante", "application/pdf"));
+
+    expect(foto.s3Key).toMatch(/\.pdf$/);
+    expect(mockUploadObject).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: "application/pdf" }),
+    );
+  });
+
+  it.each([
+    ["SVG", "<svg xmlns='http://www.w3.org/2000/svg'/>", "dibujo.svg", "image/svg+xml", /imagen.*PDF/i],
+    ["GIF", "GIF89a", "animado.gif", "image/gif", /imagen.*PDF/i],
+    ["un ejecutable declarado como PDF", "MZ-no-soy-un-pdf", "doc.pdf", "application/pdf", /no corresponde/i],
+    ["texto declarado como imagen", "contenido-de-prueba", "foto.jpg", "image/jpeg", /no corresponde/i],
+  ])("rechaza %s sin subir nada a S3 ni crear el adjunto", async (_caso, contenido, nombre, tipo, mensaje) => {
+    const { novedad } = await crearNovedadEnProceso();
+
+    await expect(
+      subirFotoNovedad(novedad.id, formDataCon(contenido, nombre, tipo)),
+    ).rejects.toThrow(mensaje);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+    expect(await prisma.photo.count({ where: { novedadId: novedad.id } })).toBe(0);
+  });
+
+  it("rechaza un adjunto de más de 8 MB", async () => {
+    const { novedad } = await crearNovedadEnProceso();
+    const enorme = Buffer.alloc(MAX_ADJUNTO_NOVEDAD_BYTES + 1);
+    PDF.copy(enorme);
+
+    await expect(
+      subirFotoNovedad(novedad.id, formDataCon(enorme, "grande.pdf", "application/pdf")),
+    ).rejects.toThrow(/no puede superar 8 MB/);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("sigue exigiendo seleccionar un archivo (vacío)", async () => {
+    const { novedad } = await crearNovedadEnProceso();
+
+    await expect(
+      subirFotoNovedad(novedad.id, formDataCon(new Uint8Array(0), "vacia.jpg", "image/jpeg")),
+    ).rejects.toThrow(/seleccionar una foto o documento/i);
   });
 });
 
@@ -472,16 +525,12 @@ describe("inmutabilidad: una inspección ENVIADA no puede volver a editarse con 
     ).rejects.toThrow(/ya no está en proceso/i);
   });
 
-  it("registrarEstadoConductor rechaza sobre una inspección ya enviada", async () => {
+  it("registrarRespuestaEstadoConductor rechaza sobre una inspección ya enviada", async () => {
     const { worker, inspection } = await crearInspeccionEnviada();
     loginComo(worker);
 
     await expect(
-      registrarEstadoConductor(inspection.id, {
-        tomaMedicamentos: false,
-        condicionesAptas: true,
-        consumioAlcohol: false,
-      }),
+      registrarRespuestaEstadoConductor(inspection.id, "tomaMedicamentos", true),
     ).rejects.toThrow(/ya no está en proceso/i);
   });
 });
@@ -673,6 +722,84 @@ describe("iniciarInspeccion — el vehículo debe ser el asignado al trabajador"
     loginComo(worker);
 
     await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
+  });
+});
+
+// Idempotencia (doble submit del botón "iniciar"): si el trabajador ya tiene
+// una inspección EN_PROCESO sobre su vehículo, se devuelve esa misma en vez de
+// abrir una segunda.
+describe("iniciarInspeccion — idempotente ante doble envío", () => {
+  async function trabajadorConVehiculo() {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+    });
+    loginComo(worker);
+    return { vehicle, worker };
+  }
+
+  it("una segunda llamada devuelve la misma inspección EN_PROCESO, sin crear otra ni otra fila de auditoría", async () => {
+    const { vehicle, worker } = await trabajadorConVehiculo();
+
+    const primera = await iniciarInspeccion(vehicle.id);
+    const segunda = await iniciarInspeccion(vehicle.id);
+
+    expect(segunda.id).toBe(primera.id);
+    expect(
+      await prisma.inspection.count({
+        where: { workerId: worker.id, status: InspectionStatus.EN_PROCESO },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.auditLog.count({
+        where: { userId: worker.id, action: "INICIAR_INSPECCION" },
+      }),
+    ).toBe(1);
+  });
+
+  it("una inspección CANCELADA previa no bloquea crear una nueva", async () => {
+    const { vehicle, worker } = await trabajadorConVehiculo();
+    const primera = await iniciarInspeccion(vehicle.id);
+    await cancelarInspeccion(primera.id);
+
+    const nueva = await iniciarInspeccion(vehicle.id);
+
+    expect(nueva.id).not.toBe(primera.id);
+    expect(nueva.status).toBe(InspectionStatus.EN_PROCESO);
+    expect(await prisma.inspection.count({ where: { workerId: worker.id } })).toBe(2);
+  });
+
+  it("una inspección ya enviada previa no bloquea crear una nueva", async () => {
+    const { vehicle, worker } = await trabajadorConVehiculo();
+    const enviada = await iniciarInspeccion(vehicle.id);
+    await prisma.inspection.update({
+      where: { id: enviada.id },
+      data: { status: InspectionStatus.PENDIENTE_APROBACION },
+    });
+
+    const nueva = await iniciarInspeccion(vehicle.id);
+
+    expect(nueva.id).not.toBe(enviada.id);
+    expect(nueva.status).toBe(InspectionStatus.EN_PROCESO);
+    expect(await prisma.inspection.count({ where: { workerId: worker.id } })).toBe(2);
+  });
+
+  it("no reutiliza la inspección EN_PROCESO de otro trabajador", async () => {
+    const { vehicle, worker } = await trabajadorConVehiculo();
+    const otroVehiculo = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const otro = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: otroVehiculo.id,
+    });
+    loginComo(otro);
+    const deOtro = await iniciarInspeccion(otroVehiculo.id);
+
+    loginComo(worker);
+    const propia = await iniciarInspeccion(vehicle.id);
+
+    expect(propia.id).not.toBe(deOtro.id);
+    expect(propia.workerId).toBe(worker.id);
   });
 });
 

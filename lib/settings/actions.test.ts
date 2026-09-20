@@ -1,8 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mismo patrón de mock que lib/admin/user-actions.test.ts /
-// lib/admin/vehicle-actions.test.ts: solo se mockea la sesión de NextAuth,
-// el resto (Prisma real) corre contra infraestructura real.
+// Mismo patrón de mock que lib/admin/user-actions.test.ts: solo se mockea la
+// sesión de NextAuth, el resto (Prisma real) corre contra infraestructura real.
 const mockAuth = vi.fn();
 vi.mock("@/lib/auth/config", () => ({
   auth: () => mockAuth(),
