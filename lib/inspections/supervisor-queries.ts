@@ -25,6 +25,11 @@ export function getInspeccionesPendientes() {
     include: {
       worker: true,
       vehicle: true,
+      // Solo el conteo: la lista muestra "N novedades" para que el Supervisor
+      // priorice sin abrir cada inspección; el detalle trae las novedades.
+      _count: { select: { novedades: true } },
+      // Foto LATERAL diaria: miniatura de la tarjeta (el vehículo, moto o carro, tal como está hoy).
+      fotos: { where: { tipo: "LATERAL" }, take: 1 },
     },
     orderBy: { completedAt: "asc" },
   });
