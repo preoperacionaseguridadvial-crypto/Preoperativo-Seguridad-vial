@@ -1,0 +1,130 @@
+import { describe, expect, it } from "vitest";
+import { InspectionStatus } from "@/generated/prisma/client";
+import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
+import { accionPrincipalTrabajador, tonoEstadoInspeccion } from "@/lib/inicio/accion-trabajador";
+
+const ahora = new Date("2026-10-07T15:00:00Z");
+const HORA = 60 * 60 * 1000;
+const hace = (horas: number) => new Date(ahora.getTime() - horas * HORA);
+
+function inspeccion(
+  status: InspectionStatus,
+  extra: Partial<{
+    id: string;
+    startedAt: Date;
+    completedAt: Date | null;
+    reviewedAt: Date | null;
+    observacionesSupervisor: string | null;
+  }> = {},
+) {
+  return {
+    id: "insp-1",
+    status,
+    startedAt: hace(2),
+    completedAt: null,
+    reviewedAt: null,
+    observacionesSupervisor: null,
+    ...extra,
+  };
+}
+
+describe("accionPrincipalTrabajador", () => {
+  it("sin inspecciones: invita a iniciar una", () => {
+    const accion = accionPrincipalTrabajador(null, ahora);
+    expect(accion.estado).toBe("INICIAR");
+    expect(accion.boton).toEqual({ texto: "Iniciar inspección", href: "/inspecciones" });
+  });
+
+  it("EN_PROCESO reciente: continuar esa inspección", () => {
+    const accion = accionPrincipalTrabajador(inspeccion(InspectionStatus.EN_PROCESO, { id: "abc" }), ahora);
+    expect(accion.estado).toBe("CONTINUAR");
+    expect(accion.boton).toEqual({ texto: "Continuar inspección", href: "/inspecciones/abc" });
+  });
+
+  // iniciarInspeccion descarta una EN_PROCESO más vieja que la ventana de
+  // reuso y abre una nueva: el CTA no puede prometer "continuar" ahí.
+  it("EN_PROCESO más vieja que la ventana de reuso: iniciar una nueva", () => {
+    const vieja = inspeccion(InspectionStatus.EN_PROCESO, {
+      startedAt: hace(VENTANA_REUSO_INSPECCION_HORAS + 1),
+    });
+    const accion = accionPrincipalTrabajador(vieja, ahora);
+    expect(accion.estado).toBe("INICIAR");
+    expect(accion.boton?.href).toBe("/inspecciones");
+  });
+
+  it.each([InspectionStatus.ENVIADA, InspectionStatus.PENDIENTE_APROBACION])(
+    "%s: enviada, esperando aprobación, sin botón",
+    (status) => {
+      const accion = accionPrincipalTrabajador(
+        inspeccion(status, { completedAt: new Date(ahora.getTime() - 35 * 60_000) }),
+        ahora,
+      );
+      expect(accion.estado).toBe("ESPERANDO");
+      expect(accion.titulo).toBe("Enviada · esperando aprobación");
+      expect(accion.detalle).toBe("Enviada hace 35 min");
+      expect(accion.boton).toBeNull();
+    },
+  );
+
+  it("APROBADA reciente: muestra aprobada con el tiempo transcurrido", () => {
+    const accion = accionPrincipalTrabajador(
+      inspeccion(InspectionStatus.APROBADA, { reviewedAt: hace(3) }),
+      ahora,
+    );
+    expect(accion.estado).toBe("APROBADA");
+    expect(accion.titulo).toBe("Aprobada");
+    expect(accion.detalle).toBe("hace 3 h");
+    expect(accion.boton).toBeNull();
+  });
+
+  it("RECHAZADA reciente: muestra la observación del supervisor y permite repetir", () => {
+    const accion = accionPrincipalTrabajador(
+      inspeccion(InspectionStatus.RECHAZADA, {
+        reviewedAt: hace(1),
+        observacionesSupervisor: "Falta la foto de la placa",
+      }),
+      ahora,
+    );
+    expect(accion.estado).toBe("RECHAZADA");
+    expect(accion.titulo).toBe("Rechazada");
+    expect(accion.detalle).toBe("Falta la foto de la placa");
+    expect(accion.boton).toEqual({ texto: "Hacer una nueva inspección", href: "/inspecciones" });
+  });
+
+  it("RECHAZADA sin observación: detalle genérico", () => {
+    const accion = accionPrincipalTrabajador(inspeccion(InspectionStatus.RECHAZADA), ahora);
+    expect(accion.detalle).toBe("El supervisor no dejó observaciones.");
+  });
+
+  it("NO_APTA_PARA_OPERAR: avisa que no está apta, sin botón", () => {
+    const accion = accionPrincipalTrabajador(inspeccion(InspectionStatus.NO_APTA_PARA_OPERAR), ahora);
+    expect(accion.estado).toBe("NO_APTA");
+    expect(accion.titulo).toBe("No apta para operar");
+    expect(accion.boton).toBeNull();
+  });
+
+  it.each([
+    InspectionStatus.APROBADA,
+    InspectionStatus.RECHAZADA,
+    InspectionStatus.NO_APTA_PARA_OPERAR,
+    InspectionStatus.PENDIENTE_APROBACION,
+    InspectionStatus.ENVIADA,
+  ])("%s de hace más de la ventana de reuso cuenta como vieja: iniciar una nueva", (status) => {
+    const vieja = inspeccion(status, { startedAt: hace(VENTANA_REUSO_INSPECCION_HORAS + 1) });
+    const accion = accionPrincipalTrabajador(vieja, ahora);
+    expect(accion.estado).toBe("INICIAR");
+    expect(accion.boton).toEqual({ texto: "Iniciar inspección", href: "/inspecciones" });
+  });
+});
+
+describe("tonoEstadoInspeccion", () => {
+  it("asigna un tono por estado", () => {
+    expect(tonoEstadoInspeccion(InspectionStatus.APROBADA)).toBe("ok");
+    expect(tonoEstadoInspeccion(InspectionStatus.RECHAZADA)).toBe("crit");
+    expect(tonoEstadoInspeccion(InspectionStatus.NO_APTA_PARA_OPERAR)).toBe("crit");
+    expect(tonoEstadoInspeccion(InspectionStatus.PENDIENTE_APROBACION)).toBe("warn");
+    expect(tonoEstadoInspeccion(InspectionStatus.ENVIADA)).toBe("warn");
+    expect(tonoEstadoInspeccion(InspectionStatus.EN_PROCESO)).toBe("info");
+    expect(tonoEstadoInspeccion(InspectionStatus.CANCELADA)).toBe("neutral");
+  });
+});

@@ -23,8 +23,9 @@ The home screen still says "Fase 1 (cimientos)", shows the raw role enum, and on
 ## Tasks
 - [x] T0 — Commit approvals list redesign separately (route: inline) — commit `5cdd265`
 - [x] T1 — Shared shell + role shortcuts (SUPERVISOR, DIRECTOR/SST, ADMINISTRADOR) + role label helper, fixes missing ADMIN links (route: delegated writer — 2+ non-trivial files)
-- [ ] T2 — TRABAJADOR panel: latest inspection state CTA, expiry alerts, last 3 inspections (route: delegated writer)
+- [x] T2 — TRABAJADOR panel: latest inspection state CTA, expiry alerts, last 3 inspections (route: delegated writer)
 - [ ] T3 — Data summaries: SUPERVISOR pending counts, DIRECTOR/SST today KPIs, ADMIN expiring documents (route: delegated writer)
+- [ ] T4 — Rediseño de `app/(worker)/inspecciones/page.tsx` (route: delegated writer, same feature). Solicitado por el usuario el 2026-10-07 tras ver la pantalla plana: tarjeta héroe del vehículo (reusa la del panel T2), vista previa "Qué vas a revisar" con los pasos reales del flujo, CTA grande, tarjeta de inspección en proceso con "Continuar", confirmación antes de descartar (hoy un toque en ✕ cancela), mensajes de error/sin vehículo con tokens status-*.
 
 ## Acceptance criteria
 - Each of the 5 roles sees only links it is allowed to open, and every link resolves (HTTP 200 for that role).
@@ -38,6 +39,7 @@ TDD: strict / user global config / `npx vitest run`. RDD: off (global) — ordin
 ## Progress / evidence
 - T0 done: `5cdd265`.
 - T1 done (route: delegated writer, triggers: 2+ non-trivial files). RED: `npx vitest run lib/inicio/atajos.test.ts` failed on missing `@/lib/auth/route-roles`; GREEN: 13/13. `ROLE_ROUTE_PREFIXES` moved from `proxy.ts` to `lib/auth/route-roles.ts` (same map, no behavior change; proxy imports `getRequiredRoles`). Checks: tsc clean, eslint clean, npm test 33 files / 511 tests pass. Live curl (5 seed roles): `/` 200 with greeting + role label + date, every shortcut 200 without redirect, no "Fase 1" text. Commit: see git log (`feat(inicio): ...shell`).
+- T2 done (route: delegated writer). RED: 3 new test files failed on missing modules (`accion-trabajador`, `vencimientos-vehiculo`, `trabajador-queries`); later `chipsDocumentosVehiculo` RED ("is not a function") then GREEN; lib/inicio 40/40. CTA aligned with `iniciarInspeccion`: EN_PROCESO older than `VENTANA_REUSO_INSPECCION_HORAS` or any finished inspection older than that window => "Iniciar inspección". Vehicle card (`TarjetaVehiculo`) is reusable (T4). Live as trabajador@ess.local: `/` 200 with plate, SOAT/tecnomecanica chips, "Inspección en proceso" + "Continuar inspección" link (GET -> 307 into the checklist, as the flow does). trabajador.carro@ess.local login does not yield a session in this dev DB (not verified).
 
 ## Next step
 T1–T3 via one delegated writer, one commit per task.
