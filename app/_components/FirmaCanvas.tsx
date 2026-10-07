@@ -1,6 +1,17 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { ampliarLimites, areaDeRecorte, type Limites } from "@/lib/firma/recorte-firma";
+
+// Lienzo alto (≈180 px de alto en un celular de 360 px de ancho) para firmar
+// cómodo con el dedo. Al exportar se recorta al trazo (ver
+// lib/firma/recorte-firma.ts), así el PNG no arrastra el espacio vacío y la
+// firma no sale más chica en el PDF.
+const ANCHO_LIENZO = 600;
+const ALTO_LIENZO = 300;
+// Margen (px del lienzo) alrededor del trazo al recortar: cubre el grosor de
+// la línea (3 px, punta redonda) con holgura.
+const MARGEN_RECORTE = 12;
 
 /**
  * Canvas táctil para capturar una firma manuscrita real (Fase D): el dueño
@@ -26,6 +37,7 @@ export function FirmaCanvas({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dibujando = useRef(false);
+  const limites = useRef<Limites | null>(null);
   const [haDibujado, setHaDibujado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -45,6 +57,7 @@ export function FirmaCanvas({
     canvas.setPointerCapture(e.pointerId);
     dibujando.current = true;
     const { x, y } = getPos(e);
+    limites.current = ampliarLimites(limites.current, { x, y });
     ctx.beginPath();
     ctx.moveTo(x, y);
   }
@@ -54,6 +67,7 @@ export function FirmaCanvas({
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const { x, y } = getPos(e);
+    limites.current = ampliarLimites(limites.current, { x, y });
     ctx.lineWidth = 3;
     ctx.lineCap = "round";
     ctx.strokeStyle = "#0B3B60";
@@ -71,6 +85,7 @@ export function FirmaCanvas({
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    limites.current = null;
     setHaDibujado(false);
     setError(null);
   }
@@ -82,7 +97,19 @@ export function FirmaCanvas({
       return;
     }
     setError(null);
-    canvas.toBlob((blob) => {
+    const area = areaDeRecorte(
+      limites.current,
+      { ancho: canvas.width, alto: canvas.height },
+      MARGEN_RECORTE,
+    );
+    const recorte = document.createElement("canvas");
+    recorte.width = area.ancho;
+    recorte.height = area.alto;
+    const ctxRecorte = recorte.getContext("2d");
+    // Sin contexto 2D (muy raro) se exporta el lienzo completo, como antes.
+    const origen = ctxRecorte ? recorte : canvas;
+    ctxRecorte?.drawImage(canvas, area.x, area.y, area.ancho, area.alto, 0, 0, area.ancho, area.alto);
+    origen.toBlob((blob) => {
       if (!blob) {
         setError("No se pudo generar la firma. Intentá de nuevo.");
         return;
@@ -100,14 +127,14 @@ export function FirmaCanvas({
       <p className="text-sm font-medium text-gray-700">{etiqueta}</p>
       <canvas
         ref={canvasRef}
-        width={600}
-        height={160}
+        width={ANCHO_LIENZO}
+        height={ALTO_LIENZO}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
         className="w-full touch-none rounded-md border border-gray-300 bg-white"
-        style={{ aspectRatio: "600 / 160" }}
+        style={{ aspectRatio: `${ANCHO_LIENZO} / ${ALTO_LIENZO}` }}
       />
       <div className="flex gap-2">
         <button
