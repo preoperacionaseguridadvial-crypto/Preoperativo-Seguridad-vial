@@ -61,4 +61,4 @@ TDD: strict / user global config / `npx vitest run`. RDD: off (global).
 - Live (dev server, throwaway worker, cleaned up afterwards): Atrás href chain verified from confirmar back to medidas; item/novedad prefill and progress counts (13 OK + 1 FALLA <-> 14 OK); kilometraje 1234 -> 1300; photo replace (LATERAL.jpg -> LATERAL.png, signature removed and audited); resultado Sí -> No with justification; after status PENDIENTE_APROBACION a stale form POST returned 500 and kilometraje stayed, every step page 307 -> /enviada. NOT verified live: clicking "Cambiar" on documents (client JS, no browser available) and visual layout.
 
 ## Next step
-T1–T3 via one delegated writer on branch `feat/correccion-respuestas-inspeccion` (stacked on `feat/panel-inicio-por-rol`).
+Done (T1 `94723d5`, T2 `7853695`, T3 `60719a4`). Parent re-ran npm test: 579/579. Open: product confirmation that an unsent CONDUCTOR signature may be discarded on correction.
