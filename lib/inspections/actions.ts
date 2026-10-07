@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
-import { Role, InspectionStatus, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
+import { Role, InspectionStatus, Prisma, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
 import { PERFIL_ADJUNTO_NOVEDAD, validarArchivo } from "@/lib/storage/validar-archivo";
@@ -14,6 +14,7 @@ import {
   FOTOS_DIARIAS_REQUERIDAS,
 } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
+import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
 import { esNovedad, valoresPermitidos } from "@/lib/inspections/respuesta";
 
 // Server actions del flujo de inspección del TRABAJADOR (Fase 2). Todas
@@ -43,6 +44,63 @@ async function getOwnInspeccionEnProceso(inspectionId: string, workerId: string)
   }
 
   return inspection;
+}
+
+// Mismo criterio que `esErrorFotoDuplicada` (foto-actions.ts) y
+// `campoDuplicado` (lib/admin/user-actions.ts): solo el código P2002 de Prisma
+// identifica de forma confiable una violación de unicidad. En `Inspection` la
+// única restricción única aparte de la PK (cuid, no colisiona) es el índice
+// parcial "una EN_PROCESO por trabajador y vehículo".
+function esErrorUnicidad(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+}
+
+/** La EN_PROCESO más reciente del trabajador sobre ese vehículo, si hay. */
+function buscarEnProceso(workerId: string, vehicleId: string) {
+  return prisma.inspection.findFirst({
+    where: { workerId, vehicleId, status: InspectionStatus.EN_PROCESO },
+    orderBy: { startedAt: "desc" },
+  });
+}
+
+/**
+ * Cancela una EN_PROCESO abandonada y crea la nueva EN EL MISMO $transaction
+ * (primero cancelar, luego crear) para que el índice único parcial nunca vea
+ * dos EN_PROCESO a la vez. La cancelación se audita igual que
+ * `cancelarInspeccion` pero con metadata que la distingue de un descarte
+ * manual del trabajador. Si otra request ya la había cancelado (`count === 0`)
+ * no se duplica la auditoría: el `create` de abajo resuelve con P2002 si esa
+ * request ya abrió la nueva, y el caller devuelve la ganadora.
+ */
+async function reemplazarInspeccionAbandonada(
+  abandonadaId: string,
+  workerId: string,
+  vehicleId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const cancelada = await tx.inspection.updateMany({
+      where: { id: abandonadaId, status: InspectionStatus.EN_PROCESO },
+      data: { status: InspectionStatus.CANCELADA },
+    });
+
+    const nueva = await tx.inspection.create({
+      data: { workerId, conductorId: workerId, vehicleId },
+    });
+
+    if (cancelada.count > 0) {
+      await tx.auditLog.create({
+        data: {
+          userId: workerId,
+          action: "CANCELAR_INSPECCION",
+          entityType: "Inspection",
+          entityId: abandonadaId,
+          metadata: { motivo: "abandonada", reemplazadaPor: nueva.id },
+        },
+      });
+    }
+
+    return nueva;
+  });
 }
 
 /**
@@ -97,36 +155,44 @@ export async function iniciarInspeccion(vehicleId: string) {
   }
 
   // Idempotencia ante doble envío (doble tap en el botón de iniciar): si el
-  // trabajador ya tiene una inspección EN_PROCESO sobre este vehículo, se
-  // devuelve esa misma — la pantalla de inicio ya la lista como "Continuar
-  // inspección" y la ✕ permite descartarla (`cancelarInspeccion`). Una
-  // inspección CANCELADA o ya enviada nunca bloquea una nueva.
+  // trabajador ya tiene una inspección EN_PROCESO sobre este vehículo Y es
+  // reciente (dentro de VENTANA_REUSO_INSPECCION_HORAS), se devuelve esa misma
+  // — la pantalla de inicio ya la lista como "Continuar inspección" y la ✕
+  // permite descartarla (`cancelarInspeccion`). Una inspección CANCELADA o ya
+  // enviada nunca bloquea una nueva. Una EN_PROCESO más vieja que la ventana
+  // se considera abandonada (el preoperacional es un chequeo diario): se
+  // cancela y se abre una nueva con `startedAt` fresco.
   //
-  // Riesgo residual conocido: es un check-then-create sin restricción en base
-  // de datos, así que dos requests verdaderamente simultáneas aún podrían
-  // crear dos filas. Cerrarlo del todo exige un índice único parcial
-  // (`workerId, vehicleId` WHERE status = 'EN_PROCESO'), que necesita una
-  // migración y no está incluido; el botón deshabilitado mientras se envía
-  // (BotonIniciarInspeccion) cubre el doble tap real.
-  const enProceso = await prisma.inspection.findFirst({
-    where: {
-      workerId: session.user.id,
-      vehicleId,
-      status: InspectionStatus.EN_PROCESO,
-    },
-    orderBy: { startedAt: "desc" },
-  });
-  if (enProceso) {
+  // Garantía real ante la carrera: el índice único parcial
+  // `Inspection_workerId_vehicleId_en_proceso_key` (a lo sumo una EN_PROCESO
+  // por trabajador y vehículo, ver prisma/schema.prisma) hace que de dos
+  // requests simultáneas solo una pueda crear la fila; la otra recibe P2002 y
+  // devuelve la ganadora en vez de fallar. El findFirst de acá es solo el
+  // camino rápido, ya no es lo que evita el duplicado.
+  const trabajadorId = session.user.id;
+  const enProceso = await buscarEnProceso(trabajadorId, vehicleId);
+  const limiteReuso = new Date(Date.now() - VENTANA_REUSO_INSPECCION_HORAS * 60 * 60 * 1000);
+  if (enProceso && enProceso.startedAt >= limiteReuso) {
     return enProceso;
   }
 
-  const inspection = await prisma.inspection.create({
-    data: {
-      workerId: session.user.id,
-      conductorId: session.user.id,
-      vehicleId,
-    },
-  });
+  let inspection;
+  try {
+    inspection = enProceso
+      ? await reemplazarInspeccionAbandonada(enProceso.id, trabajadorId, vehicleId)
+      : await prisma.inspection.create({
+          data: { workerId: trabajadorId, conductorId: trabajadorId, vehicleId },
+        });
+  } catch (err) {
+    // Solo la violación de unicidad (P2002) significa "otra request ya creó la
+    // EN_PROCESO": se devuelve esa. Cualquier otro error se relanza tal cual.
+    // Si ni siquiera hay una EN_PROCESO que devolver, el P2002 fue por otra
+    // causa: también se relanza.
+    if (!esErrorUnicidad(err)) throw err;
+    const ganadora = await buscarEnProceso(trabajadorId, vehicleId);
+    if (!ganadora) throw err;
+    return ganadora;
+  }
 
   await logAudit({
     userId: session.user.id,

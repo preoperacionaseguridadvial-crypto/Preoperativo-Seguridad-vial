@@ -20,6 +20,7 @@ vi.mock("@/lib/storage/s3", () => ({
 
 import { prisma } from "@/lib/prisma";
 import {
+  Prisma,
   Role,
   InspectionStatus,
   RespuestaChecklist,
@@ -46,6 +47,7 @@ import {
   limpiarBaseDeTest,
 } from "@/test/helpers/db";
 import { getChecklistCatalog } from "@/lib/inspections/queries";
+import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
 import { MAX_ADJUNTO_NOVEDAD_BYTES } from "@/lib/storage/validar-archivo";
 
 function loginComo(user: { id: string; role: Role }) {
@@ -800,6 +802,191 @@ describe("iniciarInspeccion — idempotente ante doble envío", () => {
 
     expect(propia.id).not.toBe(deOtro.id);
     expect(propia.workerId).toBe(worker.id);
+  });
+});
+
+// Ventana de reuso: la inspección preoperacional es un chequeo diario, así que
+// una EN_PROCESO vieja no se devuelve — se cancela y se abre una nueva.
+describe("iniciarInspeccion — ventana de reuso de la inspección EN_PROCESO", () => {
+  const HORA_MS = 60 * 60 * 1000;
+
+  async function trabajadorConVehiculo() {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+    });
+    loginComo(worker);
+    return { vehicle, worker };
+  }
+
+  async function envejecer(inspectionId: string, horas: number) {
+    await prisma.inspection.update({
+      where: { id: inspectionId },
+      data: { startedAt: new Date(Date.now() - horas * HORA_MS) },
+    });
+  }
+
+  it("la ventana de reuso es de 24 horas", () => {
+    expect(VENTANA_REUSO_INSPECCION_HORAS).toBe(24);
+  });
+
+  it("reutiliza una EN_PROCESO iniciada hace 23 horas, conservando su startedAt", async () => {
+    const { vehicle, worker } = await trabajadorConVehiculo();
+    const primera = await iniciarInspeccion(vehicle.id);
+    await envejecer(primera.id, 23);
+    const startedAtOriginal = (
+      await prisma.inspection.findUniqueOrThrow({ where: { id: primera.id } })
+    ).startedAt;
+
+    const segunda = await iniciarInspeccion(vehicle.id);
+
+    expect(segunda.id).toBe(primera.id);
+    expect(segunda.startedAt.getTime()).toBe(startedAtOriginal.getTime());
+    expect(await prisma.inspection.count({ where: { workerId: worker.id } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { userId: worker.id } })).toBe(1);
+  });
+
+  it("cancela una EN_PROCESO iniciada hace 25 horas y abre una nueva, dejando una sola EN_PROCESO", async () => {
+    const { vehicle, worker } = await trabajadorConVehiculo();
+    const vieja = await iniciarInspeccion(vehicle.id);
+    await envejecer(vieja.id, 25);
+
+    const nueva = await iniciarInspeccion(vehicle.id);
+
+    expect(nueva.id).not.toBe(vieja.id);
+    expect(nueva.status).toBe(InspectionStatus.EN_PROCESO);
+    // startedAt fresco, no el de hace 25 horas.
+    expect(Date.now() - nueva.startedAt.getTime()).toBeLessThan(HORA_MS);
+
+    const viejaEnBase = await prisma.inspection.findUniqueOrThrow({ where: { id: vieja.id } });
+    expect(viejaEnBase.status).toBe(InspectionStatus.CANCELADA);
+    expect(
+      await prisma.inspection.count({
+        where: { workerId: worker.id, status: InspectionStatus.EN_PROCESO },
+      }),
+    ).toBe(1);
+
+    const cancelacion = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "CANCELAR_INSPECCION", entityId: vieja.id },
+    });
+    expect(cancelacion.userId).toBe(worker.id);
+    expect(cancelacion.metadata).toEqual({ motivo: "abandonada", reemplazadaPor: nueva.id });
+    expect(
+      await prisma.auditLog.count({
+        where: { action: "INICIAR_INSPECCION", entityId: nueva.id },
+      }),
+    ).toBe(1);
+  });
+});
+
+// Carrera real: sin restricción en base, dos requests simultáneas pasaban el
+// findFirst y creaban dos filas. Ahora el índice único parcial lo impide y
+// `iniciarInspeccion` devuelve la inspección ganadora.
+describe("iniciarInspeccion — llamadas simultáneas", () => {
+  async function trabajadorConVehiculo() {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+    });
+    loginComo(worker);
+    return { vehicle, worker };
+  }
+
+  it.each([2, 5])(
+    "%i llamadas simultáneas terminan con UNA sola EN_PROCESO y todas devuelven la misma",
+    async (n) => {
+      const { vehicle, worker } = await trabajadorConVehiculo();
+
+      const resultados = await Promise.all(
+        Array.from({ length: n }, () => iniciarInspeccion(vehicle.id)),
+      );
+
+      expect(new Set(resultados.map((r) => r.id)).size).toBe(1);
+      expect(
+        await prisma.inspection.count({
+          where: { workerId: worker.id, status: InspectionStatus.EN_PROCESO },
+        }),
+      ).toBe(1);
+      // Solo quien realmente creó la fila audita el inicio.
+      expect(
+        await prisma.auditLog.count({ where: { userId: worker.id, action: "INICIAR_INSPECCION" } }),
+      ).toBe(1);
+    },
+  );
+
+  it("llamadas simultáneas sobre una EN_PROCESO vieja: una sola nueva, una sola cancelación", async () => {
+    const { vehicle, worker } = await trabajadorConVehiculo();
+    const vieja = await iniciarInspeccion(vehicle.id);
+    await prisma.inspection.update({
+      where: { id: vieja.id },
+      data: { startedAt: new Date(Date.now() - 25 * 60 * 60 * 1000) },
+    });
+
+    const resultados = await Promise.all(
+      Array.from({ length: 5 }, () => iniciarInspeccion(vehicle.id)),
+    );
+
+    expect(new Set(resultados.map((r) => r.id)).size).toBe(1);
+    expect(resultados[0].id).not.toBe(vieja.id);
+    expect(
+      await prisma.inspection.count({
+        where: { workerId: worker.id, status: InspectionStatus.EN_PROCESO },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.auditLog.count({ where: { action: "CANCELAR_INSPECCION", entityId: vieja.id } }),
+    ).toBe(1);
+  });
+});
+
+// Garantía a nivel de base de datos (índice único parcial
+// `Inspection_workerId_vehicleId_en_proceso_key`), independiente del código.
+describe("Inspection — a lo sumo una EN_PROCESO por trabajador y vehículo (índice único parcial)", () => {
+  it("la base rechaza una segunda EN_PROCESO del mismo trabajador y vehículo con P2002", async () => {
+    const { worker, vehicle } = await crearInspeccionEnProceso();
+
+    const intento = prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+
+    await expect(intento).rejects.toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+    await expect(intento).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("permite varias inspecciones no EN_PROCESO del mismo trabajador y vehículo junto a una EN_PROCESO", async () => {
+    const { worker, vehicle } = await crearInspeccionEnProceso();
+
+    for (const status of [
+      InspectionStatus.CANCELADA,
+      InspectionStatus.CANCELADA,
+      InspectionStatus.PENDIENTE_APROBACION,
+      InspectionStatus.APROBADA,
+    ]) {
+      await prisma.inspection.create({
+        data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id, status },
+      });
+    }
+
+    expect(await prisma.inspection.count({ where: { workerId: worker.id } })).toBe(5);
+  });
+
+  it("permite una EN_PROCESO del mismo trabajador sobre otro vehículo, y de otro trabajador sobre el mismo vehículo", async () => {
+    const { worker, vehicle } = await crearInspeccionEnProceso();
+    const otroVehiculo = await crearVehiculo();
+    const otroTrabajador = await crearUsuario(Role.TRABAJADOR);
+
+    await expect(
+      prisma.inspection.create({
+        data: { workerId: worker.id, conductorId: worker.id, vehicleId: otroVehiculo.id },
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      prisma.inspection.create({
+        data: { workerId: otroTrabajador.id, conductorId: otroTrabajador.id, vehicleId: vehicle.id },
+      }),
+    ).resolves.toBeDefined();
   });
 });
 

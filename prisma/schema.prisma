@@ -232,6 +232,14 @@ model Vehicle {
 
 // Registro inmutable: no se agrega deletedAt ni mutation de borrado. Los
 // errores se corrigen con nuevos estados/observaciones, nunca eliminando.
+// OJO: además de los índices de abajo existe un índice ÚNICO PARCIAL solo en
+// SQL (Prisma no puede expresar `WHERE` en schema.prisma):
+// "Inspection_workerId_vehicleId_en_proceso_key" ON ("workerId", "vehicleId")
+// WHERE status = 'EN_PROCESO' (migración 20260920230000_inspeccion_unica_en_proceso).
+// Garantiza a lo sumo una inspección EN_PROCESO por trabajador y vehículo;
+// `iniciarInspeccion` depende de él (P2002 → devuelve la ganadora). Verificado
+// con Prisma 7.9.1: `migrate diff` / `migrate dev` NO lo detectan como drift
+// ni intentan borrarlo. No lo declares con @@unique/@@index (rompería el WHERE).
 model Inspection {
   id            String            @id @default(cuid())
   workerId      String
