@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, Prisma, TipoFotoInspeccion } from "@/generated/prisma/client";
-import { uploadObject } from "@/lib/storage/s3";
+import { deleteObject, uploadObject } from "@/lib/storage/s3";
+import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
 import { PERFIL_FOTO_INSPECCION, validarArchivo } from "@/lib/storage/validar-archivo";
 
 // Mismo criterio que `campoDuplicado` en lib/admin/user-actions.ts: solo el
@@ -16,15 +17,16 @@ function esErrorFotoDuplicada(err: unknown): boolean {
 
 // Server action de las fotos diarias obligatorias (Fase soporte-moto-carro,
 // Slice 3, A7). `FotoInspeccion` mirroa el patrón ya probado de `Firma`
-// (lib/inspections/firma-actions.ts): inmutable, `@@unique([inspectionId,
-// tipo])` como garantía real ante una carrera además del chequeo optimista
-// de acá. Vive en su propio archivo (no actions.ts) por el mismo motivo que
+// (lib/inspections/firma-actions.ts): `@@unique([inspectionId, tipo])` como
+// garantía real ante una carrera (una sola fila por tipo). A diferencia de la
+// firma, la foto se puede reemplazar mientras la inspección siga EN_PROCESO;
+// una vez enviada queda inmutable. Vive en su propio archivo (no actions.ts) por el mismo motivo que
 // firma-actions.ts: es un concepto propio (evidencia fotográfica diaria),
 // no una respuesta de checklist.
 
 /**
  * Sube una de las dos fotos diarias obligatorias (LATERAL o PLACA) y crea el
- * registro `FotoInspeccion`. Solo el TRABAJADOR dueño de la inspección,
+ * registro `FotoInspeccion` (o reemplaza la existente del mismo tipo). Solo el TRABAJADOR dueño de la inspección,
  * mientras siga EN_PROCESO — mismo criterio de pertenencia y de estado que
  * el resto de las mutaciones del flujo del trabajador (ver
  * `getOwnInspeccionEnProceso`, lib/inspections/actions.ts).
@@ -44,12 +46,12 @@ export async function subirFotoInspeccion(
     throw new Error("La inspección ya no está en proceso: no se pueden agregar fotos.");
   }
 
+  // Mientras la inspección siga EN_PROCESO la foto se puede reemplazar
+  // (corrección, feature correccion-respuestas-inspeccion): hay una sola fila
+  // por (inspección, tipo) y el reemplazo la actualiza.
   const existente = await prisma.fotoInspeccion.findUnique({
     where: { inspectionId_tipo: { inspectionId, tipo } },
   });
-  if (existente) {
-    throw new Error("Ya existe una foto registrada para esta inspección: no se puede reemplazar.");
-  }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -64,7 +66,11 @@ export async function subirFotoInspeccion(
   await uploadObject({ key, body: buffer, contentType });
 
   try {
-    await prisma.fotoInspeccion.create({ data: { inspectionId, tipo, s3Key: key } });
+    if (existente) {
+      await prisma.fotoInspeccion.update({ where: { id: existente.id }, data: { s3Key: key } });
+    } else {
+      await prisma.fotoInspeccion.create({ data: { inspectionId, tipo, s3Key: key } });
+    }
   } catch (err) {
     // Carrera entre el findUnique de arriba y este create: la restricción
     // @@unique([inspectionId, tipo]) del schema es la garantía real de
@@ -76,7 +82,7 @@ export async function subirFotoInspeccion(
     // `errorDeDuplicado` en lib/admin/user-actions.ts, que solo traduce el
     // P2002 y deja pasar cualquier otro error).
     if (esErrorFotoDuplicada(err)) {
-      throw new Error("Ya existe una foto registrada para esta inspección: no se puede reemplazar.");
+      throw new Error("Ya existe una foto registrada para esta inspección (se subió otra al mismo tiempo): volvé a intentarlo.");
     }
     console.error("Fallo al crear el registro de FotoInspeccion tras subir la foto a S3.", {
       inspectionId,
@@ -86,11 +92,24 @@ export async function subirFotoInspeccion(
     throw err;
   }
 
+  // Si la extensión cambió (jpg -> png) la key nueva es otra: el objeto
+  // anterior queda huérfano y se borra (best-effort, no debe fallar el reemplazo).
+  if (existente && existente.s3Key !== key) {
+    try {
+      await deleteObject(existente.s3Key);
+    } catch (err) {
+      console.error("No se pudo borrar la foto anterior de S3 tras reemplazarla.", { inspectionId, tipo, err });
+    }
+  }
+
   await logAudit({
     userId: session.user.id,
-    action: "SUBIR_FOTO_INSPECCION",
+    action: existente ? "REEMPLAZAR_FOTO_INSPECCION" : "SUBIR_FOTO_INSPECCION",
     entityType: "Inspection",
     entityId: inspectionId,
     metadata: { tipo },
   });
+  if (existente) {
+    await invalidarFirmaConductor(inspectionId, session.user.id, `Foto ${tipo} reemplazada`);
+  }
 }

@@ -38,6 +38,7 @@ export default async function NoPuedeOperarPage({ params }: { params: Promise<{ 
         <textarea
           name="justificacion"
           required
+          defaultValue={inspection.justificacionNoOperar ?? ""}
           minLength={3}
           rows={6}
           placeholder="Ej: llanta trasera sin presión, no es seguro circular."

@@ -21,7 +21,7 @@ User (2026-10-07): "necesito tener un botón de devolver atrás en la inspecció
 ## Tasks
 - [x] T1 — Step order helper + "Atrás" control on every step (route: delegated writer, mapping 4+ files)
 - [x] T2 — Re-answer checklist items and documents with the current value preselected; documents list reachable and editable while EN_PROCESO
-- [ ] T3 — Re-edit kilometraje, declaración del conductor, fotos, resultado; consistent "Siguiente" after a correction
+- [x] T3 — Re-edit kilometraje, declaración del conductor, fotos, resultado; consistent "Siguiente" after a correction
 
 ## Acceptance criteria
 - From any step of an EN_PROCESO inspection, "Atrás" reaches the previous step, and so on back to the start.
@@ -48,7 +48,17 @@ TDD: strict / user global config / `npx vitest run`. RDD: off (global).
 - `DocumentoCheckItem`: resolved row has "Cambiar" (reopens checkbox / Reportar problema, with "Cancelar"). `editando` is closed explicitly on `marcarOk` and after the report form, because FALLA->FALLA does not change `estadoInicial` (the `estadoPrevio` resync would not fire).
 - Verified `responderItem` FALLA/MALO -> OK/BUENO/BAJO deletes the novedad and its Photo rows (S3 objects stay: known, documented limitation). BUG FOUND AND FIXED: it returned the already-deleted novedad in `{ novedad }` (test RED: "expected {…} to be null").
 - Open product question (signature): a CONDUCTOR `Firma` can exist while EN_PROCESO (worker signs at /confirmar and can then go back). Implemented the safe behavior: `invalidarFirmaConductor` (lib/inspections/firma-invalidacion.ts) deletes the CONDUCTOR firma + audit `INVALIDAR_FIRMA_CONDUCTOR` (with motivo) when a correction actually changes data (responderItem value/observation/novedad tipo/ubicación; novedad attachment added). Same-value saves keep the signature. S3 object stays and is overwritten on re-sign. This conflicts with the "Firma is immutable" wording of `crearFirma`: product should confirm that a not-yet-sent signature may be discarded.
+- T2 commit: 7853695.
 - T2 TDD: RED `npx vitest run lib/inspections/actions.test.ts` -> 3 failed (stale novedad returned after FALLA->OK; firma not invalidated on item change; firma not invalidated on novedad attachment). GREEN 66/66.
+
+### T3
+- `registrarKilometraje`, `registrarRespuestaEstadoConductor`, `registrarResultado` now run in a transaction and call `invalidarFirmaConductor` only when the stored value really changes (first answers and same-value saves do not). `registrarResultado(true)` after `false` clears the justification (already did; now tested).
+- `subirFotoInspeccion` now REPLACES an existing LATERAL/PLACA (updates the single `FotoInspeccion` row; audit `REEMPLAZAR_FOTO_INSPECCION`; best-effort `deleteObject` of the old key when the extension changed; same key is overwritten). It was previously blocked on purpose ("no se puede reemplazar"); still EN_PROCESO only. `/fotos` shows "Cambiar foto" (secondary style) next to a saved photo. The P2002 race message changed to "volvé a intentarlo".
+- Resultado page shows "Declaración actual" with the saved button ringed; justification textarea is prefilled. Kilometraje and estado-conductor were already prefilled.
+- After a correction every step still redirects via `getNextStepPath`: first pending step, or `/confirmar` when nothing is pending. Chosen over walking forward through answered steps because that would force N extra taps; to walk forward without changing anything the worker uses the item page "Siguiente" or the step's own "Continuar" (also jumps to first pending/confirmar). Documented decision; estado-conductor therefore jumps from a corrected question to the next pending step (not necessarily the next question).
+- Novedad attachment (`subirFotoNovedad`) still allows only one photo per novedad: replacing it is NOT implemented (out of the stated scope); to change it the worker flips the item to OK and back to FALLA.
+- T3 TDD: RED `actions.test.ts` + `foto-actions.test.ts` -> 7 failed; GREEN 198/198 in lib/inspections.
+- Live (dev server, throwaway worker, cleaned up afterwards): Atrás href chain verified from confirmar back to medidas; item/novedad prefill and progress counts (13 OK + 1 FALLA <-> 14 OK); kilometraje 1234 -> 1300; photo replace (LATERAL.jpg -> LATERAL.png, signature removed and audited); resultado Sí -> No with justification; after status PENDIENTE_APROBACION a stale form POST returned 500 and kilometraje stayed, every step page 307 -> /enviada. NOT verified live: clicking "Cambiar" on documents (client JS, no browser available) and visual layout.
 
 ## Next step
 T1–T3 via one delegated writer on branch `feat/correccion-respuestas-inspeccion` (stacked on `feat/panel-inicio-por-rol`).

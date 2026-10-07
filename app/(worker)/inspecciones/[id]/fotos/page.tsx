@@ -20,7 +20,8 @@ import { TipoFotoInspeccion } from "@/generated/prisma/client";
 // cámara trasera directo (`CapturaFotoInput`), auto-submit al elegir la
 // foto. `subirFotoInspeccion` (lib/inspections/foto-actions.ts) es la
 // validación real de backend — `enviarInspeccion` vuelve a exigir ambas
-// fotos antes de enviar.
+// fotos antes de enviar. Una foto ya subida se puede reemplazar ("Cambiar
+// foto") mientras la inspección siga EN_PROCESO.
 export default async function FotosInspeccionPage({
   params,
   searchParams,
@@ -81,24 +82,18 @@ export default async function FotosInspeccionPage({
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-gray-700">Foto lateral del vehículo</h2>
-        {lateral ? (
-          <p className="text-sm text-green-700">✓ Foto adjuntada.</p>
-        ) : (
-          <form action={subirLateralAction}>
-            <CapturaFotoInput />
-          </form>
-        )}
+        {lateral && <p className="text-sm text-green-700">✓ Foto adjuntada.</p>}
+        <form action={subirLateralAction}>
+          <CapturaFotoInput etiqueta={lateral ? "Cambiar foto" : "Tomar foto"} secundario={Boolean(lateral)} />
+        </form>
       </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-gray-700">Foto de la placa</h2>
-        {placa ? (
-          <p className="text-sm text-green-700">✓ Foto adjuntada.</p>
-        ) : (
-          <form action={subirPlacaAction}>
-            <CapturaFotoInput />
-          </form>
-        )}
+        {placa && <p className="text-sm text-green-700">✓ Foto adjuntada.</p>}
+        <form action={subirPlacaAction}>
+          <CapturaFotoInput etiqueta={placa ? "Cambiar foto" : "Tomar foto"} secundario={Boolean(placa)} />
+        </form>
       </section>
 
       {ambasCompletas && <ContinuarLink inspectionId={id} />}

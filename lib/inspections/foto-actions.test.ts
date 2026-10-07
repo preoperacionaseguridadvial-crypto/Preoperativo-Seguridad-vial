@@ -10,12 +10,14 @@ vi.mock("@/lib/auth/config", () => ({
 }));
 
 const mockUploadObject = vi.fn();
+const mockDeleteObject = vi.fn();
 vi.mock("@/lib/storage/s3", () => ({
   uploadObject: (...args: unknown[]) => mockUploadObject(...args),
+  deleteObject: (...args: unknown[]) => mockDeleteObject(...args),
 }));
 
 import { prisma } from "@/lib/prisma";
-import { Role, TipoFotoInspeccion } from "@/generated/prisma/client";
+import { Role, TipoFirma, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { subirFotoInspeccion } from "@/lib/inspections/foto-actions";
 import { MAX_FOTO_INSPECCION_BYTES } from "@/lib/storage/validar-archivo";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
@@ -50,6 +52,8 @@ beforeEach(async () => {
   mockAuth.mockReset();
   mockUploadObject.mockReset();
   mockUploadObject.mockResolvedValue(undefined);
+  mockDeleteObject.mockReset();
+  mockDeleteObject.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -148,5 +152,67 @@ describe("subirFotoInspeccion — discriminación de errores al crear FotoInspec
       subirFotoInspeccion(inspection.id, TipoFotoInspeccion.PLACA, crearFormDataConFoto()),
     ).rejects.toThrow("Connection terminated unexpectedly");
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Corrección (feature correccion-respuestas-inspeccion): mientras la
+// inspección siga EN_PROCESO la foto diaria se puede reemplazar. Sigue siendo
+// UNA fila por (inspección, tipo): el reemplazo actualiza la fila existente.
+describe("subirFotoInspeccion — reemplazar una foto ya subida", () => {
+  it("actualiza la fila existente (una sola por tipo), sube la nueva y borra el objeto anterior si cambió la key", async () => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: `fotos-inspeccion/${inspection.id}/LATERAL.jpg` },
+    });
+    const png = new File([PNG_MINIMO], "foto.png", { type: "image/png" });
+
+    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LATERAL, crearFormDataConFoto(png));
+
+    const fotos = await prisma.fotoInspeccion.findMany({ where: { inspectionId: inspection.id } });
+    expect(fotos).toHaveLength(1);
+    expect(fotos[0].s3Key).toBe(`fotos-inspeccion/${inspection.id}/LATERAL.png`);
+    expect(mockUploadObject).toHaveBeenCalledTimes(1);
+    expect(mockDeleteObject).toHaveBeenCalledWith(`fotos-inspeccion/${inspection.id}/LATERAL.jpg`);
+  });
+
+  it("con la misma key sobrescribe el objeto y no borra nada", async () => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: `fotos-inspeccion/${inspection.id}/PLACA.jpg` },
+    });
+
+    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.PLACA, crearFormDataConFoto());
+
+    expect(mockUploadObject).toHaveBeenCalledTimes(1);
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+    expect(await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id } })).toBe(1);
+  });
+
+  it("reemplazar una foto anula la firma del conductor y lo audita", async () => {
+    const { worker, inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: `fotos-inspeccion/${inspection.id}/LATERAL.jpg` },
+    });
+    await prisma.firma.create({
+      data: { inspectionId: inspection.id, userId: worker.id, tipo: TipoFirma.CONDUCTOR, s3Key: "firmas/test.png" },
+    });
+
+    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LATERAL, crearFormDataConFoto());
+
+    expect(await prisma.firma.count({ where: { inspectionId: inspection.id } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { entityId: inspection.id, action: "INVALIDAR_FIRMA_CONDUCTOR" } })).toBe(1);
+  });
+
+  it("no permite reemplazar una foto de una inspección que ya no está EN_PROCESO", async () => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "fotos-inspeccion/x/LATERAL.jpg" },
+    });
+    await prisma.inspection.update({ where: { id: inspection.id }, data: { status: "PENDIENTE_APROBACION" } });
+
+    await expect(
+      subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LATERAL, crearFormDataConFoto()),
+    ).rejects.toThrow(/ya no está en proceso/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
   });
 });

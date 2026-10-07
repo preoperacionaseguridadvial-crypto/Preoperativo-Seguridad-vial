@@ -1190,3 +1190,72 @@ describe("firma del conductor ante una corrección", () => {
     expect(await prisma.firma.count({ where: { inspectionId: inspection.id } })).toBe(0);
   });
 });
+
+describe("corregir kilometraje, declaración del conductor y resultado", () => {
+  async function prepararFirmada() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+    await registrarKilometraje(inspection.id, { kilometraje: 1000 });
+    await registrarRespuestaEstadoConductor(inspection.id, "consumioAlcohol", false);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+    return { worker, inspection };
+  }
+
+  const firmas = (inspectionId: string) => prisma.firma.count({ where: { inspectionId } });
+
+  it("cambiar el kilometraje ya registrado anula la firma; repetir el mismo valor no", async () => {
+    const { inspection } = await prepararFirmada();
+
+    await registrarKilometraje(inspection.id, { kilometraje: 1000 });
+    expect(await firmas(inspection.id)).toBe(1);
+
+    const corregido = await registrarKilometraje(inspection.id, { kilometraje: 1250 });
+    expect(corregido.kilometraje).toBe(1250);
+    expect(await firmas(inspection.id)).toBe(0);
+  });
+
+  it("cambiar una respuesta de la declaración anula la firma; repetirla no", async () => {
+    const { inspection } = await prepararFirmada();
+
+    await registrarRespuestaEstadoConductor(inspection.id, "consumioAlcohol", false);
+    expect(await firmas(inspection.id)).toBe(1);
+
+    await registrarRespuestaEstadoConductor(inspection.id, "consumioAlcohol", true);
+    expect(await firmas(inspection.id)).toBe(0);
+  });
+
+  it("cambiar el resultado anula la firma; repetirlo no", async () => {
+    const { inspection } = await prepararFirmada();
+
+    await registrarResultado(inspection.id, true);
+    expect(await firmas(inspection.id)).toBe(1);
+
+    await registrarResultado(inspection.id, false, "Llanta sin presión");
+    expect(await firmas(inspection.id)).toBe(0);
+  });
+
+  it("volver de 'no puede operar' a 'puede operar' limpia la justificación", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+    await registrarResultado(inspection.id, false, "Llanta sin presión");
+
+    const corregido = await registrarResultado(inspection.id, true);
+
+    expect(corregido.puedeOperar).toBe(true);
+    expect(corregido.justificacionNoOperar).toBeNull();
+  });
+
+  it("repetir la misma justificación no anula la firma, cambiarla sí", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    loginComo(worker);
+    await registrarResultado(inspection.id, false, "Llanta sin presión");
+    await firmarComoConductor(inspection.id, worker.id);
+
+    await registrarResultado(inspection.id, false, "  Llanta sin presión ");
+    expect(await firmas(inspection.id)).toBe(1);
+
+    await registrarResultado(inspection.id, false, "Llanta sin presión y sin freno");
+    expect(await firmas(inspection.id)).toBe(0);
+  });
+});

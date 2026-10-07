@@ -22,7 +22,15 @@ import { comprimirFotoEnNavegador } from "@/lib/imagenes/adaptador-navegador";
  * Debe renderizarse DENTRO del `<form>` (usa `useFormStatus` para saber cuándo
  * termina el envío y no dejar el botón bloqueado si la acción devuelve error).
  */
-export function CapturaFotoInput() {
+export function CapturaFotoInput({
+  etiqueta = "Tomar foto",
+  secundario = false,
+}: {
+  /** Texto del botón en reposo (p. ej. "Cambiar foto" al reemplazar una ya subida). */
+  etiqueta?: string;
+  /** Estilo discreto (borde) para acciones de reemplazo, en vez del botón principal. */
+  secundario?: boolean;
+} = {}) {
   const [procesando, setProcesando] = useState(false);
   // Guarda contra re-entrada síncrona: `procesando` (estado) se actualiza en el
   // siguiente render, la ref es inmediata ante un doble toque.
@@ -65,11 +73,13 @@ export function CapturaFotoInput() {
   return (
     <label
       aria-busy={ocupado}
-      className={`block w-full cursor-pointer rounded-md bg-[#2E9BD6] px-4 py-4 text-center text-base font-semibold text-white hover:bg-[#2E9BD6]/90${
-        ocupado ? " pointer-events-none opacity-70" : ""
-      }`}
+      className={`block w-full cursor-pointer rounded-md px-4 py-4 text-center text-base font-semibold ${
+        secundario
+          ? "border border-brand bg-surface text-brand hover:bg-brand/5"
+          : "bg-[#2E9BD6] text-white hover:bg-[#2E9BD6]/90"
+      }${ocupado ? " pointer-events-none opacity-70" : ""}`}
     >
-      {procesando ? "Procesando foto…" : enviando ? "Subiendo foto…" : "Tomar foto"}
+      {procesando ? "Procesando foto…" : enviando ? "Subiendo foto…" : etiqueta}
       <input
         type="file"
         name="file"
