@@ -1,5 +1,5 @@
 import type { InspectionStatus } from "@/generated/prisma/client";
-import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
+import { esReutilizable } from "@/lib/inspections/reuso-inspeccion";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 
 // Acción principal de la pantalla de inicio del TRABAJADOR, derivada de su
@@ -41,8 +41,7 @@ export function accionPrincipalTrabajador(
   ultima: InspeccionResumen | null,
   ahora: Date = new Date(),
 ): AccionTrabajador {
-  const limite = ahora.getTime() - VENTANA_REUSO_INSPECCION_HORAS * 60 * 60 * 1000;
-  if (!ultima || ultima.startedAt.getTime() < limite) {
+  if (!ultima || !esReutilizable(ultima.startedAt, ahora)) {
     return ACCION_INICIAR;
   }
 

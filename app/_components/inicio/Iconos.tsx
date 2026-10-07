@@ -1,6 +1,7 @@
 // Íconos SVG en línea del inicio por rol (mismo estilo que la lista de
 // aprobaciones: trazo 1.8–2, currentColor, decorativos).
 import type { IconoAtajo } from "@/lib/inicio/atajos";
+import type { IconoPaso } from "@/lib/inspections/pasos-flujo";
 
 type Props = { className?: string };
 
@@ -72,6 +73,48 @@ export function IconoDeAtajo({ icono, className = "size-6" }: { icono: IconoAtaj
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
       {TRAZOS_ATAJO[icono]}
+    </svg>
+  );
+}
+
+const TRAZOS_PASO: Record<IconoPaso, React.ReactNode> = {
+  kilometraje: (
+    <>
+      <path d="M4 17a8 8 0 1116 0" strokeLinecap="round" />
+      <path d="M12 17l4-5" strokeLinecap="round" />
+    </>
+  ),
+  checklist: (
+    <>
+      <path d="M4 7l1.5 1.5L8 6M4 13l1.5 1.5L8 12M4 19l1.5 1.5L8 18" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 7h8M12 13h8M12 19h8" strokeLinecap="round" />
+    </>
+  ),
+  conductor: (
+    <>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" strokeLinecap="round" />
+    </>
+  ),
+  fotos: (
+    <>
+      <path d="M4 8h3l1.5-2h7L17 8h3v11H4z" strokeLinejoin="round" />
+      <circle cx="12" cy="13.5" r="3.2" />
+    </>
+  ),
+  resultado: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5 12.5l2.5 2.5 4.5-5" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  firma: <path d="M4 18c3-1 4-8 6-8s0 6 2 6 2-3 3-3 1 2 3 2M4 21h16" strokeLinecap="round" strokeLinejoin="round" />,
+};
+
+export function IconoDePaso({ icono, className = "size-5" }: { icono: IconoPaso; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      {TRAZOS_PASO[icono]}
     </svg>
   );
 }
