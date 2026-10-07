@@ -7,11 +7,14 @@ import {
   getOwnInspectionOrNotFound,
   getNextStepPath,
   getChecklistItemById,
-  getAdjacentChecklistItemIds,
+  getPreviousStepPath,
+  getFollowingStepPath,
   getChecklistEstadoCompleto,
+  CATEGORIA_SIN_PANTALLA_PROPIA,
 } from "@/lib/inspections/queries";
 import { responderItem } from "@/lib/inspections/actions";
 import { imagenesDelItem } from "@/lib/inspections/imagenes";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { GaleriaReferencia } from "@/app/(worker)/inspecciones/_components/GaleriaReferencia";
 import { RespuestaChecklistItem } from "@/app/(worker)/inspecciones/_components/RespuestaChecklistItem";
 import { RespuestaTriestadoItem } from "@/app/(worker)/inspecciones/_components/RespuestaTriestadoItem";
@@ -50,7 +53,14 @@ export default async function ChecklistItemPage({
     notFound();
   }
 
-  const { previousItemId, nextItemId } = await getAdjacentChecklistItemIds(id, itemId);
+  // "Atrás" sigue el orden real del flujo (cruza categorías, hasta el
+  // kilometraje). Un ítem de Documentación no es un paso propio (es parte de la
+  // pantalla de lista), así que desde acá "Atrás" vuelve a esa lista.
+  const hrefAtras =
+    (await getPreviousStepPath(id, `checklist/${itemId}`)) ??
+    (item.category.nombre === CATEGORIA_SIN_PANTALLA_PROPIA
+      ? `/inspecciones/${id}/checklist`
+      : `/inspecciones/${id}/medidas`);
 
   // Mismo cálculo que la pantalla de lista (checklist/page.tsx) — misma
   // fuente de verdad (getChecklistEstadoCompleto), para que el progreso
@@ -62,6 +72,14 @@ export default async function ChecklistItemPage({
   const noConformes = allItems.filter((i) => i.estado === "FALLA" || i.estado === "MALO").length;
   const pendientes = allItems.filter((i) => i.estado === "PENDIENTE").length;
   const revisados = totalItems - pendientes;
+
+  // "Siguiente →" solo con el ítem ya respondido: permite recorrer hacia
+  // adelante lo que se revisa con "Atrás" sin tener que volver a guardar. Un
+  // ítem sin responder se sigue resolviendo respondiéndolo (el servidor exige
+  // el checklist completo antes de confirmar).
+  const respuestaActual = inspection.respuestas.find((r) => r.checklistItemId === itemId);
+  const yaRespondido = allItems.find((i) => i.id === itemId)?.estado !== "PENDIENTE";
+  const hrefSiguiente = yaRespondido ? await getFollowingStepPath(id, `checklist/${itemId}`) : null;
 
   /**
    * Marca el ítem como OK, sin pedir ubicación — ni siquiera para "Rayones":
@@ -118,6 +136,8 @@ export default async function ChecklistItemPage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-6">
+      <BotonAtras href={hrefAtras} />
+
       <ProgresoInspeccion
         revisados={revisados}
         total={totalItems}
@@ -143,6 +163,7 @@ export default async function ChecklistItemPage({
             itemId={itemId}
             marcarBueno={marcarBueno}
             marcarBajo={marcarBajo}
+            valorActual={respuestaActual?.valor}
           />
         ) : (
           <RespuestaChecklistItem
@@ -151,32 +172,21 @@ export default async function ChecklistItemPage({
             pideUbicacion={item.pideUbicacion}
             marcarOk={marcarOk}
             marcarFallaConUbicacion={item.pideUbicacion ? marcarFallaConUbicacion : undefined}
+            valorActual={respuestaActual?.valor}
+            ubicacionInicial={respuestaActual?.novedad ? (respuestaActual.observacion ?? "") : ""}
+            tipoInicial={respuestaActual?.novedad?.tipo ?? ""}
           />
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        {previousItemId ? (
-          <Link
-            href={`/inspecciones/${id}/checklist/${previousItemId}`}
-            className="flex-1 rounded-md border border-[#D9E2EA] bg-white px-4 py-3 text-center text-sm font-medium text-[#005B96] hover:bg-gray-50"
-          >
-            ← Anterior
-          </Link>
-        ) : (
-          <span className="flex-1" />
-        )}
-        {nextItemId ? (
-          <Link
-            href={`/inspecciones/${id}/checklist/${nextItemId}`}
-            className="flex-1 rounded-md border border-[#D9E2EA] bg-white px-4 py-3 text-center text-sm font-medium text-[#005B96] hover:bg-gray-50"
-          >
-            Siguiente →
-          </Link>
-        ) : (
-          <span className="flex-1" />
-        )}
-      </div>
+      {hrefSiguiente && (
+        <Link
+          href={hrefSiguiente}
+          className="block w-full rounded-md border border-[#D9E2EA] bg-white px-4 py-3 text-center text-sm font-medium text-[#005B96] hover:bg-gray-50"
+        >
+          Siguiente →
+        </Link>
+      )}
     </main>
   );
 }

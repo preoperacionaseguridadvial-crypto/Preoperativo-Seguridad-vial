@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
-import { getOwnInspectionOrNotFound, getNextStepPath } from "@/lib/inspections/queries";
+import { getOwnInspectionOrNotFound, getNextStepPath, getPreviousStepPath } from "@/lib/inspections/queries";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { registrarResultado } from "@/lib/inspections/actions";
 
 // Resultado final (sección 13 del brief): declaración PERSONAL del
@@ -23,6 +24,11 @@ export default async function ResultadoPage({ params }: { params: Promise<{ id: 
     redirect(await getNextStepPath(id));
   }
 
+  const hrefAtras = (await getPreviousStepPath(id, "resultado")) ?? `/inspecciones/${id}/fotos`;
+
+  // Corrección: se indica la declaración ya guardada y se resalta su botón.
+  const yaDeclaro = inspection.puedeOperar !== null;
+
   async function marcarPuedeOperar() {
     "use server";
     await registrarResultado(id, true);
@@ -31,6 +37,7 @@ export default async function ResultadoPage({ params }: { params: Promise<{ id: 
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-4 py-8">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-2xl font-semibold text-[#0B3B60]">
@@ -38,11 +45,23 @@ export default async function ResultadoPage({ params }: { params: Promise<{ id: 
         </h1>
       </div>
 
+      {yaDeclaro && (
+        <p className="rounded-md bg-status-info-soft px-3 py-2 text-sm text-status-info-ink">
+          Declaración actual:{" "}
+          <span className="font-semibold">
+            {inspection.puedeOperar ? "Sí está en condiciones" : "No está en condiciones"}
+          </span>
+          . Tocá la otra opción para cambiarla.
+        </p>
+      )}
+
       <div className="flex flex-col gap-3">
         <form action={marcarPuedeOperar}>
           <button
             type="submit"
-            className="w-full rounded-md bg-green-600 px-4 py-5 text-lg font-semibold text-white hover:bg-green-700"
+            className={`w-full rounded-md bg-green-600 px-4 py-5 text-lg font-semibold text-white hover:bg-green-700${
+              inspection.puedeOperar === true ? " ring-4 ring-brand/40 ring-offset-2" : ""
+            }`}
           >
             ✓ Sí, declaro que está en condiciones
           </button>
@@ -50,7 +69,9 @@ export default async function ResultadoPage({ params }: { params: Promise<{ id: 
 
         <Link
           href={`/inspecciones/${id}/resultado/no-puede-operar`}
-          className="block w-full rounded-md bg-red-600 px-4 py-5 text-center text-lg font-semibold text-white hover:bg-red-700"
+          className={`block w-full rounded-md bg-red-600 px-4 py-5 text-center text-lg font-semibold text-white hover:bg-red-700${
+            inspection.puedeOperar === false ? " ring-4 ring-brand/40 ring-offset-2" : ""
+          }`}
         >
           ✕ No, no está en condiciones
         </Link>

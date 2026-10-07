@@ -30,6 +30,21 @@ export function requiereAtencionEstadoConductor(inspection: {
 }
 
 /**
+ * "Requiere atención" de una inspección pendiente de revisión: NO apta para
+ * operar, o con una respuesta preocupante en el estado del conductor. Es la
+ * definición única de la lista de aprobaciones del Supervisor y del resumen
+ * de su pantalla de inicio — así los conteos nunca se desfasan.
+ */
+export function requiereAtencionPendiente(inspection: {
+  status: string;
+  tomaMedicamentos: boolean | null;
+  condicionesAptas: boolean | null;
+  consumioAlcohol: boolean | null;
+}): boolean {
+  return inspection.status === "NO_APTA_PARA_OPERAR" || requiereAtencionEstadoConductor(inspection);
+}
+
+/**
  * Preguntas de la declaración del conductor, en el orden en que se muestran:
  * una pantalla por pregunta (pedido del dueño de producto, 2026-09-18), con el
  * texto textual del formato. `campo` es la columna de `Inspection` donde se

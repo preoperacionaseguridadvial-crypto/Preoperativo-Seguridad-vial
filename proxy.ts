@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/base-config";
-import type { Role } from "@/generated/prisma/client";
+import { getRequiredRoles } from "@/lib/auth/route-roles";
 
 // Aunque Proxy (Next.js 16+, antes "middleware") corre en Node.js runtime
 // por defecto, se usa igual `authConfig` (sin el Credentials provider) en
@@ -15,39 +15,8 @@ const { auth } = NextAuth(authConfig);
 // (si no, nadie podría iniciar sesión).
 const PUBLIC_PATHS = ["/login", "/api/auth"];
 
-/**
- * Prefijos de ruta -> roles permitidos. Esta es la primera barrera (a nivel
- * de ruta); la validación de negocio real vuelve a hacerse siempre dentro de
- * cada server action / route handler con `requireRole` (ver
- * lib/auth/requireRole.ts), porque Proxy nunca debe ser la única defensa.
- *
- * Fase 1 dejó este mapa vacío a propósito. Fase 2 agrega el flujo de
- * checklist del trabajador; Fase 3 agrega la revisión del Supervisor. El
- * resto (dashboard) sigue pendiente para fases futuras.
- */
-const ROLE_ROUTE_PREFIXES: Record<string, Role[]> = {
-  "/inspecciones": ["TRABAJADOR"],
-  "/aprobaciones": ["SUPERVISOR"],
-  "/consulta-inspecciones": ["DIRECTOR", "SST", "SUPERVISOR", "ADMINISTRADOR"],
-  "/dashboard": ["DIRECTOR", "SST", "ADMINISTRADOR"],
-  // SST tiene los mismos permisos que ADMINISTRADOR en todo el panel
-  // (decisión del usuario, 2026-09-18): usuarios, hoja de vida y
-  // configuración. Si se agrega un permiso nuevo a ADMINISTRADOR, agregarlo
-  // también a SST (y a su requireRole).
-  "/admin": ["ADMINISTRADOR", "SST"],
-};
-
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-}
-
-function getRequiredRoles(pathname: string): Role[] | null {
-  for (const [prefix, roles] of Object.entries(ROLE_ROUTE_PREFIXES)) {
-    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
-      return roles;
-    }
-  }
-  return null;
 }
 
 export default auth((req) => {

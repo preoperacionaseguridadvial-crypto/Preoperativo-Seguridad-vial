@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   PREGUNTAS_ESTADO_CONDUCTOR,
   requiereAtencionEstadoConductor,
+  requiereAtencionPendiente,
   siguientePreguntaEstadoConductor,
 } from "@/lib/inspections/estado-conductor";
 
@@ -125,5 +126,23 @@ describe("siguientePreguntaEstadoConductor", () => {
     expect(
       siguientePreguntaEstadoConductor({ tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false }),
     ).toBeNull();
+  });
+});
+
+// Misma definición que usa la lista de aprobaciones y el resumen del inicio
+// del Supervisor: una sola función para que los conteos nunca se desfasen.
+describe("requiereAtencionPendiente", () => {
+  const limpia = { tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false };
+
+  it("NO_APTA_PARA_OPERAR siempre requiere atención", () => {
+    expect(requiereAtencionPendiente({ status: "NO_APTA_PARA_OPERAR", ...limpia })).toBe(true);
+  });
+
+  it("una pendiente con alerta del conductor requiere atención", () => {
+    expect(requiereAtencionPendiente({ status: "PENDIENTE_APROBACION", ...limpia, consumioAlcohol: true })).toBe(true);
+  });
+
+  it("una pendiente sin alertas no requiere atención", () => {
+    expect(requiereAtencionPendiente({ status: "PENDIENTE_APROBACION", ...limpia })).toBe(false);
   });
 });

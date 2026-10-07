@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound, getNextStepPath, getNovedadForWorker } from "@/lib/inspections/queries";
 import { subirFotoNovedad } from "@/lib/inspections/actions";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { CapturaFotoInput } from "@/app/(worker)/inspecciones/_components/CapturaFotoInput";
 
 // Pantalla de foto (sección 11 del brief): se usa desde el celular en el
@@ -25,7 +26,10 @@ export default async function FotoNovedadPage({
     redirect("/login");
   }
 
-  await getOwnInspectionOrNotFound(id, session.user.id);
+  const inspection = await getOwnInspectionOrNotFound(id, session.user.id);
+  if (inspection.status !== "EN_PROCESO") {
+    redirect(await getNextStepPath(id));
+  }
   const novedad = await getNovedadForWorker(novedadId);
   if (!novedad || novedad.inspectionId !== id) {
     notFound();
@@ -36,10 +40,18 @@ export default async function FotoNovedadPage({
     await subirFotoNovedad(novedadId, formData);
   }
 
+  // Vuelve al formulario de la novedad (el ítem de Documentación no tiene
+  // pantalla propia: su formulario cuelga de la lista).
+  const checklistItemId = novedad.inspectionItemResponse?.checklistItemId;
+  const hrefAtras = checklistItemId
+    ? `/inspecciones/${id}/checklist/${checklistItemId}/novedad`
+    : `/inspecciones/${id}`;
+
   const itemNombre = novedad.inspectionItemResponse?.checklistItem.nombre ?? "Novedad";
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{itemNombre}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Agregar foto</h1>

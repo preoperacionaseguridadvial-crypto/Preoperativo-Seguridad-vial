@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { TipoNovedad } from "@/generated/prisma/client";
+import type { RespuestaChecklist, TipoNovedad } from "@/generated/prisma/client";
+import { ANILLO_ACTUAL, RespuestaActual } from "@/app/(worker)/inspecciones/_components/RespuestaActual";
 import { TIPOS_NOVEDAD_CARROCERIA, TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 
 /**
@@ -17,6 +18,11 @@ import { TIPOS_NOVEDAD_CARROCERIA, TIPO_NOVEDAD_LABELS } from "@/lib/inspections
  * selector de tipo (acotado a daños de carrocería) solo aparecen después de
  * tocar FALLA, como un segundo paso inline en vez de navegar a la pantalla
  * de novedad genérica — por eso vive como state de este client component.
+ *
+ * Corrección de respuestas: si el ítem ya fue respondido (`valorActual`), se
+ * indica la respuesta actual y su botón queda resaltado; el trabajador puede
+ * tocar el otro para cambiarla. `ubicacionInicial` / `tipoInicial` precargan el
+ * formulario inline de "Rayones" con la novedad existente.
  */
 export function RespuestaChecklistItem({
   idInspeccion,
@@ -24,24 +30,33 @@ export function RespuestaChecklistItem({
   pideUbicacion,
   marcarOk,
   marcarFallaConUbicacion,
+  valorActual,
+  ubicacionInicial = "",
+  tipoInicial = "",
 }: {
   idInspeccion: string;
   itemId: string;
   pideUbicacion: boolean;
   marcarOk: () => Promise<void>;
   marcarFallaConUbicacion?: (formData: FormData) => Promise<void>;
+  valorActual?: RespuestaChecklist;
+  ubicacionInicial?: string;
+  tipoInicial?: TipoNovedad | "";
 }) {
   const [mostrarFormularioFalla, setMostrarFormularioFalla] = useState(false);
-  const [ubicacion, setUbicacion] = useState("");
-  const [tipo, setTipo] = useState<TipoNovedad | "">("");
+  const [ubicacion, setUbicacion] = useState(ubicacionInicial);
+  const [tipo, setTipo] = useState<TipoNovedad | "">(tipoInicial);
+  const okActual = valorActual === "OK";
+  const fallaActual = valorActual === "FALLA";
 
   if (!pideUbicacion || !marcarFallaConUbicacion) {
     return (
       <div className="flex flex-col gap-3">
+        <RespuestaActual valorActual={valorActual} />
         <form action={marcarOk}>
           <button
             type="submit"
-            className="w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]"
+            className={`w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]${okActual ? ANILLO_ACTUAL : ""}`}
           >
             ✓ OK
           </button>
@@ -49,7 +64,7 @@ export function RespuestaChecklistItem({
 
         <Link
           href={`/inspecciones/${idInspeccion}/checklist/${itemId}/novedad`}
-          className="block w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-center text-lg font-semibold text-white hover:bg-[#B91C1C]"
+          className={`block w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-center text-lg font-semibold text-white hover:bg-[#B91C1C]${fallaActual ? ANILLO_ACTUAL : ""}`}
         >
           ✕ FALLA / DAÑO / FALTANTE
         </Link>
@@ -60,10 +75,11 @@ export function RespuestaChecklistItem({
   if (!mostrarFormularioFalla) {
     return (
       <div className="flex flex-col gap-3">
+        <RespuestaActual valorActual={valorActual} />
         <form action={marcarOk}>
           <button
             type="submit"
-            className="w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]"
+            className={`w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]${okActual ? ANILLO_ACTUAL : ""}`}
           >
             ✓ OK
           </button>
@@ -72,7 +88,7 @@ export function RespuestaChecklistItem({
         <button
           type="button"
           onClick={() => setMostrarFormularioFalla(true)}
-          className="w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-lg font-semibold text-white hover:bg-[#B91C1C]"
+          className={`w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-lg font-semibold text-white hover:bg-[#B91C1C]${fallaActual ? ANILLO_ACTUAL : ""}`}
         >
           ✕ FALLA / DAÑO / FALTANTE
         </button>

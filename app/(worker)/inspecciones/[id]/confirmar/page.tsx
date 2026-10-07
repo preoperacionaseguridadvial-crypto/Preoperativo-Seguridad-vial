@@ -3,12 +3,14 @@ import { auth } from "@/lib/auth/config";
 import {
   getOwnInspectionOrNotFound,
   getNextStepPath,
+  getPreviousStepPath,
   getInspectionForWorker,
   getFirmasInspeccion,
 } from "@/lib/inspections/queries";
 import { enviarInspeccion } from "@/lib/inspections/actions";
 import { guardarFirmaConductor } from "@/lib/inspections/firma-actions";
 import { filtrarNoConformes } from "@/lib/inspections/respuesta";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { FirmaCanvas } from "@/app/_components/FirmaCanvas";
 
 // Pantalla de confirmación antes de enviar (última del flujo): resume lo
@@ -57,6 +59,7 @@ export default async function ConfirmarPage({
   }
 
   const { conductor: firmaConductor } = await getFirmasInspeccion(id);
+  const hrefAtras = (await getPreviousStepPath(id, "confirmar")) ?? `/inspecciones/${id}/resultado`;
 
   // Corrección Slice 2 (hallazgo CRITICAL #5): antes solo miraba
   // `valor === "FALLA"` — un ítem TRIESTADO de fluidos en MALO (que sí crea
@@ -96,6 +99,7 @@ export default async function ConfirmarPage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-3 px-4 py-4">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-lg font-semibold text-[#0B3B60]">Confirmar envío</h1>

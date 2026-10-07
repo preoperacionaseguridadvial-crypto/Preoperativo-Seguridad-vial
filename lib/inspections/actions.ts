@@ -16,6 +16,7 @@ import {
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
 import { esNovedad, valoresPermitidos } from "@/lib/inspections/respuesta";
+import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
 
 // Server actions del flujo de inspección del TRABAJADOR (Fase 2). Todas
 // validan rol vía `requireRole` (nunca confían en el frontend) y, cuando
@@ -257,17 +258,20 @@ export async function registrarKilometraje(
   data: { kilometraje: number },
 ) {
   const session = await requireRole([Role.TRABAJADOR]);
-  await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
 
   if (!Number.isFinite(data.kilometraje) || data.kilometraje < 0) {
     throw new Error("Kilometraje inválido.");
   }
 
-  return prisma.inspection.update({
-    where: { id: inspectionId },
-    data: {
-      kilometraje: Math.trunc(data.kilometraje),
-    },
+  const kilometraje = Math.trunc(data.kilometraje);
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.inspection.update({ where: { id: inspectionId }, data: { kilometraje } });
+    // Corregir un kilometraje ya registrado cambia lo que el conductor firmó.
+    if (inspection.kilometraje !== null && inspection.kilometraje !== kilometraje) {
+      await invalidarFirmaConductor(inspectionId, session.user.id, "Cambio de kilometraje", tx);
+    }
+    return updated;
   });
 }
 
@@ -376,12 +380,15 @@ export async function responderItem(
           },
         });
 
+    // Corrección FALLA/MALO -> OK/BUENO/BAJO: la Novedad deja de existir con
+    // sus adjuntos (en base de datos). `novedad` queda en null para que el
+    // retorno no devuelva una Novedad ya borrada.
+    let novedad = existing?.novedad ?? null;
     if (existing?.novedad && !esNovedad(valor)) {
       await tx.photo.deleteMany({ where: { novedadId: existing.novedad.id } });
       await tx.novedad.delete({ where: { id: existing.novedad.id } });
+      novedad = null;
     }
-
-    let novedad = existing?.novedad ?? null;
     if (esNovedad(valor)) {
       const descripcionNovedad = item.pideUbicacion
         ? TIPO_NOVEDAD_LABELS[tipo!]
@@ -402,6 +409,19 @@ export async function responderItem(
               ubicacion: ubicacionNovedad,
             },
           });
+    }
+
+    // Una firma del conductor previa solo deja de valer si la respuesta
+    // realmente cambió (guardar lo mismo al revisar un paso no la anula).
+    const cambio =
+      !existing ||
+      existing.valor !== valor ||
+      (existing.observacion ?? "") !== observacionLimpia ||
+      (esNovedad(valor) &&
+        (existing.novedad?.tipo !== tipo ||
+          (existing.novedad?.ubicacion ?? null) !== (novedad?.ubicacion ?? null)));
+    if (cambio) {
+      await invalidarFirmaConductor(inspectionId, session.user.id, `Cambio en el ítem "${item.nombre}"`, tx);
     }
 
     return { response: saved, novedad };
@@ -452,9 +472,12 @@ export async function subirFotoNovedad(novedadId: string, formData: FormData) {
 
   await uploadObject({ key, body: buffer, contentType });
 
-  return prisma.photo.create({
+  const foto = await prisma.photo.create({
     data: { novedadId, s3Key: key },
   });
+  // Un adjunto nuevo cambia lo que el conductor firmó (ver firma-invalidacion.ts).
+  await invalidarFirmaConductor(novedad.inspectionId, session.user.id, "Adjunto agregado a una novedad");
+  return foto;
 }
 
 /**
@@ -467,19 +490,28 @@ export async function registrarResultado(
   justificacion?: string,
 ) {
   const session = await requireRole([Role.TRABAJADOR]);
-  await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
 
   const justificacionLimpia = justificacion?.trim() || "";
   if (!puedeOperar && !justificacionLimpia) {
     throw new Error("La justificación es obligatoria cuando el vehículo no puede operar.");
   }
 
-  return prisma.inspection.update({
-    where: { id: inspectionId },
-    data: {
-      puedeOperar,
-      justificacionNoOperar: puedeOperar ? null : justificacionLimpia,
-    },
+  const justificacionNoOperar = puedeOperar ? null : justificacionLimpia;
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.inspection.update({
+      where: { id: inspectionId },
+      data: { puedeOperar, justificacionNoOperar },
+    });
+    // Corrección de un resultado ya declarado (valor o justificación distintos).
+    if (
+      inspection.puedeOperar !== null &&
+      (inspection.puedeOperar !== puedeOperar ||
+        (inspection.justificacionNoOperar ?? null) !== justificacionNoOperar)
+    ) {
+      await invalidarFirmaConductor(inspectionId, session.user.id, "Cambio en la declaración final", tx);
+    }
+    return updated;
   });
 }
 
@@ -516,12 +548,19 @@ export async function registrarRespuestaEstadoConductor(
   };
   const declaracionCompleta = Object.values(respuestas).every((respuesta) => respuesta !== null);
 
-  return prisma.inspection.update({
-    where: { id: inspectionId },
-    data: {
-      [campo]: valor,
-      ...(declaracionCompleta ? { declaracionEstadoAt: new Date() } : {}),
-    },
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.inspection.update({
+      where: { id: inspectionId },
+      data: {
+        [campo]: valor,
+        ...(declaracionCompleta ? { declaracionEstadoAt: new Date() } : {}),
+      },
+    });
+    // Corrección de una respuesta ya dada (null = primera vez, no cuenta).
+    if (inspection[campo] !== null && inspection[campo] !== valor) {
+      await invalidarFirmaConductor(inspectionId, session.user.id, "Cambio en la declaración del conductor", tx);
+    }
+    return updated;
   });
 }
 

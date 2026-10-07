@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { auth } from "@/lib/auth/config";
-import { getOwnInspectionOrNotFound, getNextStepPath } from "@/lib/inspections/queries";
+import { getOwnInspectionOrNotFound, getNextStepPath, getPreviousStepPath } from "@/lib/inspections/queries";
 import { registrarRespuestaEstadoConductor } from "@/lib/inspections/actions";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { GaleriaReferencia } from "@/app/(worker)/inspecciones/_components/GaleriaReferencia";
 import {
   PREGUNTAS_ESTADO_CONDUCTOR,
@@ -45,6 +45,10 @@ export default async function EstadoConductorPage({
     );
   }
 
+  // "Atrás": pregunta anterior; desde la primera, el último paso del checklist.
+  const hrefAtras =
+    (await getPreviousStepPath(id, `estado-conductor?paso=${numero}`)) ?? `/inspecciones/${id}/checklist`;
+
   const campo = pregunta.campo;
   const respuestaActual = inspection[campo];
 
@@ -66,6 +70,7 @@ export default async function EstadoConductorPage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Declaración del conductor</h1>
@@ -115,14 +120,6 @@ export default async function EstadoConductorPage({
         </button>
       </form>
 
-      {numero > 1 && (
-        <Link
-          href={`/inspecciones/${id}/estado-conductor?paso=${numero - 1}`}
-          className="text-sm text-[#005B96] hover:underline"
-        >
-          ← Pregunta anterior
-        </Link>
-      )}
     </main>
   );
 }

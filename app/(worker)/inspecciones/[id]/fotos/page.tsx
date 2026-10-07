@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
-import { getOwnInspectionOrNotFound, getNextStepPath, getFotosInspeccion } from "@/lib/inspections/queries";
+import {
+  getOwnInspectionOrNotFound,
+  getNextStepPath,
+  getPreviousStepPath,
+  getFotosInspeccion,
+} from "@/lib/inspections/queries";
 import { subirFotoInspeccion } from "@/lib/inspections/foto-actions";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { CapturaFotoInput } from "@/app/(worker)/inspecciones/_components/CapturaFotoInput";
 import { TipoFotoInspeccion } from "@/generated/prisma/client";
 
@@ -14,7 +20,8 @@ import { TipoFotoInspeccion } from "@/generated/prisma/client";
 // cámara trasera directo (`CapturaFotoInput`), auto-submit al elegir la
 // foto. `subirFotoInspeccion` (lib/inspections/foto-actions.ts) es la
 // validación real de backend — `enviarInspeccion` vuelve a exigir ambas
-// fotos antes de enviar.
+// fotos antes de enviar. Una foto ya subida se puede reemplazar ("Cambiar
+// foto") mientras la inspección siga EN_PROCESO.
 export default async function FotosInspeccionPage({
   params,
   searchParams,
@@ -35,6 +42,8 @@ export default async function FotosInspeccionPage({
   }
 
   const { lateral, placa } = await getFotosInspeccion(id);
+  const hrefAtras =
+    (await getPreviousStepPath(id, "fotos")) ?? `/inspecciones/${id}/estado-conductor?paso=3`;
 
   async function subirLateralAction(formData: FormData) {
     "use server";
@@ -62,6 +71,7 @@ export default async function FotosInspeccionPage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Fotos del vehículo</h1>
@@ -72,24 +82,18 @@ export default async function FotosInspeccionPage({
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-gray-700">Foto lateral del vehículo</h2>
-        {lateral ? (
-          <p className="text-sm text-green-700">✓ Foto adjuntada.</p>
-        ) : (
-          <form action={subirLateralAction}>
-            <CapturaFotoInput />
-          </form>
-        )}
+        {lateral && <p className="text-sm text-green-700">✓ Foto adjuntada.</p>}
+        <form action={subirLateralAction}>
+          <CapturaFotoInput etiqueta={lateral ? "Cambiar foto" : "Tomar foto"} secundario={Boolean(lateral)} />
+        </form>
       </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-gray-700">Foto de la placa</h2>
-        {placa ? (
-          <p className="text-sm text-green-700">✓ Foto adjuntada.</p>
-        ) : (
-          <form action={subirPlacaAction}>
-            <CapturaFotoInput />
-          </form>
-        )}
+        {placa && <p className="text-sm text-green-700">✓ Foto adjuntada.</p>}
+        <form action={subirPlacaAction}>
+          <CapturaFotoInput etiqueta={placa ? "Cambiar foto" : "Tomar foto"} secundario={Boolean(placa)} />
+        </form>
       </section>
 
       {ambasCompletas && <ContinuarLink inspectionId={id} />}

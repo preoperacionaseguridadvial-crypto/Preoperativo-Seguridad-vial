@@ -7,6 +7,8 @@ import {
   getAdjacentChecklistItemIds,
   getFotosInspeccion,
   getNextStepPath,
+  getPreviousStepPath,
+  getFollowingStepPath,
   categoriasParaLista,
 } from "@/lib/inspections/queries";
 import {
@@ -328,9 +330,30 @@ describe("getNextStepPath — recorrido guiado del checklist", () => {
   });
 });
 
-// La pantalla de lista (`/checklist`) ya no despliega todo el checklist junto:
-// solo muestra Documentación (la única categoría sin pantalla por ítem) y
-// únicamente mientras tenga documentos pendientes.
+describe("getPreviousStepPath / getFollowingStepPath", () => {
+  it("devuelve el paso previo y el siguiente en el orden real del flujo (documentos al final del checklist)", async () => {
+    const visual = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
+    const documentos = await prisma.checklistCategory.create({ data: { nombre: "Documentación", orden: 2 } });
+    const espejos = await crearChecklistItem(visual.id, { nombre: "Espejos", orden: 1 });
+    await crearChecklistItem(documentos.id, { nombre: "SOAT", orden: 1 });
+    const inspection = await crearInspeccionEnProceso();
+    const base = `/inspecciones/${inspection.id}`;
+
+    expect(await getPreviousStepPath(inspection.id, "medidas")).toBeNull();
+    expect(await getPreviousStepPath(inspection.id, `checklist/${espejos.id}`)).toBe(`${base}/medidas`);
+    expect(await getPreviousStepPath(inspection.id, "checklist")).toBe(`${base}/checklist/${espejos.id}`);
+    expect(await getPreviousStepPath(inspection.id, "estado-conductor?paso=1")).toBe(`${base}/checklist`);
+    expect(await getPreviousStepPath(inspection.id, "fotos")).toBe(`${base}/estado-conductor?paso=3`);
+    expect(await getPreviousStepPath(inspection.id, "confirmar")).toBe(`${base}/resultado`);
+    expect(await getFollowingStepPath(inspection.id, `checklist/${espejos.id}`)).toBe(`${base}/checklist`);
+    expect(await getFollowingStepPath(inspection.id, "confirmar")).toBeNull();
+  });
+});
+
+// La pantalla de lista (`/checklist`) solo muestra Documentación (la única
+// categoría sin pantalla por ítem). Se muestra SIEMPRE mientras la inspección
+// está EN_PROCESO (con o sin pendientes) para poder revisar y corregir los
+// documentos ya resueltos.
 describe("categoriasParaLista", () => {
   const catalogo = (estadoDocumentos: "PENDIENTE" | "OK") => [
     { nombre: "Inspección Visual", items: [{ estado: "PENDIENTE" as const }] },
@@ -344,7 +367,13 @@ describe("categoriasParaLista", () => {
     expect(visibles.map((categoria) => categoria.nombre)).toEqual(["Documentación"]);
   });
 
-  it("no muestra nada cuando los documentos ya están completos (aunque queden otras categorías pendientes)", () => {
-    expect(categoriasParaLista(catalogo("OK"))).toEqual([]);
+  it("sigue mostrando Documentación aunque ya esté completa, para poder corregir un documento", () => {
+    const visibles = categoriasParaLista(catalogo("OK"));
+
+    expect(visibles.map((categoria) => categoria.nombre)).toEqual(["Documentación"]);
+  });
+
+  it("no muestra nada si el catálogo no tiene documentos", () => {
+    expect(categoriasParaLista([{ nombre: "Fluidos", items: [{ estado: "OK" as const }] }])).toEqual([]);
   });
 });

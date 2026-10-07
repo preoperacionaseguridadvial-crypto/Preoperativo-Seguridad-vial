@@ -11,3 +11,13 @@
  * devolver la vieja.
  */
 export const VENTANA_REUSO_INSPECCION_HORAS = 24;
+
+/**
+ * `true` si una inspección EN_PROCESO iniciada en `startedAt` todavía cuenta
+ * como "la de hoy" (se reutiliza al iniciar); `false` si se considera
+ * abandonada. Misma regla que aplica `iniciarInspeccion`, en un solo lugar
+ * para que las pantallas del trabajador no prometan algo distinto.
+ */
+export function esReutilizable(startedAt: Date, ahora: Date = new Date()): boolean {
+  return startedAt.getTime() >= ahora.getTime() - VENTANA_REUSO_INSPECCION_HORAS * 60 * 60 * 1000;
+}

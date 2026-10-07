@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound, getNextStepPath } from "@/lib/inspections/queries";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { registrarResultado } from "@/lib/inspections/actions";
 
 export default async function NoPuedeOperarPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +25,7 @@ export default async function NoPuedeOperarPage({ params }: { params: Promise<{ 
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+      <BotonAtras href={`/inspecciones/${id}/resultado`} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Justificación</h1>
@@ -36,6 +38,7 @@ export default async function NoPuedeOperarPage({ params }: { params: Promise<{ 
         <textarea
           name="justificacion"
           required
+          defaultValue={inspection.justificacionNoOperar ?? ""}
           minLength={3}
           rows={6}
           placeholder="Ej: llanta trasera sin presión, no es seguro circular."

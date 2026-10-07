@@ -15,9 +15,9 @@ export function BotonIniciarInspeccion({ children }: { children: ReactNode }) {
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className="w-full rounded-md bg-[#0B3B60] px-4 py-4 text-left text-sm font-medium text-white hover:bg-[#0B3B60]/90 disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex min-h-14 w-full items-center justify-center rounded-xl bg-brand px-4 text-base font-semibold text-white shadow-sm active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {children}
+      {pending ? "Iniciando…" : children}
     </button>
   );
 }
