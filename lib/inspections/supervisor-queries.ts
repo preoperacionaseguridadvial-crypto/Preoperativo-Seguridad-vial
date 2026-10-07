@@ -9,6 +9,14 @@ import { getSignedReadUrl } from "@/lib/storage/s3";
 // trabajador→supervisor (decisión de negocio ya tomada), por eso estas
 // queries no filtran por `supervisorId`.
 
+/** Filtro de "pendiente de revisión", compartido con el resumen del inicio del Supervisor. */
+export const WHERE_PENDIENTES = {
+  reviewedAt: null,
+  status: {
+    in: [InspectionStatus.PENDIENTE_APROBACION, InspectionStatus.NO_APTA_PARA_OPERAR],
+  },
+} satisfies NonNullable<Parameters<typeof prisma.inspection.findMany>[0]>["where"];
+
 /**
  * Inspecciones pendientes de revisión: `reviewedAt` nulo y estado
  * PENDIENTE_APROBACION o NO_APTA_PARA_OPERAR. Ordenadas por `completedAt`
@@ -16,12 +24,7 @@ import { getSignedReadUrl } from "@/lib/storage/s3";
  */
 export function getInspeccionesPendientes() {
   return prisma.inspection.findMany({
-    where: {
-      reviewedAt: null,
-      status: {
-        in: [InspectionStatus.PENDIENTE_APROBACION, InspectionStatus.NO_APTA_PARA_OPERAR],
-      },
-    },
+    where: WHERE_PENDIENTES,
     include: {
       worker: true,
       vehicle: true,

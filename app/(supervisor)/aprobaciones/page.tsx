@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getInspeccionesPendientes } from "@/lib/inspections/supervisor-queries";
-import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
+import { requiereAtencionEstadoConductor, requiereAtencionPendiente } from "@/lib/inspections/estado-conductor";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 // "Buscar todas las inspecciones" reusa la pantalla de solo lectura de
@@ -105,9 +105,7 @@ export default async function AprobacionesPage() {
 }
 
 function requiereAtencion(inspection: Pendiente) {
-  return (
-    inspection.status === "NO_APTA_PARA_OPERAR" || requiereAtencionEstadoConductor(inspection)
-  );
+  return requiereAtencionPendiente(inspection);
 }
 
 function Resumen({

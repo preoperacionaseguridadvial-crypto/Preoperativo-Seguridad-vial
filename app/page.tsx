@@ -2,15 +2,23 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { atajosPorRol } from "@/lib/inicio/atajos";
 import { getDatosInicioTrabajador } from "@/lib/inicio/trabajador-queries";
+import {
+  getResumenDelDia,
+  getResumenSupervisor,
+  getVehiculosConDocumentosPorVencer,
+} from "@/lib/inicio/resumen-queries";
 import { AppHeader } from "@/app/_components/AppHeader";
 import { SaludoInicio } from "@/app/_components/inicio/SaludoInicio";
 import { AtajosInicio } from "@/app/_components/inicio/AtajosInicio";
 import { PanelTrabajador } from "@/app/_components/inicio/PanelTrabajador";
+import { ResumenSupervisor } from "@/app/_components/inicio/ResumenSupervisor";
+import { ResumenDelDia } from "@/app/_components/inicio/ResumenDelDia";
+import { VencimientosVehiculos } from "@/app/_components/inicio/VencimientosVehiculos";
 
-// Inicio por rol (contenedor): lee la sesión y arma el panel. Los paneles
-// específicos de cada rol viven en app/_components/inicio/ y los datos en
-// lib/. Proxy ya manda a /login a quien no tiene sesión; el link de abajo es
-// solo la red de seguridad si se renderiza sin usuario.
+// Inicio por rol (contenedor): lee la sesión, consulta solo lo que el rol va
+// a ver y arma el panel. Los paneles viven en app/_components/inicio/ y los
+// datos en lib/inicio/. Proxy ya manda a /login a quien no tiene sesión; el
+// link de abajo es solo la red de seguridad si se renderiza sin usuario.
 export default async function Home() {
   const session = await auth();
   const user = session?.user;
@@ -30,18 +38,28 @@ export default async function Home() {
   }
 
   const ahora = new Date();
-  const esTrabajador = user.role === "TRABAJADOR";
-  const datosTrabajador = esTrabajador ? await getDatosInicioTrabajador(user.id) : null;
+  const rol = user.role;
+  const [datosTrabajador, resumenSupervisor, resumenDia, vencimientos] = await Promise.all([
+    rol === "TRABAJADOR" ? getDatosInicioTrabajador(user.id) : null,
+    rol === "SUPERVISOR" ? getResumenSupervisor() : null,
+    rol === "DIRECTOR" || rol === "SST" ? getResumenDelDia(ahora) : null,
+    rol === "ADMINISTRADOR" || rol === "SST" ? getVehiculosConDocumentosPorVencer(ahora) : null,
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">
       <AppHeader enInicio />
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-4 py-6">
-        <SaludoInicio nombre={user.name} rol={user.role} ahora={ahora} />
+        <SaludoInicio nombre={user.name} rol={rol} ahora={ahora} />
         {datosTrabajador ? (
           <PanelTrabajador datos={datosTrabajador} ahora={ahora} />
         ) : (
-          <AtajosInicio atajos={atajosPorRol(user.role)} />
+          <>
+            {resumenSupervisor && <ResumenSupervisor resumen={resumenSupervisor} />}
+            {resumenDia && <ResumenDelDia resumen={resumenDia} />}
+            <AtajosInicio atajos={atajosPorRol(rol)} />
+            {vencimientos && <VencimientosVehiculos vehiculos={vencimientos} />}
+          </>
         )}
       </main>
     </div>
