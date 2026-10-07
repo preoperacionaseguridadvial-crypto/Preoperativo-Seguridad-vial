@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
 
 /**
  * Encabezado compartido por los tres roles con flujo propio (trabajador,
@@ -8,8 +9,11 @@ import Image from "next/image";
  * `app/(supervisor)`, `app/(gestion)`) se vean exactamente igual — antes solo
  * existía inline en el layout del trabajador, por eso Supervisor/Director no
  * lo tenían.
+ *
+ * En la pantalla de inicio (`enInicio`) el link "← Inicio" no tiene sentido:
+ * en su lugar va el botón de cerrar sesión.
  */
-export function AppHeader() {
+export function AppHeader({ enInicio = false }: { enInicio?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[#D9E2EA] bg-white px-4 py-2">
       <Image
@@ -20,9 +24,13 @@ export function AppHeader() {
         className="h-7 w-auto object-contain"
         priority
       />
-      <Link href="/" className="text-sm text-[#005B96] hover:underline">
-        ← Inicio
-      </Link>
+      {enInicio ? (
+        <CerrarSesionForm />
+      ) : (
+        <Link href="/" className="text-sm text-[#005B96] hover:underline">
+          ← Inicio
+        </Link>
+      )}
     </div>
   );
 }
