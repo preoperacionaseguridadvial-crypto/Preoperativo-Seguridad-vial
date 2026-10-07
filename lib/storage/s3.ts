@@ -22,8 +22,7 @@ const globalForS3 = globalThis as unknown as {
   s3Client?: S3Client;
 };
 
-function createS3Client() {
-  const endpoint = process.env.S3_ENDPOINT;
+function createS3Client(endpoint: string | undefined = process.env.S3_ENDPOINT) {
   return new S3Client({
     region: process.env.S3_REGION ?? "us-east-1",
     endpoint: endpoint || undefined,
@@ -39,6 +38,28 @@ export const s3Client: S3Client = globalForS3.s3Client ?? createS3Client();
 
 if (process.env.NODE_ENV !== "production") {
   globalForS3.s3Client = s3Client;
+}
+
+// `S3_PUBLIC_ENDPOINT` (opcional, pensado para desarrollo): las URLs firmadas de
+// LECTURA las abre el navegador del usuario, no el servidor. Con MinIO local,
+// `S3_ENDPOINT` suele ser `http://localhost:9010`, que un teléfono en la red
+// local no alcanza; ahí se define `S3_PUBLIC_ENDPOINT=http://<IP-de-la-PC>:9010`.
+// Se usa SOLO para firmar lecturas (un segundo cliente con las mismas
+// credenciales, región y path-style); subir y borrar siguen por `s3Client`.
+// Sin la variable, el comportamiento no cambia. El host forma parte de la
+// firma, por eso no se puede reescribir la URL después de firmarla.
+const globalForPresign = globalThis as unknown as {
+  presignClient?: { endpoint: string; client: S3Client };
+};
+
+function getPresignClient(): S3Client {
+  const publicEndpoint = process.env.S3_PUBLIC_ENDPOINT;
+  if (!publicEndpoint) return s3Client;
+  const cached = globalForPresign.presignClient;
+  if (cached?.endpoint === publicEndpoint) return cached.client;
+  const client = createS3Client(publicEndpoint);
+  globalForPresign.presignClient = { endpoint: publicEndpoint, client };
+  return client;
 }
 
 function getBucket(): string {
@@ -88,5 +109,5 @@ export async function deleteObject(key: string): Promise<void> {
  */
 export async function getSignedReadUrl(key: string, expiresInSeconds = 900): Promise<string> {
   const command = new GetObjectCommand({ Bucket: getBucket(), Key: key });
-  return getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
+  return getSignedUrl(getPresignClient(), command, { expiresIn: expiresInSeconds });
 }
