@@ -56,10 +56,10 @@ function armarDeps(opciones: {
 }
 
 describe("constantes", () => {
-  it("usa 1920 px, calidad 0.8 y umbral de pass-through de 1 MB", () => {
-    expect(MAX_LADO_PX).toBe(1920);
-    expect(CALIDAD_JPEG).toBe(0.8);
-    expect(UMBRAL_CONSERVAR_BYTES).toBe(1 * MB);
+  it("usa 1600 px, calidad 0.75 y umbral de pass-through de 500 KB", () => {
+    expect(MAX_LADO_PX).toBe(1600);
+    expect(CALIDAD_JPEG).toBe(0.75);
+    expect(UMBRAL_CONSERVAR_BYTES).toBe(500 * 1024);
   });
 });
 
@@ -161,11 +161,11 @@ describe("debeConservarOriginal", () => {
   it("conserva un JPEG/PNG/WebP pequeño y dentro de dimensiones", () => {
     expect(debeConservarOriginal({ tipo: "image/jpeg", bytes: 500_000, ancho: 1600, alto: 1200 })).toBe(true);
     expect(debeConservarOriginal({ tipo: "image/png", bytes: 200_000, ancho: 800, alto: 600 })).toBe(true);
-    expect(debeConservarOriginal({ tipo: "image/webp", bytes: 100_000, ancho: 1920, alto: 1080 })).toBe(true);
+    expect(debeConservarOriginal({ tipo: "image/webp", bytes: 100_000, ancho: 1600, alto: 900 })).toBe(true);
   });
 
   it("conserva justo en los umbrales (peso y lado largo)", () => {
-    expect(debeConservarOriginal({ tipo: "image/jpeg", bytes: UMBRAL_CONSERVAR_BYTES, ancho: 1920, alto: 1080 })).toBe(true);
+    expect(debeConservarOriginal({ tipo: "image/jpeg", bytes: UMBRAL_CONSERVAR_BYTES, ancho: 1600, alto: 900 })).toBe(true);
   });
 
   it("no conserva si pasa el umbral de peso por 1 byte", () => {
@@ -184,7 +184,7 @@ describe("debeConservarOriginal", () => {
 });
 
 describe("comprimirImagen", () => {
-  it("comprime una foto grande a JPEG reducida a 1920 px de lado largo", async () => {
+  it("comprime una foto grande a JPEG reducida a 1600 px de lado largo", async () => {
     const original = archivoFalso("IMG_0001.HEIC", "image/heic", 6 * MB);
     const { deps, codificarJpeg, decodificar } = armarDeps({ ancho: 4000, alto: 3000, bytesResultado: 400_000 });
 
@@ -192,7 +192,7 @@ describe("comprimirImagen", () => {
 
     expect(decodificar).toHaveBeenCalledWith(original);
     expect(codificarJpeg).toHaveBeenCalledTimes(1);
-    expect(codificarJpeg).toHaveBeenCalledWith(expect.objectContaining({ ancho: 4000, alto: 3000 }), 1920, 1440, 0.8);
+    expect(codificarJpeg).toHaveBeenCalledWith(expect.objectContaining({ ancho: 4000, alto: 3000 }), 1600, 1200, 0.75);
     expect(resultado).not.toBe(original);
     expect(resultado).toBeInstanceOf(File);
     expect(resultado.type).toBe("image/jpeg");
@@ -208,20 +208,20 @@ describe("comprimirImagen", () => {
     expect(liberar).toHaveBeenCalledTimes(1);
   });
 
-  it("no reescala si solo excede el peso pero ya está dentro de 1920 px", async () => {
+  it("no reescala si solo excede el peso pero ya está dentro de 1600 px", async () => {
     const original = archivoFalso("a.jpg", "image/jpeg", 3 * MB);
-    const { deps, codificarJpeg } = armarDeps({ ancho: 1920, alto: 1080, bytesResultado: 500_000 });
+    const { deps, codificarJpeg } = armarDeps({ ancho: 1600, alto: 900, bytesResultado: 500_000 });
 
     const resultado = await comprimirImagen(original, deps);
 
-    expect(codificarJpeg).toHaveBeenCalledWith(expect.anything(), 1920, 1080, 0.8);
+    expect(codificarJpeg).toHaveBeenCalledWith(expect.anything(), 1600, 900, 0.75);
     expect(resultado.size).toBe(500_000);
   });
 
   it("comprime una foto vertical respetando la orientación ya decodificada", async () => {
     const { deps, codificarJpeg } = armarDeps({ ancho: 3000, alto: 4000, bytesResultado: 300_000 });
     await comprimirImagen(archivoFalso("v.jpg", "image/jpeg", 4 * MB), deps);
-    expect(codificarJpeg).toHaveBeenCalledWith(expect.anything(), 1440, 1920, 0.8);
+    expect(codificarJpeg).toHaveBeenCalledWith(expect.anything(), 1200, 1600, 0.75);
   });
 
   describe("pass-through (devuelve el mismo File sin recomprimir)", () => {
@@ -243,7 +243,7 @@ describe("comprimirImagen", () => {
       expect(codificarJpeg).not.toHaveBeenCalled();
     });
 
-    it("comprime aunque pese poco si excede 1920 px", async () => {
+    it("comprime aunque pese poco si excede 1600 px", async () => {
       const original = archivoFalso("a.jpg", "image/jpeg", 800_000);
       const { deps, codificarJpeg } = armarDeps({ ancho: 4000, alto: 3000, bytesResultado: 300_000 });
       const resultado = await comprimirImagen(original, deps);

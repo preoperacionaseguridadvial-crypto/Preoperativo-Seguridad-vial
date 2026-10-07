@@ -8,20 +8,20 @@
 // Por qué: una foto de cámara de teléfono pesa 3–12 MB; el servidor
 // (lib/storage/validar-archivo.ts) topa las fotos en 8 MB, solo acepta
 // JPEG/PNG/WebP y el límite global de server actions es 10 MB. Reducir el lado
-// largo a 1920 px y recodificar a JPEG deja cada foto en unos cientos de KB.
+// largo a 1600 px y recodificar a JPEG 0.75 deja cada foto en ~200–350 KB.
 // Recodificar además elimina los metadatos EXIF/GPS de la foto original (la
 // ubicación del trabajador no viaja al servidor). Cuando se deja pasar el
 // original sin recodificar (foto ya pequeña) esos metadatos sí se conservan.
 
 /** Lado largo máximo (px) de la foto enviada; nunca se amplía. */
-export const MAX_LADO_PX = 1920;
+export const MAX_LADO_PX = 1600;
 /** Calidad de recodificación JPEG (0–1). */
-export const CALIDAD_JPEG = 0.8;
+export const CALIDAD_JPEG = 0.75;
 /**
  * Peso máximo (bytes) por debajo del cual, si además el tipo es soportado y
  * está dentro de `MAX_LADO_PX`, se envía el original sin tocar.
  */
-export const UMBRAL_CONSERVAR_BYTES = 1024 * 1024;
+export const UMBRAL_CONSERVAR_BYTES = 500 * 1024;
 
 const TIPOS_SOPORTADOS: readonly string[] = ["image/jpeg", "image/png", "image/webp"];
 const NOMBRE_POR_DEFECTO = "foto";
