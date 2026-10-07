@@ -22,7 +22,7 @@ User (2026-10-07, real phone: Android 10, Chrome 154): after taking both photos 
 
 ## Tasks
 - [x] T1 — Route handler for photo upload with progress-friendly response + `S3_PUBLIC_ENDPOINT` presign support (route: delegated writer, 2+ non-trivial files)
-- [ ] T2 — Client upload component: progress bar states, local preview, error/retry; fotos page shows stored thumbnails
+- [x] T2 — Client upload component: progress bar states, local preview, error/retry; fotos page shows stored thumbnails
 
 ## Acceptance criteria
 - On the phone, taking a photo shows a preview immediately, a bar advancing to 100 %, then "✓ Foto guardada" with the stored thumbnail.
@@ -35,6 +35,11 @@ TDD: strict / user global config / `npx vitest run`. RDD: off (global).
 ## Progress / evidence
 - T1 (route: delegated writer). Route `POST /inspecciones/[id]/fotos/[tipo]/subir` (tipo = lateral|placa), under `/inspecciones` so proxy already restricts it to TRABAJADOR; no new map entry. Pure helper `lib/inspections/foto-upload-http.ts` (`parseTipoFoto`, `errorFotoAHttp`: 401/403/400, Prisma/AWS errors -> generic 500). `lib/storage/s3.ts`: `getSignedReadUrl` presigns with a second client when `S3_PUBLIC_ENDPOINT` is set.
   - RED: s3.test.ts 2 failed (host stayed localhost), route/helper suites failed to import. GREEN: 3 files, 17 tests passed. tsc and eslint clean.
+- T1 commit: 67bb0cd.
+- T2 (route: delegated writer). `lib/imagenes/progreso-subida.ts` (reducer, percentage, response parsing; 14 tests), client `SubirFotoInspeccion.tsx` (local preview, XHR progress, retry), fotos page shows signed thumbnails. No-JS server-action fallback dropped: compression and progress need JS, and an uncompressed upload would hit the 8 MB cap.
+  - RED: progreso-subida.test.ts failed (module missing). GREEN: 14/14. tsc, eslint clean; npm test 45 files / 610 tests passed.
+  - Live (temp worker, data deleted): route 200 for own EN_PROCESO (lateral, placa, replace); 404 bad tipo; 400 no file; 403 other worker and trabajador@ess.local; 400 ENVIADA; 307 to login without session. DB rows, S3 objects (141721 B JPEG) and audit rows confirmed. Headless Pixel 7 Chrome: Optimizando -> Subiendo NN % -> Guardando… -> Foto guardada, Continuar after both, abort of the XHR shows error + Reintentar -> saved.
+  - User must add to `.env`: `S3_PUBLIC_ENDPOINT=http://192.168.1.7:9010`, then restart dev server.
 
 ## Next step
 T1–T2 via one delegated writer on branch `feat/compresion-fotos`.
