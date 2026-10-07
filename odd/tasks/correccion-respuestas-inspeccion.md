@@ -20,7 +20,7 @@ User (2026-10-07): "necesito tener un botón de devolver atrás en la inspecció
 
 ## Tasks
 - [x] T1 — Step order helper + "Atrás" control on every step (route: delegated writer, mapping 4+ files)
-- [ ] T2 — Re-answer checklist items and documents with the current value preselected; documents list reachable and editable while EN_PROCESO
+- [x] T2 — Re-answer checklist items and documents with the current value preselected; documents list reachable and editable while EN_PROCESO
 - [ ] T3 — Re-edit kilometraje, declaración del conductor, fotos, resultado; consistent "Siguiente" after a correction
 
 ## Acceptance criteria
@@ -40,7 +40,15 @@ TDD: strict / user global config / `npx vitest run`. RDD: off (global).
 - First step (medidas) "Atrás" goes to `/inspecciones` (inspection stays EN_PROCESO and resumable). Subscreens: novedad -> item page (or the list for documents), foto de novedad -> novedad form, no-puede-operar -> resultado.
 - The item page's old "Anterior/Siguiente" (within category) was replaced by "Atrás" (true flow order) and a flow-based "Siguiente" shown only for already-answered items.
 - Route: delegated writer (single), trigger: mapping 4+ files and 2+ non-trivial files.
+- T1 commit: 94723d5.
 - T1 TDD: RED `npx vitest run lib/inspections/pasos-flujo.test.ts` -> 7 failed (construirPasosFlujo is not a function); `queries.test.ts` -> 2 failed (getPreviousStepPath missing; categoriasParaLista with complete docs returned []). GREEN: 9/9 and 21/21.
+
+### T2
+- Item pages show "Respuesta actual" and ring the saved button (`RespuestaActual.tsx`, shared by the client `RespuestaChecklistItem` and server `RespuestaTriestadoItem`); Rayones inline form and the novedad page preload the existing novedad (tipo, descripción, ubicación). Novedad pages now redirect when the inspection is no longer EN_PROCESO (server actions already rejected).
+- `DocumentoCheckItem`: resolved row has "Cambiar" (reopens checkbox / Reportar problema, with "Cancelar"). `editando` is closed explicitly on `marcarOk` and after the report form, because FALLA->FALLA does not change `estadoInicial` (the `estadoPrevio` resync would not fire).
+- Verified `responderItem` FALLA/MALO -> OK/BUENO/BAJO deletes the novedad and its Photo rows (S3 objects stay: known, documented limitation). BUG FOUND AND FIXED: it returned the already-deleted novedad in `{ novedad }` (test RED: "expected {…} to be null").
+- Open product question (signature): a CONDUCTOR `Firma` can exist while EN_PROCESO (worker signs at /confirmar and can then go back). Implemented the safe behavior: `invalidarFirmaConductor` (lib/inspections/firma-invalidacion.ts) deletes the CONDUCTOR firma + audit `INVALIDAR_FIRMA_CONDUCTOR` (with motivo) when a correction actually changes data (responderItem value/observation/novedad tipo/ubicación; novedad attachment added). Same-value saves keep the signature. S3 object stays and is overwritten on re-sign. This conflicts with the "Firma is immutable" wording of `crearFirma`: product should confirm that a not-yet-sent signature may be discarded.
+- T2 TDD: RED `npx vitest run lib/inspections/actions.test.ts` -> 3 failed (stale novedad returned after FALLA->OK; firma not invalidated on item change; firma not invalidated on novedad attachment). GREEN 66/66.
 
 ## Next step
 T1–T3 via one delegated writer on branch `feat/correccion-respuestas-inspeccion` (stacked on `feat/panel-inicio-por-rol`).

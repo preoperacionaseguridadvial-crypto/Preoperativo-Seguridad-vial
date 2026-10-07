@@ -1083,3 +1083,110 @@ describe("enviarInspeccion — completitud por diferencia de conjuntos, no por c
     await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan ítems del checklist/i);
   });
 });
+
+// Corrección de respuestas (feature correccion-respuestas-inspeccion): mientras
+// la inspección siga EN_PROCESO el trabajador puede volver a un ítem y cambiar
+// su respuesta. La Novedad sigue a la respuesta (FALLA la crea/actualiza, OK la
+// retira) y una firma del conductor ya dada deja de valer si cambia algún dato.
+describe("responderItem — corregir una respuesta ya dada", () => {
+  async function prepararItem() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    return { worker, inspection, item };
+  }
+
+  it("OK -> FALLA exige descripción y tipo de novedad, y no cambia nada si faltan", async () => {
+    const { inspection, item } = await prepararItem();
+    await responderItem(inspection.id, item.id, RespuestaChecklist.OK);
+
+    await expect(responderItem(inspection.id, item.id, RespuestaChecklist.FALLA)).rejects.toThrow(/describir la novedad/i);
+    await expect(
+      responderItem(inspection.id, item.id, RespuestaChecklist.FALLA, "Se ve la falla"),
+    ).rejects.toThrow(/tipo de novedad/i);
+
+    const respuesta = await prisma.inspectionItemResponse.findFirstOrThrow({ where: { inspectionId: inspection.id } });
+    expect(respuesta.valor).toBe(RespuestaChecklist.OK);
+    expect(await prisma.novedad.count({ where: { inspectionId: inspection.id } })).toBe(0);
+  });
+
+  it("OK -> FALLA crea la Novedad y FALLA -> OK la retira junto con sus adjuntos", async () => {
+    const { inspection, item } = await prepararItem();
+    await responderItem(inspection.id, item.id, RespuestaChecklist.OK);
+
+    const { novedad } = await responderItem(inspection.id, item.id, RespuestaChecklist.FALLA, "Espejo roto", "FALLA");
+    await prisma.photo.create({ data: { novedadId: novedad!.id, s3Key: "novedades/x/foto.jpg" } });
+    expect(await prisma.novedad.count({ where: { inspectionId: inspection.id } })).toBe(1);
+
+    const { novedad: tras } = await responderItem(inspection.id, item.id, RespuestaChecklist.OK);
+
+    expect(tras).toBeNull();
+    expect(await prisma.novedad.count({ where: { inspectionId: inspection.id } })).toBe(0);
+    expect(await prisma.photo.count()).toBe(0);
+    const respuesta = await prisma.inspectionItemResponse.findFirstOrThrow({ where: { inspectionId: inspection.id } });
+    expect(respuesta.valor).toBe(RespuestaChecklist.OK);
+    expect(respuesta.observacion).toBeNull();
+  });
+
+  it("FALLA -> FALLA actualiza la misma Novedad y conserva su adjunto", async () => {
+    const { inspection, item } = await prepararItem();
+    const { novedad } = await responderItem(inspection.id, item.id, RespuestaChecklist.FALLA, "Espejo roto", "FALLA");
+    await prisma.photo.create({ data: { novedadId: novedad!.id, s3Key: "novedades/x/foto.jpg" } });
+
+    const { novedad: editada } = await responderItem(
+      inspection.id,
+      item.id,
+      RespuestaChecklist.FALLA,
+      "Espejo derecho roto",
+      "FALLA",
+    );
+
+    expect(editada!.id).toBe(novedad!.id);
+    expect(editada!.descripcion).toBe("Espejo derecho roto");
+    expect(await prisma.photo.count({ where: { novedadId: novedad!.id } })).toBe(1);
+  });
+});
+
+describe("firma del conductor ante una corrección", () => {
+  async function prepararFirmada() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    await responderItem(inspection.id, item.id, RespuestaChecklist.OK);
+    await firmarComoConductor(inspection.id, worker.id);
+    return { worker, inspection, item };
+  }
+
+  it("cambiar la respuesta de un ítem anula la firma ya dada y lo deja en la auditoría", async () => {
+    const { worker, inspection, item } = await prepararFirmada();
+
+    await responderItem(inspection.id, item.id, RespuestaChecklist.FALLA, "Espejo roto", "FALLA");
+
+    expect(await prisma.firma.count({ where: { inspectionId: inspection.id } })).toBe(0);
+    const auditoria = await prisma.auditLog.findMany({
+      where: { entityId: inspection.id, action: "INVALIDAR_FIRMA_CONDUCTOR" },
+    });
+    expect(auditoria).toHaveLength(1);
+    expect(auditoria[0].userId).toBe(worker.id);
+  });
+
+  it("volver a guardar la MISMA respuesta no anula la firma", async () => {
+    const { inspection, item } = await prepararFirmada();
+
+    await responderItem(inspection.id, item.id, RespuestaChecklist.OK);
+
+    expect(await prisma.firma.count({ where: { inspectionId: inspection.id } })).toBe(1);
+  });
+
+  it("agregar un adjunto a una novedad anula la firma", async () => {
+    const { worker, inspection, item } = await prepararFirmada();
+    const { novedad } = await responderItem(inspection.id, item.id, RespuestaChecklist.FALLA, "Espejo roto", "FALLA");
+    await firmarComoConductor(inspection.id, worker.id);
+    const fd = new FormData();
+    fd.set("file", new File([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])], "f.jpg", { type: "image/jpeg" }));
+
+    await subirFotoNovedad(novedad!.id, fd);
+
+    expect(await prisma.firma.count({ where: { inspectionId: inspection.id } })).toBe(0);
+  });
+});

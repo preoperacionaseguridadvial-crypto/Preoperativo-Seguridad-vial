@@ -77,6 +77,7 @@ export default async function ChecklistItemPage({
   // adelante lo que se revisa con "Atrás" sin tener que volver a guardar. Un
   // ítem sin responder se sigue resolviendo respondiéndolo (el servidor exige
   // el checklist completo antes de confirmar).
+  const respuestaActual = inspection.respuestas.find((r) => r.checklistItemId === itemId);
   const yaRespondido = allItems.find((i) => i.id === itemId)?.estado !== "PENDIENTE";
   const hrefSiguiente = yaRespondido ? await getFollowingStepPath(id, `checklist/${itemId}`) : null;
 
@@ -162,6 +163,7 @@ export default async function ChecklistItemPage({
             itemId={itemId}
             marcarBueno={marcarBueno}
             marcarBajo={marcarBajo}
+            valorActual={respuestaActual?.valor}
           />
         ) : (
           <RespuestaChecklistItem
@@ -170,6 +172,9 @@ export default async function ChecklistItemPage({
             pideUbicacion={item.pideUbicacion}
             marcarOk={marcarOk}
             marcarFallaConUbicacion={item.pideUbicacion ? marcarFallaConUbicacion : undefined}
+            valorActual={respuestaActual?.valor}
+            ubicacionInicial={respuestaActual?.novedad ? (respuestaActual.observacion ?? "") : ""}
+            tipoInicial={respuestaActual?.novedad?.tipo ?? ""}
           />
         )}
       </div>

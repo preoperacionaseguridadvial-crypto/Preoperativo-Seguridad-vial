@@ -33,7 +33,10 @@ export default async function NovedadPage({
     redirect("/login");
   }
 
-  await getOwnInspectionOrNotFound(id, session.user.id);
+  const inspection = await getOwnInspectionOrNotFound(id, session.user.id);
+  if (inspection.status !== "EN_PROCESO") {
+    redirect(await getNextStepPath(id));
+  }
   const item = await getChecklistItemById(itemId);
   if (!item) {
     notFound();
@@ -47,6 +50,13 @@ export default async function NovedadPage({
   // RespuestaTriestadoItem, que enlaza acá para "✕ Malo".
   const esFluido = item.tipoRespuesta === TipoRespuestaItem.TRIESTADO;
   const valorNovedad = esFluido ? RespuestaChecklist.MALO : RespuestaChecklist.FALLA;
+
+  // Corrección: si el ítem ya tenía una novedad, el formulario abre con sus
+  // datos. En ítems con `pideUbicacion` el "¿Dónde?" vive en `observacion`
+  // (ver `responderItem`), pero esos ítems usan el formulario inline, no esta
+  // pantalla; acá `observacion` es la descripción.
+  const respuestaPrevia = inspection.respuestas.find((r) => r.checklistItemId === itemId);
+  const novedadPrevia = respuestaPrevia?.novedad ?? null;
 
   // Los documentos se resuelven en la lista; el resto, en su pantalla de ítem.
   const hrefAtras = esDocumento
@@ -82,7 +92,14 @@ export default async function NovedadPage({
           <div className="grid grid-cols-2 gap-2">
             {tiposDisponibles.map((tipo) => (
               <label key={tipo} className="cursor-pointer">
-                <input type="radio" name="tipo" value={tipo} required className="peer sr-only" />
+                <input
+                  type="radio"
+                  name="tipo"
+                  value={tipo}
+                  required
+                  defaultChecked={novedadPrevia?.tipo === tipo}
+                  className="peer sr-only"
+                />
                 <span className="block rounded-md border border-gray-300 px-3 py-3 text-center text-sm font-medium text-gray-700 peer-checked:border-[#2E9BD6] peer-checked:bg-[#2E9BD6]/10 peer-checked:text-[#0B3B60]">
                   {TIPO_NOVEDAD_LABELS[tipo]}
                 </span>
@@ -94,6 +111,7 @@ export default async function NovedadPage({
         <textarea
           name="observacion"
           required
+          defaultValue={respuestaPrevia?.observacion ?? ""}
           minLength={3}
           rows={6}
           placeholder={esDocumento ? "Ej: SOAT vencido desde marzo." : "Ej: espejo derecho roto, no refleja."}
@@ -108,6 +126,7 @@ export default async function NovedadPage({
             <input
               id="ubicacion"
               name="ubicacion"
+              defaultValue={novedadPrevia?.ubicacion ?? ""}
               placeholder="Ej: tanque, lado derecho."
               className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#2E9BD6] focus:outline-none"
             />

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { RespuestaChecklist } from "@/generated/prisma/client";
+import { ANILLO_ACTUAL, RespuestaActual } from "@/app/(worker)/inspecciones/_components/RespuestaActual";
 
 /**
  * Control de 3 estados para ítems de fluidos (`tipoRespuesta = TRIESTADO`,
@@ -17,18 +19,22 @@ export function RespuestaTriestadoItem({
   itemId,
   marcarBueno,
   marcarBajo,
+  valorActual,
 }: {
   idInspeccion: string;
   itemId: string;
   marcarBueno: () => Promise<void>;
   marcarBajo: () => Promise<void>;
+  /** Respuesta ya guardada (al volver a corregirla): se resalta su botón. */
+  valorActual?: RespuestaChecklist;
 }) {
   return (
     <div className="flex flex-col gap-3">
+      <RespuestaActual valorActual={valorActual} />
       <form action={marcarBueno}>
         <button
           type="submit"
-          className="w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]"
+          className={`w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]${valorActual === "BUENO" ? ANILLO_ACTUAL : ""}`}
         >
           ✓ Bueno
         </button>
@@ -37,7 +43,7 @@ export function RespuestaTriestadoItem({
       <form action={marcarBajo}>
         <button
           type="submit"
-          className="w-full rounded-[10px] bg-[#D97706] px-4 py-5 text-lg font-semibold text-white hover:bg-[#B45309]"
+          className={`w-full rounded-[10px] bg-[#D97706] px-4 py-5 text-lg font-semibold text-white hover:bg-[#B45309]${valorActual === "BAJO" ? ANILLO_ACTUAL : ""}`}
         >
           ⚠ Bajo
         </button>
@@ -45,7 +51,7 @@ export function RespuestaTriestadoItem({
 
       <Link
         href={`/inspecciones/${idInspeccion}/checklist/${itemId}/novedad`}
-        className="block w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-center text-lg font-semibold text-white hover:bg-[#B91C1C]"
+        className={`block w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-center text-lg font-semibold text-white hover:bg-[#B91C1C]${valorActual === "MALO" ? ANILLO_ACTUAL : ""}`}
       >
         ✕ Malo
       </Link>

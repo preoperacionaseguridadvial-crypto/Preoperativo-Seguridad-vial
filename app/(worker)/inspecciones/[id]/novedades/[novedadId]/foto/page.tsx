@@ -26,7 +26,10 @@ export default async function FotoNovedadPage({
     redirect("/login");
   }
 
-  await getOwnInspectionOrNotFound(id, session.user.id);
+  const inspection = await getOwnInspectionOrNotFound(id, session.user.id);
+  if (inspection.status !== "EN_PROCESO") {
+    redirect(await getNextStepPath(id));
+  }
   const novedad = await getNovedadForWorker(novedadId);
   if (!novedad || novedad.inspectionId !== id) {
     notFound();
