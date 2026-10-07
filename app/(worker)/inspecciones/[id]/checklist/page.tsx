@@ -7,10 +7,12 @@ import type { TipoNovedad } from "@/generated/prisma/client";
 import {
   getOwnInspectionOrNotFound,
   getNextStepPath,
+  getPreviousStepPath,
   getChecklistEstadoCompleto,
   categoriasParaLista,
 } from "@/lib/inspections/queries";
 import { responderItem } from "@/lib/inspections/actions";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { DocumentoCheckItem } from "@/app/(worker)/inspecciones/_components/DocumentoCheckItem";
 import { ProgresoInspeccion } from "@/app/(worker)/inspecciones/_components/ProgresoInspeccion";
 
@@ -46,12 +48,19 @@ export default async function ChecklistListPage({ params }: { params: Promise<{ 
   const pendientes = allItems.filter((item) => item.estado === "PENDIENTE").length;
   const revisados = totalItems - pendientes;
 
-  // Sin documentos pendientes esta lista no tiene nada que mostrar: si aún
-  // quedan ítems, se sigue el flujo guiado (siguiente ítem, uno por uno).
+  // La lista se muestra siempre (EN_PROCESO), aun sin documentos pendientes:
+  // el trabajador puede llegar acá con "Atrás" para corregir un documento ya
+  // resuelto. Antes redirigía al siguiente ítem cuando no quedaba nada
+  // pendiente, lo que bloqueaba volver. Si no hay documentos en el catálogo,
+  // no hay nada que mostrar y se sigue el flujo guiado.
   const categoriasVisibles = categoriasParaLista(catalogConEstado);
-  if (categoriasVisibles.length === 0 && pendientes > 0) {
+  if (categoriasVisibles.length === 0) {
     redirect(await getNextStepPath(id));
   }
+  const documentosPendientes = categoriasVisibles
+    .flatMap((category) => category.items)
+    .filter((item) => item.estado === "PENDIENTE").length;
+  const hrefAtras = (await getPreviousStepPath(id, "checklist")) ?? `/inspecciones/${id}/medidas`;
 
   // Reporte inline de un documento (sin navegar a otra pantalla): se
   // bindea con el `checklistItemId` de cada fila al pasarlo a
@@ -70,6 +79,7 @@ export default async function ChecklistListPage({ params }: { params: Promise<{ 
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-6">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Checklist de inspección</h1>
@@ -108,7 +118,7 @@ export default async function ChecklistListPage({ params }: { params: Promise<{ 
         ))}
       </div>
 
-      {pendientes === 0 && <ContinuarLink inspectionId={id} />}
+      {documentosPendientes === 0 && <ContinuarLink inspectionId={id} />}
     </main>
   );
 }

@@ -9,6 +9,8 @@ import {
   TipoFotoInspeccion,
 } from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
+import { construirPasosFlujo, pasoAnterior, pasoSiguiente } from "@/lib/inspections/pasos-flujo";
+import { PREGUNTAS_ESTADO_CONDUCTOR } from "@/lib/inspections/estado-conductor";
 
 // Fase soporte-moto-carro (Slice 3, A7): las 2 fotos diarias obligatorias,
 // independiente del resultado del checklist. Un único lugar de verdad de
@@ -112,20 +114,48 @@ export const CATEGORIA_SIN_PANTALLA_PROPIA = "Documentación";
 
 /**
  * Categorías que muestra la pantalla de lista (`/checklist`): solo
- * Documentación, y únicamente mientras tenga documentos pendientes. El resto
- * del checklist (Inspección Visual, Fluidos, Equipo de prevención) se recorre
- * ítem por ítem con el flujo guiado (`getNextStepPath`); desplegarlo todo
- * junto en la lista obligaba al trabajador a buscar cada ítem a mano (pedido
- * del dueño de producto, 2026-09-18).
+ * Documentación. El resto del checklist (Inspección Visual, Fluidos, Equipo
+ * de prevención) se recorre ítem por ítem con el flujo guiado
+ * (`getNextStepPath`); desplegarlo todo junto en la lista obligaba al
+ * trabajador a buscar cada ítem a mano (pedido del dueño de producto,
+ * 2026-09-18). Documentación se muestra aunque ya no tenga pendientes: mientras
+ * la inspección está EN_PROCESO el trabajador puede volver (botón "Atrás") a
+ * revisar y corregir un documento ya resuelto.
  */
 export function categoriasParaLista<T extends { nombre: string; items: { estado: EstadoChecklistItem }[] }>(
   catalogo: T[],
 ): T[] {
   return catalogo.filter(
-    (categoria) =>
-      categoria.nombre === CATEGORIA_SIN_PANTALLA_PROPIA &&
-      categoria.items.some((item) => item.estado === "PENDIENTE"),
+    (categoria) => categoria.nombre === CATEGORIA_SIN_PANTALLA_PROPIA && categoria.items.length > 0,
   );
+}
+
+/**
+ * Pasos del flujo de esta inspección, como rutas relativas a
+ * `/inspecciones/[id]/` (ver `construirPasosFlujo`). Usa el catálogo filtrado
+ * por el tipo de vehículo, igual que `getNextStepPath`.
+ */
+async function getPasosFlujo(inspectionId: string): Promise<string[]> {
+  const tipoVehiculo = await getTipoVehiculoDeInspeccion(inspectionId);
+  const catalogo = await getChecklistCatalog(tipoVehiculo);
+  return construirPasosFlujo(catalogo, CATEGORIA_SIN_PANTALLA_PROPIA, PREGUNTAS_ESTADO_CONDUCTOR.length);
+}
+
+/**
+ * Ruta (absoluta) del paso anterior a `pasoActual` en el flujo real — el
+ * destino del botón "Atrás". `pasoActual` es relativo, p. ej. `"fotos"` o
+ * `"checklist/<itemId>"`. `null` si es el primer paso o no es un paso del
+ * flujo (el caller decide el destino alternativo).
+ */
+export async function getPreviousStepPath(inspectionId: string, pasoActual: string): Promise<string | null> {
+  const anterior = pasoAnterior(await getPasosFlujo(inspectionId), pasoActual);
+  return anterior === null ? null : `/inspecciones/${inspectionId}/${anterior}`;
+}
+
+/** Ruta (absoluta) del paso siguiente a `pasoActual`, o `null` (ver `getPreviousStepPath`). */
+export async function getFollowingStepPath(inspectionId: string, pasoActual: string): Promise<string | null> {
+  const siguiente = pasoSiguiente(await getPasosFlujo(inspectionId), pasoActual);
+  return siguiente === null ? null : `/inspecciones/${inspectionId}/${siguiente}`;
 }
 
 /**

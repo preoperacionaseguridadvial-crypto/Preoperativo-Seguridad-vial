@@ -9,6 +9,7 @@ import {
   CATEGORIA_SIN_PANTALLA_PROPIA,
 } from "@/lib/inspections/queries";
 import { responderItem } from "@/lib/inspections/actions";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { getTiposNovedadParaItem, TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 
 // Pantalla de novedad (sección 11 del brief): textarea obligatoria. La foto
@@ -47,6 +48,11 @@ export default async function NovedadPage({
   const esFluido = item.tipoRespuesta === TipoRespuestaItem.TRIESTADO;
   const valorNovedad = esFluido ? RespuestaChecklist.MALO : RespuestaChecklist.FALLA;
 
+  // Los documentos se resuelven en la lista; el resto, en su pantalla de ítem.
+  const hrefAtras = esDocumento
+    ? `/inspecciones/${id}/checklist`
+    : `/inspecciones/${id}/checklist/${itemId}`;
+
   async function guardarNovedad(formData: FormData) {
     "use server";
     const observacion = formData.get("observacion")?.toString() ?? "";
@@ -61,6 +67,7 @@ export default async function NovedadPage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{item.category.nombre}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">

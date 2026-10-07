@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
-import { getOwnInspectionOrNotFound, getNextStepPath, getFotosInspeccion } from "@/lib/inspections/queries";
+import {
+  getOwnInspectionOrNotFound,
+  getNextStepPath,
+  getPreviousStepPath,
+  getFotosInspeccion,
+} from "@/lib/inspections/queries";
 import { subirFotoInspeccion } from "@/lib/inspections/foto-actions";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { CapturaFotoInput } from "@/app/(worker)/inspecciones/_components/CapturaFotoInput";
 import { TipoFotoInspeccion } from "@/generated/prisma/client";
 
@@ -35,6 +41,8 @@ export default async function FotosInspeccionPage({
   }
 
   const { lateral, placa } = await getFotosInspeccion(id);
+  const hrefAtras =
+    (await getPreviousStepPath(id, "fotos")) ?? `/inspecciones/${id}/estado-conductor?paso=3`;
 
   async function subirLateralAction(formData: FormData) {
     "use server";
@@ -62,6 +70,7 @@ export default async function FotosInspeccionPage({
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Fotos del vehículo</h1>

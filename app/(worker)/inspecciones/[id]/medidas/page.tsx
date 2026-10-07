@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound, getNextStepPath } from "@/lib/inspections/queries";
 import { registrarKilometraje } from "@/lib/inspections/actions";
 import { imagenKilometraje } from "@/lib/inspections/imagenes";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { ImagenReferencia } from "@/app/(worker)/inspecciones/_components/ImagenReferencia";
 
 // Primer paso del flujo guiado: medida directa de la inspección
@@ -30,6 +31,7 @@ export default async function MedidasPage({ params }: { params: Promise<{ id: st
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+      <BotonAtras href="/inspecciones" />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Kilometraje del vehículo</h1>

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
-import { getOwnInspectionOrNotFound, getNextStepPath } from "@/lib/inspections/queries";
+import { getOwnInspectionOrNotFound, getNextStepPath, getPreviousStepPath } from "@/lib/inspections/queries";
+import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { registrarResultado } from "@/lib/inspections/actions";
 
 // Resultado final (sección 13 del brief): declaración PERSONAL del
@@ -23,6 +24,8 @@ export default async function ResultadoPage({ params }: { params: Promise<{ id: 
     redirect(await getNextStepPath(id));
   }
 
+  const hrefAtras = (await getPreviousStepPath(id, "resultado")) ?? `/inspecciones/${id}/fotos`;
+
   async function marcarPuedeOperar() {
     "use server";
     await registrarResultado(id, true);
@@ -31,6 +34,7 @@ export default async function ResultadoPage({ params }: { params: Promise<{ id: 
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-4 py-8">
+      <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>
         <h1 className="text-2xl font-semibold text-[#0B3B60]">
