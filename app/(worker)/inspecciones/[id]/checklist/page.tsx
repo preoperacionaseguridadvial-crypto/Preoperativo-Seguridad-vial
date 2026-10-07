@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { refresh } from "next/cache";
 import { auth } from "@/lib/auth/config";
 import { RespuestaChecklist } from "@/generated/prisma/client";
 import type { TipoNovedad } from "@/generated/prisma/client";
@@ -54,14 +55,17 @@ export default async function ChecklistListPage({ params }: { params: Promise<{ 
 
   // Reporte inline de un documento (sin navegar a otra pantalla): se
   // bindea con el `checklistItemId` de cada fila al pasarlo a
-  // `DocumentoCheckItem` más abajo. Al no llamar `redirect`, Next.js
-  // revalida esta misma ruta y el `<details>` que la disparó vuelve a
-  // renderizar con el ítem ya resuelto.
+  // `DocumentoCheckItem` más abajo. Una Server Action NO re-renderiza la
+  // ruta por sí sola: sin `refresh()` la novedad quedaba guardada pero la
+  // pantalla seguía mostrando el documento como pendiente (el trabajador
+  // pensaba que "Guardar" no hacía nada). `refresh()` (next/cache) refresca
+  // el router del cliente y la fila vuelve con el ítem ya resuelto.
   async function reportarProblemaDocumento(checklistItemId: string, formData: FormData) {
     "use server";
     const tipo = formData.get("tipo")?.toString() as TipoNovedad;
     const observacion = formData.get("observacion")?.toString() ?? "";
     await responderItem(id, checklistItemId, RespuestaChecklist.FALLA, observacion, tipo);
+    refresh();
   }
 
   return (

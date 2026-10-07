@@ -63,7 +63,11 @@ export function DocumentoCheckItem({
   if (estado !== "PENDIENTE") {
     const esOk = estado === "OK";
     return (
-      <div className="flex items-center gap-3 px-4 py-3">
+      <div
+        className={`flex items-center gap-3 px-4 py-3 ${
+          esOk ? "bg-status-ok-soft/60" : "bg-status-crit-soft"
+        }`}
+      >
         <span className={`text-lg ${esOk ? "text-green-600" : "text-red-600"}`} aria-hidden="true">
           {esOk ? "✓" : "🔴"}
         </span>
