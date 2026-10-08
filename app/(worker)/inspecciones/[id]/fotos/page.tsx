@@ -54,7 +54,7 @@ export default async function FotosInspeccionPage({
   const ambasCompletas = Boolean(lateral && placa);
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-5">
       <BotonAtras href={hrefAtras} />
       <div>
         <p className="text-xs uppercase text-gray-400">{inspection.vehicle.placa}</p>

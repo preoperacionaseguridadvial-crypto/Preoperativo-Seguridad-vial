@@ -5,11 +5,11 @@ import { guiaDeFoto, type TipoFotoGuia, type TipoVehiculoGuia } from "@/lib/insp
  * salir la foto, según el tipo de vehículo, más una instrucción corta. Las
  * ilustraciones viven en public/fotos-guia/ (ver README ahí).
  *
- * Alto fijo (caja con aspect-ratio) para que no haya salto de layout al cargar
- * la imagen y para que no empuje el botón "Tomar foto" fuera de una pantalla de
- * 360×740. Con `compacta` (la foto ya está subida) se reduce a una fila:
- * imagen pequeña + instrucción, para que la miniatura de la foto sea la
- * protagonista pero el trabajador pueda consultar la guía si quiere cambiarla.
+ * Caja con aspect-ratio (sin salto de layout al cargar la imagen) en una fila
+ * compacta junto a la instrucción, para que las dos guías y sus botones
+ * "Tomar foto" entren en una sola pantalla de celular. Con `compacta` (la foto
+ * ya está subida) la fila se achica más, para que la miniatura de la foto sea
+ * la protagonista pero la guía siga a mano si quiere cambiarla.
  */
 export function GuiaFoto({
   tipo,
@@ -42,10 +42,13 @@ export function GuiaFoto({
     );
   }
 
+  // Fila compacta (imagen a la izquierda, instrucción a la derecha): en un
+  // celular real (≈360×650 visibles con la barra del navegador) las dos guías
+  // apiladas en vertical empujaban el segundo "Tomar foto" fuera de pantalla.
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-page px-2 py-2">
-      <div className="mx-auto aspect-[16/9] h-36 max-w-full">{imagen}</div>
-      <p className="text-center text-sm text-ink">{instruccion}</p>
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2">
+      <div className="aspect-[16/9] w-36 shrink-0 rounded-md bg-page">{imagen}</div>
+      <p className="text-sm leading-snug text-ink">{instruccion}</p>
     </div>
   );
 }
