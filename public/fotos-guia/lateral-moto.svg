@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img">
+  <title>Foto lateral de la moto: la moto completa, de costado, de rueda a rueda</title>
+  <defs>
+    <linearGradient id="tanque" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a78d6"/>
+      <stop offset="1" stop-color="#005b96"/>
+    </linearGradient>
+    <linearGradient id="cielo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8f1fc"/>
+      <stop offset="1" stop-color="#f4f7fa"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="180" rx="10" fill="url(#cielo)"/>
+  <!-- piso y sombra -->
+  <rect x="0" y="146" width="320" height="34" fill="#dfe7ef"/>
+  <ellipse cx="160" cy="148" rx="118" ry="7" fill="#17324d" opacity=".15"/>
+  <!-- rueda trasera -->
+  <circle cx="92" cy="122" r="27" fill="#17324d"/>
+  <circle cx="92" cy="122" r="18" fill="#c9d3dd"/>
+  <g stroke="#17324d" stroke-width="2.5" stroke-linecap="round">
+    <path d="M92 104v36M74 122h36M79 109l26 26M105 109l-26 26"/>
+  </g>
+  <circle cx="92" cy="122" r="5" fill="#17324d"/>
+  <!-- rueda delantera -->
+  <circle cx="234" cy="122" r="27" fill="#17324d"/>
+  <circle cx="234" cy="122" r="18" fill="#c9d3dd"/>
+  <circle cx="234" cy="122" r="11" fill="none" stroke="#7d8a96" stroke-width="3"/>
+  <g stroke="#17324d" stroke-width="2.5" stroke-linecap="round">
+    <path d="M234 104v36M216 122h36M221 109l26 26M247 109l-26 26"/>
+  </g>
+  <circle cx="234" cy="122" r="5" fill="#17324d"/>
+  <!-- basculante y cadena -->
+  <path d="M92 122 L150 112" stroke="#17324d" stroke-width="7" stroke-linecap="round"/>
+  <!-- motor -->
+  <rect x="130" y="92" width="44" height="34" rx="6" fill="#4a5a6a"/>
+  <path d="M136 100h32M136 108h32M136 116h32" stroke="#2c3a47" stroke-width="2"/>
+  <!-- escape -->
+  <path d="M150 124 L112 132 Q98 134 96 128 L100 124 L148 116 Z" fill="#7d8a96" stroke="#17324d" stroke-width="2"/>
+  <!-- chasis / guardabarros trasero -->
+  <path d="M84 86 Q70 88 66 100 L76 102 Q82 94 96 92 Z" fill="#005b96"/>
+  <!-- asiento -->
+  <path d="M90 84 Q118 74 150 78 L148 88 Q118 86 94 94 Z" fill="#17324d"/>
+  <!-- tanque -->
+  <path d="M146 76 Q164 62 196 66 Q208 70 206 84 L176 92 Q156 90 148 88 Z" fill="url(#tanque)" stroke="#17324d" stroke-width="2"/>
+  <path d="M160 74 Q176 68 194 72" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity=".7" fill="none"/>
+  <!-- horquilla -->
+  <path d="M204 70 L232 120" stroke="#9aa6b2" stroke-width="6" stroke-linecap="round"/>
+  <path d="M204 70 L232 120" stroke="#17324d" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+  <!-- manubrio y espejo -->
+  <path d="M200 66 L214 56 L226 58" stroke="#17324d" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M212 56 L206 40" stroke="#17324d" stroke-width="2.5" stroke-linecap="round"/>
+  <ellipse cx="204" cy="37" rx="7" ry="4.5" fill="#17324d"/>
+  <!-- farola -->
+  <path d="M214 68 L230 66 Q236 74 230 82 L216 80 Z" fill="#17324d"/>
+  <circle cx="230" cy="74" r="5" fill="#fab219"/>
+  <!-- guardabarros delantero -->
+  <path d="M214 98 Q234 90 254 102" stroke="#005b96" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <!-- stop -->
+  <rect x="62" y="96" width="9" height="5" rx="2" fill="#d03b3b"/>
+  <!-- visor de cámara -->
+  <g stroke="#005b96" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M14 38V14h24M282 14h24v24M306 142v24h-24M38 166H14v-24"/>
+  </g>
+</svg>

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img">
+  <title>Foto de la placa del carro: de cerca, la placa trasera completa y legible</title>
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8f1fc"/>
+      <stop offset="1" stop-color="#f4f7fa"/>
+    </linearGradient>
+    <linearGradient id="baul" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a78d6"/>
+      <stop offset="1" stop-color="#005b96"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="180" rx="10" fill="url(#fondo)"/>
+  <!-- parte trasera del carro -->
+  <path d="M30 40 Q34 24 52 22 L268 22 Q286 24 290 40 L294 120 Q294 128 286 128 L34 128 Q26 128 26 120 Z" fill="url(#baul)" stroke="#17324d" stroke-width="2.5"/>
+  <!-- luces traseras -->
+  <rect x="38" y="36" width="56" height="20" rx="5" fill="#d03b3b" stroke="#17324d" stroke-width="2"/>
+  <rect x="226" y="36" width="56" height="20" rx="5" fill="#d03b3b" stroke="#17324d" stroke-width="2"/>
+  <rect x="80" y="40" width="10" height="12" rx="2" fill="#fab219"/>
+  <rect x="230" y="40" width="10" height="12" rx="2" fill="#fab219"/>
+  <!-- emblema -->
+  <circle cx="160" cy="44" r="7" fill="none" stroke="#e8f1fc" stroke-width="2.5"/>
+  <!-- placa -->
+  <rect x="94" y="64" width="132" height="54" rx="7" fill="#fdd31d" stroke="#17324d" stroke-width="4"/>
+  <rect x="100" y="70" width="120" height="42" rx="4" fill="none" stroke="#17324d" stroke-width="1.5" opacity=".5"/>
+  <text x="160" y="100" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="28" fill="#17324d">ABC 123</text>
+  <text x="160" y="110" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="6.5" fill="#17324d">BOGOTÁ D.C.</text>
+  <!-- bómper -->
+  <rect x="20" y="128" width="280" height="18" rx="8" fill="#4a5a6a" stroke="#17324d" stroke-width="2"/>
+  <!-- llantas asomando -->
+  <rect x="40" y="146" width="44" height="22" rx="6" fill="#17324d"/>
+  <rect x="236" y="146" width="44" height="22" rx="6" fill="#17324d"/>
+  <!-- visor de cámara -->
+  <g stroke="#005b96" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M14 38V14h24M282 14h24v24M306 142v24h-24M38 166H14v-24"/>
+  </g>
+</svg>
