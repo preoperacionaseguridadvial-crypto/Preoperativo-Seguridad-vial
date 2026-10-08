@@ -8,10 +8,10 @@ import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirm
 import { etapaParaRol, type EtapaAprobacion, type RolAprobador } from "@/lib/inspections/cola-aprobacion";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 
-// Server actions de la revisión de los aprobadores (Fase 3 + roles-olariari).
+// Server actions de la revisión de los aprobadores (Fase 3 + roles-oleariari).
 // Hay dos aprobadores: el Director de Operaciones (rol SUPERVISOR), que decide
-// cualquier inspección que le toque, y el Supervisor Olariari, primera etapa de
-// las inspecciones de la sede Olariari. La etapa se decide SIEMPRE en el
+// cualquier inspección que le toque, y el Supervisor Oleariari, primera etapa de
+// las inspecciones de la sede Oleariari. La etapa se decide SIEMPRE en el
 // servidor, a partir de la sede de la inspección y del rol de la sesión (ver
 // lib/inspections/cola-aprobacion.ts): el cliente no elige etapa y una
 // decisión fuera de turno se rechaza. No hay asignación trabajador→supervisor.
@@ -22,7 +22,7 @@ import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 // decidida (`reviewedAt` no nulo) es inmutable — no se puede volver a
 // decidir; toda decisión se audita vía `logAudit`.
 
-const ROLES_APROBADORES: Role[] = [Role.SUPERVISOR, Role.SUPERVISOR_OLARIARI];
+const ROLES_APROBADORES: Role[] = [Role.SUPERVISOR, Role.SUPERVISOR_OLEARIARI];
 
 /**
  * Valida que la inspección exista, esté en un estado revisable
@@ -53,7 +53,7 @@ async function getInspeccionRevisable(inspectionId: string, role: RolAprobador) 
     // dar un mensaje útil; el resto es "no le corresponde".
     if (role === Role.SUPERVISOR) {
       throw new Error(
-        `Esta inspección todavía está pendiente del ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}: aún no le corresponde.`,
+        `Esta inspección todavía está pendiente del ${etiquetaRol(Role.SUPERVISOR_OLEARIARI)}: aún no le corresponde.`,
       );
     }
     throw new Error("Esta inspección no le corresponde a su rol o ya pasó por su etapa.");
@@ -63,7 +63,7 @@ async function getInspeccionRevisable(inspectionId: string, role: RolAprobador) 
 }
 
 function rolAprobadorDe(session: { user: { role: Role } }): RolAprobador {
-  return session.user.role === Role.SUPERVISOR_OLARIARI ? Role.SUPERVISOR_OLARIARI : Role.SUPERVISOR;
+  return session.user.role === Role.SUPERVISOR_OLEARIARI ? Role.SUPERVISOR_OLEARIARI : Role.SUPERVISOR;
 }
 
 /**
@@ -76,7 +76,7 @@ function rolAprobadorDe(session: { user: { role: Role } }): RolAprobador {
  * lista. Con confirmación, la auditoría guarda que se aprobó con novedades y
  * cuáles eran.
  *
- * Etapa 1 (Supervisor Olariari): no cambia el `status` ni fija `reviewedAt`;
+ * Etapa 1 (Supervisor Oleariari): no cambia el `status` ni fija `reviewedAt`;
  * solo registra su revisión y la inspección pasa a la cola del Director.
  * Etapa 2 (Director de Operaciones): aprueba de forma definitiva.
  */
@@ -108,11 +108,11 @@ export async function aprobarInspeccion(
   const updated = await prisma.inspection.update({
     where: { id: inspectionId },
     data:
-      etapa === "OLARIARI"
+      etapa === "OLEARIARI"
         ? {
-            revisadaSupervisorOlariariAt: now,
-            supervisorOlariariId: session.user.id,
-            observacionesSupervisorOlariari: observacionLimpia,
+            revisadaSupervisorOleariariAt: now,
+            supervisorOleariariId: session.user.id,
+            observacionesSupervisorOleariari: observacionLimpia,
           }
         : {
             status: InspectionStatus.APROBADA,
@@ -139,7 +139,7 @@ export async function aprobarInspeccion(
 
 /**
  * Rechaza una inspección pendiente. La observación es obligatoria (debe
- * quedar registrado por qué se rechazó). Un rechazo del Supervisor Olariari
+ * quedar registrado por qué se rechazó). Un rechazo del Supervisor Oleariari
  * cierra la inspección: nunca llega al Director.
  */
 export async function rechazarInspeccion(inspectionId: string, observacion: string) {
@@ -156,14 +156,14 @@ export async function rechazarInspeccion(inspectionId: string, observacion: stri
   const updated = await prisma.inspection.update({
     where: { id: inspectionId },
     data:
-      etapa === "OLARIARI"
+      etapa === "OLEARIARI"
         ? {
             status: InspectionStatus.RECHAZADA,
             rejectedAt: now,
             reviewedAt: now,
-            revisadaSupervisorOlariariAt: now,
-            supervisorOlariariId: session.user.id,
-            observacionesSupervisorOlariari: observacionLimpia,
+            revisadaSupervisorOleariariAt: now,
+            supervisorOleariariId: session.user.id,
+            observacionesSupervisorOleariari: observacionLimpia,
           }
         : {
             status: InspectionStatus.RECHAZADA,
@@ -187,5 +187,5 @@ export async function rechazarInspeccion(inspectionId: string, observacion: stri
 
 /** La etapa del Director conserva los nombres históricos; la primera etapa lleva sufijo. */
 function accionAuditoria(verbo: "APROBAR" | "RECHAZAR", etapa: EtapaAprobacion) {
-  return etapa === "OLARIARI" ? `${verbo}_INSPECCION_SUPERVISOR_OLARIARI` : `${verbo}_INSPECCION`;
+  return etapa === "OLEARIARI" ? `${verbo}_INSPECCION_SUPERVISOR_OLEARIARI` : `${verbo}_INSPECCION`;
 }

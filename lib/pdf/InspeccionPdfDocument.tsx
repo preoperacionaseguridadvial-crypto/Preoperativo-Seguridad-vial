@@ -57,8 +57,8 @@ registrarFuentesPdf();
 // ancho (pedido del dueño de producto, 2026-09-18): a la derecha, como en el
 // Excel original, le quitaba espacio a las firmas. Conductor y supervisor
 // conservan la proporción del Excel (A:C = 32.10 y D:F = 37.89), ahora sobre
-// el ancho completo. Una inspección de Olariari suma la caja del Supervisor
-// Olariari (3 firmas, roles-olariari): cuántas cajas y qué anchos lleva cada
+// el ancho completo. Una inspección de Oleariari suma la caja del Supervisor
+// Oleariari (3 firmas, roles-oleariari): cuántas cajas y qué anchos lleva cada
 // una lo decide `cajasFirmaPdf`.
 
 // Textos literales del formato oficial (tal cual figuran en el Excel,
@@ -379,16 +379,16 @@ function FirmaCaja({
   );
 }
 
-/** Nombre, cédula y firma de quien firma cada caja (conductor, Supervisor Olariari o Director). */
+/** Nombre, cédula y firma de quien firma cada caja (conductor, Supervisor Oleariari o Director). */
 function firmanteDeCaja(data: InspeccionParaPdf, tipo: TipoFirma) {
   switch (tipo) {
     case TipoFirma.CONDUCTOR:
       return { nombre: data.conductor.name, cedula: data.conductor.cedula, firma: data.firmas.conductor };
-    case TipoFirma.SUPERVISOR_OLARIARI:
+    case TipoFirma.SUPERVISOR_OLEARIARI:
       return {
-        nombre: data.supervisorOlariari?.name ?? null,
-        cedula: data.supervisorOlariari?.cedula,
-        firma: data.firmas.supervisorOlariari,
+        nombre: data.supervisorOleariari?.name ?? null,
+        cedula: data.supervisorOleariari?.cedula,
+        firma: data.firmas.supervisorOleariari,
       };
     case TipoFirma.SUPERVISOR:
     default:
@@ -573,9 +573,9 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
           {!data.puedeOperar && data.justificacionNoOperar && (
             <Text style={styles.aprobacionObservacion}>Justificación del conductor: {data.justificacionNoOperar}</Text>
           )}
-          {data.sede === "OLARIARI" && data.revisadaSupervisorOlariariAt && (
+          {data.sede === "OLEARIARI" && data.revisadaSupervisorOleariariAt && (
             <Text style={styles.novedadCampo}>
-              Revisada por el Supervisor Olariari el {formatFechaHora(data.revisadaSupervisorOlariariAt)}
+              Revisada por el Supervisor Oleariari el {formatFechaHora(data.revisadaSupervisorOleariariAt)}
             </Text>
           )}
           {observacionesAprobacionPdf(data).map((linea) => (

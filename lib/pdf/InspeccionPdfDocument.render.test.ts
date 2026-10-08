@@ -267,11 +267,11 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
       expect(estiloDe(ramas[ramaFirmas]).width).toBeUndefined();
     });
 
-    // roles-olariari: Olariari lleva 3 firmas (conductor, Supervisor Olariari,
+    // roles-oleariari: Oleariari lleva 3 firmas (conductor, Supervisor Oleariari,
     // Director de Operaciones); Bogotá 2, con el aprobador rotulado con su cargo.
     async function titulosDeFirma(sede: Sede, conEtapa1: boolean) {
       const worker = await crearUsuario(Role.TRABAJADOR, { sede });
-      const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+      const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
       const director = await crearUsuario(Role.SUPERVISOR);
       const vehicle = await crearVehiculo();
       const ahora = new Date();
@@ -286,9 +286,9 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
           supervisorId: director.id,
           sede,
           ...(conEtapa1 && {
-            revisadaSupervisorOlariariAt: ahora,
-            supervisorOlariariId: supOlariari.id,
-            observacionesSupervisorOlariari: "Visto en sitio.",
+            revisadaSupervisorOleariariAt: ahora,
+            supervisorOleariariId: supOleariari.id,
+            observacionesSupervisorOleariari: "Visto en sitio.",
           }),
         },
       });
@@ -299,9 +299,9 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
         await prisma.firma.create({
           data: {
             inspectionId: inspection.id,
-            userId: supOlariari.id,
-            tipo: TipoFirma.SUPERVISOR_OLARIARI,
-            s3Key: "firmas/x/SUPERVISOR_OLARIARI.png",
+            userId: supOleariari.id,
+            tipo: TipoFirma.SUPERVISOR_OLEARIARI,
+            s3Key: "firmas/x/SUPERVISOR_OLEARIARI.png",
           },
         });
       }
@@ -315,15 +315,15 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
       return { titulos, data };
     }
 
-    it("una inspección de Olariari dibuja 3 cajas de firma", async () => {
-      const { titulos, data } = await titulosDeFirma(Sede.OLARIARI, true);
+    it("una inspección de Oleariari dibuja 3 cajas de firma", async () => {
+      const { titulos, data } = await titulosDeFirma(Sede.OLEARIARI, true);
       expect(titulos).toEqual([
         "NOMBRE Y FIRMA DEL CONDUCTOR",
-        "NOMBRE Y FIRMA DEL SUPERVISOR OLARIARI",
+        "NOMBRE Y FIRMA DEL SUPERVISOR OLEARIARI",
         "NOMBRE Y FIRMA DEL DIRECTOR DE OPERACIONES",
       ]);
-      expect(data.firmas.supervisorOlariari).not.toBeNull();
-      expect(data.supervisorOlariari?.name).toBeTruthy();
+      expect(data.firmas.supervisorOleariari).not.toBeNull();
+      expect(data.supervisorOleariari?.name).toBeTruthy();
     });
 
     it("una inspección de Bogotá conserva 2 cajas, con el aprobador como Director de Operaciones", async () => {

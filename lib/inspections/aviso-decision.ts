@@ -18,13 +18,13 @@ const DECISIONES = {
 // Placas colombianas y similares: solo letras/números, longitud acotada.
 const PLACA_VALIDA = /^[A-Z0-9]{3,10}$/;
 
-// Aprobación de la primera etapa (Supervisor Olariari): la inspección sigue
+// Aprobación de la primera etapa (Supervisor Oleariari): la inspección sigue
 // pendiente (el status no cambia) y pasa al Director de Operaciones.
 const DECISION_ENVIADA_AL_DIRECTOR = "enviada";
 
 /**
  * URL del Inicio al que se vuelve tras guardar la firma del aprobador.
- * `primeraEtapa` indica que firmó el Supervisor Olariari: si aprobó, el status
+ * `primeraEtapa` indica que firmó el Supervisor Oleariari: si aprobó, el status
  * sigue pendiente y el aviso dice que se envió al Director.
  */
 export function urlInicioTrasFirma(status: string, placa: string, primeraEtapa = false): string {

@@ -87,8 +87,8 @@ describe("getInspectionForSupervisor — fotos diarias", () => {
   });
 });
 
-// Flujo de dos etapas (roles-olariari): cada aprobador ve solo su cola, y el
-// Supervisor Olariari solo consulta su propia sede.
+// Flujo de dos etapas (roles-oleariari): cada aprobador ve solo su cola, y el
+// Supervisor Oleariari solo consulta su propia sede.
 describe("colas por rol y consulta por sede", () => {
   beforeEach(async () => {
     await limpiarBaseDeTest();
@@ -105,31 +105,31 @@ describe("colas por rol y consulta por sede", () => {
         status: InspectionStatus.PENDIENTE_APROBACION,
         completedAt: new Date(),
         sede,
-        revisadaSupervisorOlariariAt: extra.revisada ? new Date() : null,
+        revisadaSupervisorOleariariAt: extra.revisada ? new Date() : null,
       },
     });
   }
 
   it("getInspeccionesPendientes(rol) devuelve la cola de cada aprobador", async () => {
     const bogota = await crear(Sede.BOGOTA);
-    const olariari1 = await crear(Sede.OLARIARI);
-    const olariari2 = await crear(Sede.OLARIARI, { revisada: true });
+    const oleariari1 = await crear(Sede.OLEARIARI);
+    const oleariari2 = await crear(Sede.OLEARIARI, { revisada: true });
 
-    const colaOlariari = await getInspeccionesPendientes(Role.SUPERVISOR_OLARIARI);
+    const colaOleariari = await getInspeccionesPendientes(Role.SUPERVISOR_OLEARIARI);
     const colaDirector = await getInspeccionesPendientes(Role.SUPERVISOR);
 
-    expect(colaOlariari.map((i) => i.id)).toEqual([olariari1.id]);
-    expect(colaDirector.map((i) => i.id).sort()).toEqual([bogota.id, olariari2.id].sort());
+    expect(colaOleariari.map((i) => i.id)).toEqual([oleariari1.id]);
+    expect(colaDirector.map((i) => i.id).sort()).toEqual([bogota.id, oleariari2.id].sort());
   });
 
   it("getAllInspeccionesForOversight filtra por sede cuando se pide", async () => {
     const bogota = await crear(Sede.BOGOTA);
-    const olariari = await crear(Sede.OLARIARI);
+    const oleariari = await crear(Sede.OLEARIARI);
 
-    const soloOlariari = await getAllInspeccionesForOversight({ sede: Sede.OLARIARI });
+    const soloOleariari = await getAllInspeccionesForOversight({ sede: Sede.OLEARIARI });
     const todas = await getAllInspeccionesForOversight();
 
-    expect(soloOlariari.map((i) => i.id)).toEqual([olariari.id]);
-    expect(todas.map((i) => i.id).sort()).toEqual([bogota.id, olariari.id].sort());
+    expect(soloOleariari.map((i) => i.id)).toEqual([oleariari.id]);
+    expect(todas.map((i) => i.id).sort()).toEqual([bogota.id, oleariari.id].sort());
   });
 });

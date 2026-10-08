@@ -5,7 +5,7 @@ import { InspectionStatus, type Sede } from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { whereColaPendientes, type RolAprobador } from "@/lib/inspections/cola-aprobacion";
 
-// Queries de la revisión de los aprobadores (Fase 3 + roles-olariari). No hay
+// Queries de la revisión de los aprobadores (Fase 3 + roles-oleariari). No hay
 // asignación trabajador→supervisor (decisión de negocio ya tomada), por eso
 // estas queries no filtran por `supervisorId`; lo que sí filtra es la ETAPA:
 // cada aprobador ve su cola (ver lib/inspections/cola-aprobacion.ts).
@@ -60,8 +60,8 @@ function getInspectionForSupervisorRaw(inspectionId: string) {
       conductor: true,
       vehicle: true,
       supervisor: true,
-      // Primera etapa de las inspecciones de Olariari (roles-olariari).
-      supervisorOlariari: true,
+      // Primera etapa de las inspecciones de Oleariari (roles-oleariari).
+      supervisorOleariari: true,
       respuestas: {
         include: {
           checklistItem: { include: { category: true } },
@@ -187,7 +187,7 @@ export type FiltrosInspecciones = {
   workerId?: string;
   supervisorId?: string;
   puedeOperar?: boolean;
-  // El Supervisor Olariari solo consulta su sede (roles-olariari).
+  // El Supervisor Oleariari solo consulta su sede (roles-oleariari).
   sede?: Sede;
 };
 

@@ -44,7 +44,7 @@ export default async function Home({
 
   const ahora = new Date();
   const rol = user.role;
-  // Los dos aprobadores (Director de Operaciones y Supervisor Olariari) tienen
+  // Los dos aprobadores (Director de Operaciones y Supervisor Oleariari) tienen
   // el mismo panel: las tarjetas de SU cola y los atajos.
   const rolAprobador = esRolAprobador(rol) ? rol : null;
   // Aviso "aprobada/rechazada y firmada" al volver de firmar (solo aprobadores).

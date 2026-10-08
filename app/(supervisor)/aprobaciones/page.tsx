@@ -9,10 +9,10 @@ import { TarjetaPendiente } from "@/app/_components/TarjetaPendiente";
 // oversight (app/(gestion)/consulta-inspecciones), a la que SUPERVISOR ya
 // tiene acceso — no se duplica una pantalla de búsqueda propia acá.
 
-// Punto de entrada de la revisión de los aprobadores (Fase 3 + roles-olariari):
+// Punto de entrada de la revisión de los aprobadores (Fase 3 + roles-oleariari):
 // lista de inspecciones pendientes de decisión EN LA COLA DE SU ROL — el
-// Supervisor Olariari ve las de su sede sin revisar; el Director de Operaciones
-// las de Bogotá y las de Olariari que ya pasaron la primera etapa. No hay
+// Supervisor Oleariari ve las de su sede sin revisar; el Director de Operaciones
+// las de Bogotá y las de Oleariari que ya pasaron la primera etapa. No hay
 // asignación trabajador→supervisor.
 //
 // Diseño mobile-first (la mayoría de los Supervisores la abre desde el

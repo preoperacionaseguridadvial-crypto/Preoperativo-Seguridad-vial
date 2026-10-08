@@ -79,7 +79,7 @@ const ATAJOS = {
 const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
   TRABAJADOR: [ATAJOS.inspecciones],
   SUPERVISOR: [ATAJOS.aprobaciones, ATAJOS.consulta],
-  SUPERVISOR_OLARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
+  SUPERVISOR_OLEARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
   DIRECTOR: [ATAJOS.dashboard, ATAJOS.consulta],
   SST: [ATAJOS.dashboard, ATAJOS.consulta, ATAJOS.administracion],
   ADMINISTRADOR: [ATAJOS.usuarios, ATAJOS.configuracion, ATAJOS.dashboard, ATAJOS.consulta],

@@ -195,8 +195,8 @@ describe("formatSiNoPdf", () => {
   });
 });
 
-// roles-olariari: cuántas cajas de firma lleva el FO-SVS-23 según la sede. La
-// inspección de Olariari pasa por dos aprobadores (3 firmas); la de Bogotá y
+// roles-oleariari: cuántas cajas de firma lleva el FO-SVS-23 según la sede. La
+// inspección de Oleariari pasa por dos aprobadores (3 firmas); la de Bogotá y
 // una legacy sin sede, por uno (2 firmas, con la caja del aprobador rotulada
 // con el cargo real).
 describe("cajasFirmaPdf", () => {
@@ -214,22 +214,22 @@ describe("cajasFirmaPdf", () => {
     expect(cajasFirmaPdf(undefined)).toHaveLength(2);
   });
 
-  it("Olariari: 3 cajas, conductor, Supervisor Olariari y Director de Operaciones", () => {
-    const cajas = cajasFirmaPdf(Sede.OLARIARI);
+  it("Oleariari: 3 cajas, conductor, Supervisor Oleariari y Director de Operaciones", () => {
+    const cajas = cajasFirmaPdf(Sede.OLEARIARI);
     expect(cajas.map((c) => c.tipo)).toEqual([
       TipoFirma.CONDUCTOR,
-      TipoFirma.SUPERVISOR_OLARIARI,
+      TipoFirma.SUPERVISOR_OLEARIARI,
       TipoFirma.SUPERVISOR,
     ]);
     expect(cajas.map((c) => c.titulo)).toEqual([
       "NOMBRE Y FIRMA DEL CONDUCTOR",
-      "NOMBRE Y FIRMA DEL SUPERVISOR OLARIARI",
+      "NOMBRE Y FIRMA DEL SUPERVISOR OLEARIARI",
       "NOMBRE Y FIRMA DEL DIRECTOR DE OPERACIONES",
     ]);
   });
 
   it("los anchos suman 100% para que las cajas entren en el ancho de la página", () => {
-    for (const sede of [Sede.BOGOTA, Sede.OLARIARI, null]) {
+    for (const sede of [Sede.BOGOTA, Sede.OLEARIARI, null]) {
       const total = cajasFirmaPdf(sede).reduce((suma, c) => suma + c.anchoPct, 0);
       expect(total).toBeCloseTo(100, 5);
     }
@@ -239,9 +239,9 @@ describe("cajasFirmaPdf", () => {
 describe("observacionesAprobacionPdf", () => {
   const base = {
     status: "APROBADA",
-    sede: Sede.OLARIARI as Sede | null,
+    sede: Sede.OLEARIARI as Sede | null,
     observacionesSupervisor: null as string | null,
-    observacionesSupervisorOlariari: null as string | null,
+    observacionesSupervisorOleariari: null as string | null,
   };
 
   it("Bogotá aprobada: solo la observación del Director de Operaciones", () => {
@@ -250,27 +250,27 @@ describe("observacionesAprobacionPdf", () => {
     ).toEqual(["Observación del Director de Operaciones: Todo en orden."]);
   });
 
-  it("Olariari: primero la del Supervisor Olariari, luego la del Director", () => {
+  it("Oleariari: primero la del Supervisor Oleariari, luego la del Director", () => {
     expect(
       observacionesAprobacionPdf({
         ...base,
         observacionesSupervisor: "Conforme.",
-        observacionesSupervisorOlariari: "Visto en sitio.",
+        observacionesSupervisorOleariari: "Visto en sitio.",
       }),
     ).toEqual([
-      "Observación del Supervisor Olariari: Visto en sitio.",
+      "Observación del Supervisor Oleariari: Visto en sitio.",
       "Observación del Director de Operaciones: Conforme.",
     ]);
   });
 
-  it("rechazada en la primera etapa: solo la del Supervisor Olariari", () => {
+  it("rechazada en la primera etapa: solo la del Supervisor Oleariari", () => {
     expect(
       observacionesAprobacionPdf({
         ...base,
         status: "RECHAZADA",
-        observacionesSupervisorOlariari: "Falta el casco.",
+        observacionesSupervisorOleariari: "Falta el casco.",
       }),
-    ).toEqual(["Observación del Supervisor Olariari: Falta el casco."]);
+    ).toEqual(["Observación del Supervisor Oleariari: Falta el casco."]);
   });
 
   it("la del Director solo se muestra una vez decidida (aprobada o rechazada)", () => {
@@ -279,14 +279,14 @@ describe("observacionesAprobacionPdf", () => {
     ).toEqual([]);
   });
 
-  it("la del Supervisor Olariari se muestra aunque la inspección siga pendiente del Director", () => {
+  it("la del Supervisor Oleariari se muestra aunque la inspección siga pendiente del Director", () => {
     expect(
       observacionesAprobacionPdf({
         ...base,
         status: "PENDIENTE_APROBACION",
-        observacionesSupervisorOlariari: "Visto en sitio.",
+        observacionesSupervisorOleariari: "Visto en sitio.",
       }),
-    ).toEqual(["Observación del Supervisor Olariari: Visto en sitio."]);
+    ).toEqual(["Observación del Supervisor Oleariari: Visto en sitio."]);
   });
 
   it("sin observaciones no devuelve nada", () => {

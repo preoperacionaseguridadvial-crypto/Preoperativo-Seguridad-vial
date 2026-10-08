@@ -6,11 +6,11 @@ import { Role } from "@/generated/prisma/enums";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { esperandoA } from "@/lib/inspections/cola-aprobacion";
 
-// Quién aprueba depende de la sede (roles-olariari): en Olariari pasa primero
-// por el Supervisor Olariari y después por el Director de Operaciones.
+// Quién aprueba depende de la sede (roles-oleariari): en Oleariari pasa primero
+// por el Supervisor Oleariari y después por el Director de Operaciones.
 function mensajeEstado(inspection: Awaited<ReturnType<typeof getOwnInspectionOrNotFound>>): string {
   const director = etiquetaRol(Role.SUPERVISOR);
-  const supOlariari = etiquetaRol(Role.SUPERVISOR_OLARIARI);
+  const supOleariari = etiquetaRol(Role.SUPERVISOR_OLEARIARI);
   const revisor = esperandoA(inspection);
   switch (inspection.status) {
     case "PENDIENTE_APROBACION":
@@ -20,8 +20,8 @@ function mensajeEstado(inspection: Awaited<ReturnType<typeof getOwnInspectionOrN
     case "APROBADA":
       return `Tu inspección fue aprobada por el ${director}.`;
     case "RECHAZADA":
-      // Sin Director de por medio, la rechazó el Supervisor Olariari.
-      return `Tu inspección fue rechazada por el ${inspection.supervisorId === null && inspection.supervisorOlariariId ? supOlariari : director}.`;
+      // Sin Director de por medio, la rechazó el Supervisor Oleariari.
+      return `Tu inspección fue rechazada por el ${inspection.supervisorId === null && inspection.supervisorOleariariId ? supOleariari : director}.`;
     default:
       return "Tu inspección fue enviada correctamente.";
   }
@@ -55,7 +55,7 @@ export default async function InspeccionEnviadaPage({
   const {
     conductor: firmaConductor,
     supervisor: firmaSupervisor,
-    supervisorOlariari: firmaSupervisorOlariari,
+    supervisorOleariari: firmaSupervisorOleariari,
   } = await getFirmasInspeccion(id);
 
   return (
@@ -65,7 +65,7 @@ export default async function InspeccionEnviadaPage({
         {mensajeEstado(inspection)}
       </p>
 
-      {(firmaConductor || firmaSupervisorOlariari || firmaSupervisor) && (
+      {(firmaConductor || firmaSupervisorOleariari || firmaSupervisor) && (
         <section className="flex w-full flex-col gap-4 rounded-md border border-gray-200 p-4 text-left">
           <h2 className="text-center text-sm font-medium text-gray-500">Firmas</h2>
           {firmaConductor && (
@@ -85,19 +85,19 @@ export default async function InspeccionEnviadaPage({
               )}
             </div>
           )}
-          {firmaSupervisorOlariari && (
+          {firmaSupervisorOleariari && (
             <div className="flex flex-col items-center gap-1">
               <p className="text-xs text-gray-500">
-                {etiquetaRol(Role.SUPERVISOR_OLARIARI)} — {formatFechaHora(firmaSupervisorOlariari.createdAt)}
+                {etiquetaRol(Role.SUPERVISOR_OLEARIARI)} — {formatFechaHora(firmaSupervisorOleariari.createdAt)}
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal, no candidata a next/image remoto. */}
               <img
-                src={firmaSupervisorOlariari.url}
-                alt="Firma del Supervisor Olariari"
+                src={firmaSupervisorOleariari.url}
+                alt="Firma del Supervisor Oleariari"
                 className="h-24 w-full max-w-xs rounded-md border border-gray-200 bg-white object-contain"
               />
-              {inspection.supervisorOlariari && (
-                <p className="text-sm font-medium text-gray-700">{inspection.supervisorOlariari.name}</p>
+              {inspection.supervisorOleariari && (
+                <p className="text-sm font-medium text-gray-700">{inspection.supervisorOleariari.name}</p>
               )}
             </div>
           )}

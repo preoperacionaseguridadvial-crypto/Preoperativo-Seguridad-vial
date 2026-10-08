@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth/config";
 import { getAllInspeccionesForOversight } from "@/lib/inspections/supervisor-queries";
 import { InspectionStatus } from "@/generated/prisma/client";
 import { Role, Sede } from "@/generated/prisma/enums";
-import { estadoEtapaOlariari } from "@/lib/inspections/cola-aprobacion";
+import { estadoEtapaOleariari } from "@/lib/inspections/cola-aprobacion";
 
 const ESTADOS_FILTRO = [
   InspectionStatus.EN_PROCESO,
@@ -25,7 +25,7 @@ type SearchParams = {
 };
 
 // Punto de entrada de la consulta de oversight (DIRECTOR/SST/SUPERVISOR/
-// ADMINISTRADOR y Supervisor Olariari, este último solo de su sede): lista de
+// ADMINISTRADOR y Supervisor Oleariari, este último solo de su sede): lista de
 // las inspecciones, cualquier estado, cualquier recorredor,
 // con filtros opcionales por conductor/placa/estado/rango de fecha vía query
 // params (form GET puro, sin JS). Pantalla de solo lectura — sin ninguna
@@ -52,8 +52,8 @@ export default async function ConsultaInspeccionesPage({
     estado: estadoValido,
     fechaDesde: fechaDesde ? new Date(fechaDesde) : undefined,
     fechaHasta: fechaHasta ? new Date(fechaHasta) : undefined,
-    // El Supervisor Olariari solo consulta las inspecciones de su sede.
-    sede: session.user.role === Role.SUPERVISOR_OLARIARI ? Sede.OLARIARI : undefined,
+    // El Supervisor Oleariari solo consulta las inspecciones de su sede.
+    sede: session.user.role === Role.SUPERVISOR_OLEARIARI ? Sede.OLEARIARI : undefined,
   });
 
   return (
@@ -177,8 +177,8 @@ export default async function ConsultaInspeccionesPage({
                 <span>Inicio: {formatFechaHora(inspection.startedAt)}</span>
                 <span>Fin: {formatFechaHora(inspection.completedAt)}</span>
               </div>
-              {estadoEtapaOlariari(inspection) && (
-                <p className="mt-1 text-xs font-medium text-[#0B3B60]">{estadoEtapaOlariari(inspection)}</p>
+              {estadoEtapaOleariari(inspection) && (
+                <p className="mt-1 text-xs font-medium text-[#0B3B60]">{estadoEtapaOleariari(inspection)}</p>
               )}
             </Link>
           </li>

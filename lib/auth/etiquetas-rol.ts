@@ -8,8 +8,8 @@ import { Role, Sede } from "@/generated/prisma/enums";
 // llaman en pantalla (cargos reales de ESS). Puro y sin dependencias de
 // servidor para poder usarlo desde componentes de cliente y tests.
 
-/** Nombre visible de la sede Olariari. Un solo lugar por si cambia la grafía. */
-export const NOMBRE_SEDE_OLARIARI = "Olariari";
+/** Nombre visible de la sede Oleariari. Un solo lugar por si cambia la grafía. */
+export const NOMBRE_SEDE_OLEARIARI = "Oleariari";
 
 const ETIQUETA_ROL: Record<Role, string> = {
   TRABAJADOR: "Recorredor",
@@ -17,18 +17,18 @@ const ETIQUETA_ROL: Record<Role, string> = {
   DIRECTOR: "Director",
   SST: "Administrador SST",
   ADMINISTRADOR: "Administrador",
-  SUPERVISOR_OLARIARI: `Supervisor ${NOMBRE_SEDE_OLARIARI}`,
+  SUPERVISOR_OLEARIARI: `Supervisor ${NOMBRE_SEDE_OLEARIARI}`,
 };
 
 const ETIQUETA_SEDE: Record<Sede, string> = {
   BOGOTA: "Bogotá",
-  OLARIARI: NOMBRE_SEDE_OLARIARI,
+  OLEARIARI: NOMBRE_SEDE_OLEARIARI,
 };
 
 /** Roles en el orden en que se ofrecen en los formularios de usuarios. */
 export const ROLES_ASIGNABLES: readonly Role[] = [
   Role.TRABAJADOR,
-  Role.SUPERVISOR_OLARIARI,
+  Role.SUPERVISOR_OLEARIARI,
   Role.SUPERVISOR,
   Role.DIRECTOR,
   Role.SST,
@@ -38,7 +38,7 @@ export const ROLES_ASIGNABLES: readonly Role[] = [
 /** Sedes con su etiqueta, para los <select>. */
 export const SEDES: readonly { value: Sede; label: string }[] = [
   { value: Sede.BOGOTA, label: ETIQUETA_SEDE.BOGOTA },
-  { value: Sede.OLARIARI, label: ETIQUETA_SEDE.OLARIARI },
+  { value: Sede.OLEARIARI, label: ETIQUETA_SEDE.OLEARIARI },
 ];
 
 export function etiquetaRol(role: Role): string {

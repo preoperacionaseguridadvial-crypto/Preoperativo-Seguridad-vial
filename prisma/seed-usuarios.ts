@@ -13,8 +13,8 @@ export type SeedUser = {
   // poder probar el flujo de inspección de punta a punta; cada uno queda
   // además vinculado a SU vehículo (1:1, ver SEED_VEHICULOS).
   tipoVehiculo?: TipoVehiculo;
-  // Sede (roles-olariari): la exige el panel para los Recorredores. En Olariari
-  // la inspección pasa primero por el Supervisor Olariari.
+  // Sede (roles-oleariari): la exige el panel para los Recorredores. En Oleariari
+  // la inspección pasa primero por el Supervisor Oleariari.
   sede?: Sede;
 };
 
@@ -36,17 +36,17 @@ export const SEED_USERS: SeedUser[] = [
     sede: Sede.BOGOTA,
   },
   {
-    email: "recorredor.olariari@ess.local",
-    name: "Recorredor Olariari Demo",
+    email: "recorredor.oleariari@ess.local",
+    name: "Recorredor Oleariari Demo",
     role: Role.TRABAJADOR,
     cedula: "1001234569",
     tipoVehiculo: TipoVehiculo.MOTO,
-    sede: Sede.OLARIARI,
+    sede: Sede.OLEARIARI,
   },
   {
-    email: "supervisor.olariari@ess.local",
-    name: "Supervisor Olariari Demo",
-    role: Role.SUPERVISOR_OLARIARI,
+    email: "supervisor.oleariari@ess.local",
+    name: "Supervisor Oleariari Demo",
+    role: Role.SUPERVISOR_OLEARIARI,
     cedula: "1002345679",
   },
   {
@@ -102,7 +102,7 @@ export const SEED_VEHICULOS = [
     tipo: "Motocicleta",
     tipoVehiculo: TipoVehiculo.MOTO,
     hojaDeVida: SEED_HOJA_DE_VIDA_MOTO,
-    usuarioEmail: "recorredor.olariari@ess.local",
+    usuarioEmail: "recorredor.oleariari@ess.local",
   },
 ] as const;
 
@@ -115,4 +115,7 @@ export const RENOMBRES_USUARIOS_DEMO = [
   { anterior: "trabajador@ess.local", nuevo: "recorredor.bogota@ess.local" },
   { anterior: "supervisor@ess.local", nuevo: "director.operaciones@ess.local" },
   { anterior: "sst@ess.local", nuevo: "admin.sst@ess.local" },
+  // Corrección ortográfica de la sede (OLARIARI → OLEARIARI).
+  { anterior: "recorredor.olariari@ess.local", nuevo: "recorredor.oleariari@ess.local" },
+  { anterior: "supervisor.olariari@ess.local", nuevo: "supervisor.oleariari@ess.local" },
 ] as const;

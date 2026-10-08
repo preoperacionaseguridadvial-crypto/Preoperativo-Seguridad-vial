@@ -234,8 +234,8 @@ export function getInspectionForWorker(inspectionId: string) {
       // app/(worker)/inspecciones/[id]/enviada/page.tsx pueda mostrar la
       // cédula del supervisor junto a su firma, sin otra query.
       supervisor: true,
-      // Primera etapa de las inspecciones de Olariari (roles-olariari).
-      supervisorOlariari: true,
+      // Primera etapa de las inspecciones de Oleariari (roles-oleariari).
+      supervisorOleariari: true,
       respuestas: {
         include: {
           checklistItem: { include: { category: true } },
@@ -302,8 +302,8 @@ export async function getFirmasInspeccion(inspectionId: string) {
   return {
     conductor: conUrl.find((firma) => firma.tipo === TipoFirma.CONDUCTOR) ?? null,
     supervisor: conUrl.find((firma) => firma.tipo === TipoFirma.SUPERVISOR) ?? null,
-    // Primera etapa de las inspecciones de Olariari (roles-olariari).
-    supervisorOlariari: conUrl.find((firma) => firma.tipo === TipoFirma.SUPERVISOR_OLARIARI) ?? null,
+    // Primera etapa de las inspecciones de Oleariari (roles-oleariari).
+    supervisorOleariari: conUrl.find((firma) => firma.tipo === TipoFirma.SUPERVISOR_OLEARIARI) ?? null,
   };
 }
 
