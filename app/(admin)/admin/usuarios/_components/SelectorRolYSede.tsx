@@ -76,7 +76,7 @@ export function SelectorRolYSede({
             ))}
           </select>
           <p className="mt-1 text-xs text-gray-500">
-            Define quién aprueba sus inspecciones: en Olariari pasan primero por el Supervisor Olariari.
+            Define quién aprueba sus inspecciones: en Oleariari pasan primero por el Supervisor Oleariari.
           </p>
         </div>
       )}

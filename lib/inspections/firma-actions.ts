@@ -103,26 +103,26 @@ export async function guardarFirmaConductor(inspectionId: string, formData: Form
  * decide el servidor por el rol de la sesión:
  * - SUPERVISOR (Director de Operaciones): decisión definitiva (APROBADA o
  *   RECHAZADA), tipo SUPERVISOR.
- * - SUPERVISOR_OLARIARI: su revisión de la primera etapa
- *   (`revisadaSupervisorOlariariAt`), tipo SUPERVISOR_OLARIARI.
+ * - SUPERVISOR_OLEARIARI: su revisión de la primera etapa
+ *   (`revisadaSupervisorOleariariAt`), tipo SUPERVISOR_OLEARIARI.
  * Solo puede firmar el mismo usuario que tomó esa decisión — sin este chequeo,
  * como no hay asignación trabajador→supervisor, cualquier otro aprobador del
  * mismo rol podría firmar una decisión que no tomó.
  */
 export async function guardarFirmaSupervisor(inspectionId: string, formData: FormData) {
-  const session = await requireRole([Role.SUPERVISOR, Role.SUPERVISOR_OLARIARI]);
-  const esOlariari = session.user.role === Role.SUPERVISOR_OLARIARI;
+  const session = await requireRole([Role.SUPERVISOR, Role.SUPERVISOR_OLEARIARI]);
+  const esOleariari = session.user.role === Role.SUPERVISOR_OLEARIARI;
 
   const inspection = await prisma.inspection.findUnique({ where: { id: inspectionId } });
   if (!inspection) {
     throw new Error("Inspección no encontrada.");
   }
 
-  if (esOlariari) {
-    if (inspection.revisadaSupervisorOlariariAt === null) {
+  if (esOleariari) {
+    if (inspection.revisadaSupervisorOleariariAt === null) {
       throw new Error("La inspección todavía no fue decidida: no se puede firmar.");
     }
-    if (inspection.supervisorOlariariId !== session.user.id) {
+    if (inspection.supervisorOleariariId !== session.user.id) {
       throw new ForbiddenError("Solo el supervisor que tomó la decisión puede firmar.");
     }
   } else {
@@ -140,8 +140,8 @@ export async function guardarFirmaSupervisor(inspectionId: string, formData: For
   await crearFirma({
     inspectionId,
     userId: session.user.id,
-    tipo: esOlariari ? TipoFirma.SUPERVISOR_OLARIARI : TipoFirma.SUPERVISOR,
+    tipo: esOleariari ? TipoFirma.SUPERVISOR_OLEARIARI : TipoFirma.SUPERVISOR,
     formData,
-    auditAction: esOlariari ? "FIRMAR_SUPERVISOR_OLARIARI" : "FIRMAR_SUPERVISOR",
+    auditAction: esOleariari ? "FIRMAR_SUPERVISOR_OLEARIARI" : "FIRMAR_SUPERVISOR",
   });
 }

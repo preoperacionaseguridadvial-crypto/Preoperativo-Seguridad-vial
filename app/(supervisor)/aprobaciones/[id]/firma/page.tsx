@@ -12,7 +12,7 @@ import { esRolAprobador, tipoFirmaPendiente } from "@/lib/inspections/cola-aprob
 // Paso posterior a la decisión del aprobador (Aprobar/Rechazar en
 // app/(supervisor)/aprobaciones/[id]/page.tsx, que redirige acá si la
 // decisión es propia y todavía no tiene firma). Cada aprobador firma SU
-// decisión (Supervisor Olariari: primera etapa; Director de Operaciones: la
+// decisión (Supervisor Oleariari: primera etapa; Director de Operaciones: la
 // definitiva) y solo el mismo usuario que decidió puede completar este paso —
 // ver `tipoFirmaPendiente` acá y la validación real de backend en
 // `guardarFirmaSupervisor` (lib/inspections/firma-actions.ts).
@@ -36,17 +36,17 @@ export default async function AprobacionFirmaPage({
   }
 
   const inspection = await getInspeccionDetalleOrNotFound(id);
-  const { supervisor: firmaSupervisor, supervisorOlariari: firmaSupervisorOlariari } =
+  const { supervisor: firmaSupervisor, supervisorOleariari: firmaSupervisorOleariari } =
     await getFirmasInspeccion(id);
   const tiposFirmados: TipoFirma[] = [
     ...(firmaSupervisor ? [TipoFirma.SUPERVISOR] : []),
-    ...(firmaSupervisorOlariari ? [TipoFirma.SUPERVISOR_OLARIARI] : []),
+    ...(firmaSupervisorOleariari ? [TipoFirma.SUPERVISOR_OLEARIARI] : []),
   ];
   // Sin decisión propia o ya firmada: nada que firmar acá.
   if (!tipoFirmaPendiente(rol, session.user.id, inspection, tiposFirmados)) {
     redirect(`/aprobaciones/${id}`);
   }
-  const primeraEtapa = rol === Role.SUPERVISOR_OLARIARI;
+  const primeraEtapa = rol === Role.SUPERVISOR_OLEARIARI;
 
   async function guardarFirmaAction(formData: FormData) {
     "use server";

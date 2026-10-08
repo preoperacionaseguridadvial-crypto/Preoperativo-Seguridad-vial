@@ -3,11 +3,9 @@ import type { getAllInspeccionesForOversight } from "@/lib/inspections/superviso
 import { estadoLegible } from "@/lib/inspections/reportes-queries";
 import { tonoAprobacion, tonoEstado } from "./estado";
 import { EstadoPill } from "./EstadoPill";
+import { formatFechaCorta, formatHora } from "@/lib/fechas/formato";
 
 export type InspeccionDetalle = Awaited<ReturnType<typeof getAllInspeccionesForOversight>>[number];
-
-const formatoFecha = new Intl.DateTimeFormat("es-CO", { dateStyle: "short" });
-const formatoHora = new Intl.DateTimeFormat("es-CO", { timeStyle: "short" });
 
 /**
  * Tabla de inspecciones compartida por "Inspecciones recientes" (5 filas) y
@@ -47,8 +45,8 @@ export function TablaInspecciones({
         <tbody className="text-ink">
           {inspecciones.map((insp) => (
             <tr key={insp.id} className="border-b border-border/60 last:border-0">
-              <td className="py-2.5 pr-3 whitespace-nowrap">{formatoFecha.format(insp.startedAt)}</td>
-              <td className="py-2.5 pr-3 whitespace-nowrap">{formatoHora.format(insp.startedAt)}</td>
+              <td className="py-2.5 pr-3 whitespace-nowrap">{formatFechaCorta(insp.startedAt)}</td>
+              <td className="py-2.5 pr-3 whitespace-nowrap">{formatHora(insp.startedAt)}</td>
               <td className="py-2.5 pr-3 font-medium">{insp.worker.name}</td>
               <td className="py-2.5 pr-3">{insp.vehicle.placa}</td>
               <td className="py-2.5 pr-3 text-right tabular-nums">{insp.kilometraje ?? "—"}</td>

@@ -7,7 +7,8 @@ import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
 import { Role, Sede } from "@/generated/prisma/enums";
 import { etiquetaRol, etiquetaSede } from "@/lib/auth/etiquetas-rol";
-import { esperandoA, estadoEtapaOlariari } from "@/lib/inspections/cola-aprobacion";
+import { esperandoA, estadoEtapaOleariari } from "@/lib/inspections/cola-aprobacion";
+import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
 
 // Pantalla de detalle de la consulta de oversight (DIRECTOR/SST): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -28,23 +29,23 @@ export default async function ConsultaInspeccionDetallePage({
   }
 
   const inspection = await getInspeccionDetalleForOversight(id);
-  // El Supervisor Olariari solo consulta las inspecciones de su sede.
-  if (session.user.role === Role.SUPERVISOR_OLARIARI && inspection.sede !== Sede.OLARIARI) {
+  // El Supervisor Oleariari solo consulta las inspecciones de su sede.
+  if (session.user.role === Role.SUPERVISOR_OLEARIARI && inspection.sede !== Sede.OLEARIARI) {
     notFound();
   }
   const decidida = inspection.reviewedAt !== null;
   const {
     conductor: firmaConductor,
     supervisor: firmaSupervisor,
-    supervisorOlariari: firmaSupervisorOlariari,
+    supervisorOleariari: firmaSupervisorOleariari,
   } = await getFirmasInspeccion(id);
-  const olariari = inspection.sede === Sede.OLARIARI;
-  const primeraEtapaHecha = olariari && inspection.revisadaSupervisorOlariariAt !== null;
+  const oleariari = inspection.sede === Sede.OLEARIARI;
+  const primeraEtapaHecha = oleariari && inspection.revisadaSupervisorOleariariAt !== null;
   const cerradaEnPrimeraEtapa = decidida && primeraEtapaHecha && inspection.supervisorId === null;
-  const etapaOlariari = estadoEtapaOlariari(inspection);
+  const etapaOleariari = estadoEtapaOleariari(inspection);
   const esperaA = esperandoA(inspection);
   const observacionDecision = cerradaEnPrimeraEtapa
-    ? inspection.observacionesSupervisorOlariari
+    ? inspection.observacionesSupervisorOleariari
     : inspection.observacionesSupervisor;
 
   const categorias = new Map<
@@ -218,25 +219,25 @@ export default async function ConsultaInspeccionDetallePage({
 
       <section className="flex flex-col gap-4 border-t border-gray-200 pt-6">
         <h2 className="text-sm font-medium text-gray-500">Decisión</h2>
-        {etapaOlariari && (
-          <p className="rounded-md bg-sky-50 p-3 text-sm font-medium text-[#0B3B60]">{etapaOlariari}</p>
+        {etapaOleariari && (
+          <p className="rounded-md bg-sky-50 p-3 text-sm font-medium text-[#0B3B60]">{etapaOleariari}</p>
         )}
         {primeraEtapaHecha && !cerradaEnPrimeraEtapa && (
           <div className="flex flex-col gap-3">
             <div className="rounded-md bg-green-50 p-3 text-sm text-green-900">
               <p className="font-semibold">
-                ✓ Aprobada por {inspection.supervisorOlariari?.name ?? etiquetaRol(Role.SUPERVISOR_OLARIARI)} el{" "}
-                {formatFechaHora(inspection.revisadaSupervisorOlariariAt)}
+                ✓ Aprobada por {inspection.supervisorOleariari?.name ?? etiquetaRol(Role.SUPERVISOR_OLEARIARI)} el{" "}
+                {formatFechaHora(inspection.revisadaSupervisorOleariariAt)}
               </p>
-              {inspection.observacionesSupervisorOlariari && (
-                <p className="mt-1">{inspection.observacionesSupervisorOlariari}</p>
+              {inspection.observacionesSupervisorOleariari && (
+                <p className="mt-1">{inspection.observacionesSupervisorOleariari}</p>
               )}
             </div>
             <FirmaEvidencia
-              etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
-              firma={firmaSupervisorOlariari}
-              nombre={inspection.supervisorOlariari?.name ?? null}
-              cedula={inspection.supervisorOlariari?.cedula ?? null}
+              etiqueta={etiquetaRol(Role.SUPERVISOR_OLEARIARI)}
+              firma={firmaSupervisorOleariari}
+              nombre={inspection.supervisorOleariari?.name ?? null}
+              cedula={inspection.supervisorOleariari?.cedula ?? null}
             />
           </div>
         )}
@@ -249,7 +250,7 @@ export default async function ConsultaInspeccionDetallePage({
             >
               <p className="font-semibold">
                 {inspection.status === "APROBADA" ? "✓ Aprobada" : "✕ Rechazada"}
-                {cerradaEnPrimeraEtapa ? ` por ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}` : ""} el{" "}
+                {cerradaEnPrimeraEtapa ? ` por ${etiquetaRol(Role.SUPERVISOR_OLEARIARI)}` : ""} el{" "}
                 {formatFechaHora(inspection.reviewedAt)}
               </p>
               {observacionDecision && <p className="mt-1">{observacionDecision}</p>}
@@ -264,10 +265,10 @@ export default async function ConsultaInspeccionDetallePage({
               />
               {cerradaEnPrimeraEtapa ? (
                 <FirmaEvidencia
-                  etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
-                  firma={firmaSupervisorOlariari}
-                  nombre={inspection.supervisorOlariari?.name ?? null}
-                  cedula={inspection.supervisorOlariari?.cedula ?? null}
+                  etiqueta={etiquetaRol(Role.SUPERVISOR_OLEARIARI)}
+                  firma={firmaSupervisorOleariari}
+                  nombre={inspection.supervisorOleariari?.name ?? null}
+                  cedula={inspection.supervisorOleariari?.cedula ?? null}
                 />
               ) : (
                 <FirmaEvidencia
@@ -323,23 +324,6 @@ function FirmaEvidencia({
       {cedula && <p className="text-xs text-gray-500">C.C. {cedula}</p>}
     </div>
   );
-}
-
-function formatFechaHora(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatFecha(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(date);
 }
 
 // Corrección Slice 3 (paridad con app/(supervisor)/aprobaciones/[id]/page.tsx,

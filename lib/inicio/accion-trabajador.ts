@@ -23,11 +23,11 @@ export type InspeccionResumen = {
   completedAt: Date | null;
   reviewedAt: Date | null;
   observacionesSupervisor: string | null;
-  // Flujo de dos etapas (roles-olariari): de la sede y de la primera etapa
+  // Flujo de dos etapas (roles-oleariari): de la sede y de la primera etapa
   // sale a quién espera la inspección. Opcionales: sin ellos se asume una sola
   // etapa (Director de Operaciones).
   sede?: Sede | null;
-  revisadaSupervisorOlariariAt?: Date | null;
+  revisadaSupervisorOleariariAt?: Date | null;
 };
 
 /** Estado de aprobación de una inspección ya enviada y todavía sin decidir. */
@@ -36,7 +36,7 @@ function datosEspera(ultima: InspeccionResumen) {
     status: InspectionStatus.PENDIENTE_APROBACION,
     sede: ultima.sede ?? null,
     reviewedAt: null,
-    revisadaSupervisorOlariariAt: ultima.revisadaSupervisorOlariariAt ?? null,
+    revisadaSupervisorOleariariAt: ultima.revisadaSupervisorOleariariAt ?? null,
   };
 }
 
@@ -82,12 +82,12 @@ export function accionPrincipalTrabajador(
     case "PENDIENTE_APROBACION": {
       const espera = tiempoTranscurrido(ultima.completedAt, ahora);
       const enviada = espera ? `Enviada ${espera}` : null;
-      const primeraEtapaLista = Boolean(ultima.revisadaSupervisorOlariariAt);
+      const primeraEtapaLista = Boolean(ultima.revisadaSupervisorOleariariAt);
       return {
         estado: "ESPERANDO",
         titulo: textoEsperandoAprobacion(datosEspera(ultima)) ?? "Esperando aprobación",
         detalle: primeraEtapaLista
-          ? [`Ya la aprobó el ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}`, enviada].filter(Boolean).join(" · ")
+          ? [`Ya la aprobó el ${etiquetaRol(Role.SUPERVISOR_OLEARIARI)}`, enviada].filter(Boolean).join(" · ")
           : enviada,
         boton: BOTON_NUEVA,
         tono: "warn",

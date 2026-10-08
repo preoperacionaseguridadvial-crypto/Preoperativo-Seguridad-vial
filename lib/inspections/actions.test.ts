@@ -729,7 +729,7 @@ describe("iniciarInspeccion — el vehículo debe ser el asignado al trabajador"
 });
 
 describe("iniciarInspeccion — snapshot de la sede del trabajador", () => {
-  it.each([Sede.BOGOTA, Sede.OLARIARI])("guarda la sede %s del trabajador en la inspección", async (sede) => {
+  it.each([Sede.BOGOTA, Sede.OLEARIARI])("guarda la sede %s del trabajador en la inspección", async (sede) => {
     const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
     const worker = await crearUsuario(Role.TRABAJADOR, {
       tipoVehiculo: TipoVehiculo.MOTO,
@@ -748,7 +748,7 @@ describe("iniciarInspeccion — snapshot de la sede del trabajador", () => {
     const worker = await crearUsuario(Role.TRABAJADOR, {
       tipoVehiculo: TipoVehiculo.MOTO,
       vehicleId: vehicle.id,
-      sede: Sede.OLARIARI,
+      sede: Sede.OLEARIARI,
     });
     loginComo(worker);
     const inspection = await iniciarInspeccion(vehicle.id);
@@ -756,7 +756,7 @@ describe("iniciarInspeccion — snapshot de la sede del trabajador", () => {
     await prisma.user.update({ where: { id: worker.id }, data: { sede: Sede.BOGOTA } });
 
     const guardada = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
-    expect(guardada.sede).toBe(Sede.OLARIARI);
+    expect(guardada.sede).toBe(Sede.OLEARIARI);
   });
 
   it("un trabajador legacy sin sede deja la sede de la inspección en null", async () => {

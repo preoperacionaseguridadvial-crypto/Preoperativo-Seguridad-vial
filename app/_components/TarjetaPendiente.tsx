@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 import type { PendienteConFoto } from "@/lib/inspections/pendientes-con-foto";
+import { formatFechaHora } from "@/lib/fechas/formato";
 
 /**
  * Tarjeta de una inspección pendiente de decisión (Supervisor): miniatura o
@@ -50,7 +51,7 @@ export function TarjetaPendiente({ inspection, ahora }: { inspection: PendienteC
           <span className="truncate text-sm font-medium text-ink">{inspection.worker.name}</span>
           {espera && (
             <span className="text-xs text-ink-muted">
-              Enviada {espera} · {formatHora(inspection.completedAt)}
+              Enviada {espera} · {formatFechaHora(inspection.completedAt)}
             </span>
           )}
 
@@ -116,12 +117,3 @@ function IconoFlecha() {
   );
 }
 
-function formatHora(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}

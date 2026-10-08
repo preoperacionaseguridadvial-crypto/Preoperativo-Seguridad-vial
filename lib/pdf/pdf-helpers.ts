@@ -143,18 +143,18 @@ const ANCHO_TRES_FIRMAS = [34, 33, 33];
 const tituloFirma = (rol: Role) => `NOMBRE Y FIRMA DEL ${etiquetaRol(rol).toUpperCase()}`;
 
 /**
- * Cajas de firma del FO-SVS-23 según la sede de la inspección (roles-olariari):
- * Olariari pasa por dos aprobadores (conductor, Supervisor Olariari y Director
+ * Cajas de firma del FO-SVS-23 según la sede de la inspección (roles-oleariari):
+ * Oleariari pasa por dos aprobadores (conductor, Supervisor Oleariari y Director
  * de Operaciones); Bogotá —y una legacy sin sede— por uno (conductor y
  * Director de Operaciones). Puro y testeable; el componente solo las dibuja.
  */
 export function cajasFirmaPdf(sede: Sede | null | undefined): CajaFirmaPdf[] {
   const conductor = { tipo: TipoFirma.CONDUCTOR, titulo: "NOMBRE Y FIRMA DEL CONDUCTOR" };
   const director = { tipo: TipoFirma.SUPERVISOR, titulo: tituloFirma(Role.SUPERVISOR) };
-  if (sede === Sede.OLARIARI) {
+  if (sede === Sede.OLEARIARI) {
     const cajas = [
       conductor,
-      { tipo: TipoFirma.SUPERVISOR_OLARIARI, titulo: tituloFirma(Role.SUPERVISOR_OLARIARI) },
+      { tipo: TipoFirma.SUPERVISOR_OLEARIARI, titulo: tituloFirma(Role.SUPERVISOR_OLEARIARI) },
       director,
     ];
     return cajas.map((caja, i) => ({ ...caja, anchoPct: ANCHO_TRES_FIRMAS[i] }));
@@ -164,18 +164,18 @@ export function cajasFirmaPdf(sede: Sede | null | undefined): CajaFirmaPdf[] {
 
 /**
  * Líneas "Observación del ..." de la caja de estado del PDF. La del
- * Supervisor Olariari se muestra siempre que exista (aunque la inspección siga
+ * Supervisor Oleariari se muestra siempre que exista (aunque la inspección siga
  * pendiente del Director); la del Director, solo una vez decidida.
  */
 export function observacionesAprobacionPdf(data: {
   status: string;
   sede: Sede | null;
   observacionesSupervisor: string | null;
-  observacionesSupervisorOlariari: string | null;
+  observacionesSupervisorOleariari: string | null;
 }): string[] {
   const lineas: string[] = [];
-  if (data.sede === Sede.OLARIARI && data.observacionesSupervisorOlariari) {
-    lineas.push(`Observación del ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}: ${data.observacionesSupervisorOlariari}`);
+  if (data.sede === Sede.OLEARIARI && data.observacionesSupervisorOleariari) {
+    lineas.push(`Observación del ${etiquetaRol(Role.SUPERVISOR_OLEARIARI)}: ${data.observacionesSupervisorOleariari}`);
   }
   if ((data.status === "APROBADA" || data.status === "RECHAZADA") && data.observacionesSupervisor) {
     lineas.push(`Observación del ${etiquetaRol(Role.SUPERVISOR)}: ${data.observacionesSupervisor}`);

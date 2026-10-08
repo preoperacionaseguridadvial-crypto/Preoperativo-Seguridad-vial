@@ -20,10 +20,10 @@ describe("getDatosInicioTrabajador", () => {
   });
 
   it("devuelve la sede del trabajador (null si es legacy sin sede)", async () => {
-    const olariari = await crearUsuario(Role.TRABAJADOR, { sede: Sede.OLARIARI });
+    const oleariari = await crearUsuario(Role.TRABAJADOR, { sede: Sede.OLEARIARI });
     const legacy = await crearUsuario(Role.TRABAJADOR);
 
-    expect((await getDatosInicioTrabajador(olariari.id)).sede).toBe(Sede.OLARIARI);
+    expect((await getDatosInicioTrabajador(oleariari.id)).sede).toBe(Sede.OLEARIARI);
     expect((await getDatosInicioTrabajador(legacy.id)).sede).toBeNull();
   });
 
@@ -59,9 +59,9 @@ describe("getDatosInicioTrabajador", () => {
     ]);
   });
 
-  it("expone la sede y la primera etapa de cada inspección, y la observación del Supervisor Olariari si la rechazó", async () => {
+  it("expone la sede y la primera etapa de cada inspección, y la observación del Supervisor Oleariari si la rechazó", async () => {
     const vehicle = await crearVehiculo();
-    const worker = await crearUsuario(Role.TRABAJADOR, { vehicleId: vehicle.id, sede: Sede.OLARIARI });
+    const worker = await crearUsuario(Role.TRABAJADOR, { vehicleId: vehicle.id, sede: Sede.OLEARIARI });
     const ahora = new Date();
     await prisma.inspection.create({
       data: {
@@ -69,17 +69,17 @@ describe("getDatosInicioTrabajador", () => {
         conductorId: worker.id,
         vehicleId: vehicle.id,
         status: InspectionStatus.RECHAZADA,
-        sede: Sede.OLARIARI,
+        sede: Sede.OLEARIARI,
         reviewedAt: ahora,
-        revisadaSupervisorOlariariAt: ahora,
-        observacionesSupervisorOlariari: "Falta el casco",
+        revisadaSupervisorOleariariAt: ahora,
+        observacionesSupervisorOleariari: "Falta el casco",
       },
     });
 
     const [inspeccion] = (await getDatosInicioTrabajador(worker.id)).inspecciones;
 
-    expect(inspeccion.sede).toBe(Sede.OLARIARI);
-    expect(inspeccion.revisadaSupervisorOlariariAt).toEqual(ahora);
+    expect(inspeccion.sede).toBe(Sede.OLEARIARI);
+    expect(inspeccion.revisadaSupervisorOleariariAt).toEqual(ahora);
     expect(inspeccion.observacionesSupervisor).toBe("Falta el casco");
   });
 

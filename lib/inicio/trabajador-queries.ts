@@ -25,13 +25,13 @@ export async function getDatosInicioTrabajador(workerId: string) {
         completedAt: true,
         reviewedAt: true,
         observacionesSupervisor: true,
-        observacionesSupervisorOlariari: true,
+        observacionesSupervisorOleariari: true,
         sede: true,
-        revisadaSupervisorOlariariAt: true,
+        revisadaSupervisorOleariariAt: true,
         fotos: { where: { tipo: "LATERAL" }, take: 1, select: { s3Key: true } },
       },
     }),
-    // Sede: se muestra junto al rol ("Recorredor Olariari") en el saludo.
+    // Sede: se muestra junto al rol ("Recorredor Oleariari") en el saludo.
     prisma.user.findUnique({ where: { id: workerId }, select: { sede: true } }),
   ]);
 
@@ -47,10 +47,10 @@ export async function getDatosInicioTrabajador(workerId: string) {
       startedAt: inspeccion.startedAt,
       completedAt: inspeccion.completedAt,
       reviewedAt: inspeccion.reviewedAt,
-      // Una rechazada en la primera etapa lleva la observación del Supervisor Olariari.
-      observacionesSupervisor: inspeccion.observacionesSupervisor ?? inspeccion.observacionesSupervisorOlariari,
+      // Una rechazada en la primera etapa lleva la observación del Supervisor Oleariari.
+      observacionesSupervisor: inspeccion.observacionesSupervisor ?? inspeccion.observacionesSupervisorOleariari,
       sede: inspeccion.sede,
-      revisadaSupervisorOlariariAt: inspeccion.revisadaSupervisorOlariariAt,
+      revisadaSupervisorOleariariAt: inspeccion.revisadaSupervisorOleariariAt,
     })),
     fotoVehiculoUrl,
   };

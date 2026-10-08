@@ -184,7 +184,7 @@ export async function iniciarInspeccion(vehicleId: string) {
       ? await reemplazarInspeccionAbandonada(enProceso.id, trabajadorId, vehicleId, trabajador.sede)
       : await prisma.inspection.create({
           // `sede` es un snapshot de la sede del trabajador: define el circuito de
-          // aprobación (Olariari: dos etapas) aunque luego cambie de sede.
+          // aprobación (Oleariari: dos etapas) aunque luego cambie de sede.
           data: { workerId: trabajadorId, conductorId: trabajadorId, vehicleId, sede: trabajador.sede },
         });
   } catch (err) {

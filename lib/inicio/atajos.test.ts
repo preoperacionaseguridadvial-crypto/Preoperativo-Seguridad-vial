@@ -44,7 +44,7 @@ describe("atajosPorRol", () => {
   it("entrega los atajos esperados por rol", () => {
     const hrefs = (rol: Role) => atajosPorRol(rol).map((a) => a.href);
     expect(hrefs(Role.SUPERVISOR)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
-    expect(hrefs(Role.SUPERVISOR_OLARIARI)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
+    expect(hrefs(Role.SUPERVISOR_OLEARIARI)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
     expect(hrefs(Role.DIRECTOR)).toEqual(["/dashboard", "/consulta-inspecciones"]);
     expect(hrefs(Role.SST)).toEqual(["/dashboard", "/consulta-inspecciones", "/admin/usuarios"]);
     expect(hrefs(Role.ADMINISTRADOR)).toEqual([
@@ -59,10 +59,10 @@ describe("atajosPorRol", () => {
   it("puedeAccederARuta rechaza rutas de otro rol y acepta subrutas", () => {
     expect(puedeAccederARuta(Role.TRABAJADOR, "/dashboard")).toBe(false);
     expect(puedeAccederARuta(Role.SUPERVISOR, "/aprobaciones/abc")).toBe(true);
-    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/aprobaciones/abc")).toBe(true);
-    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/consulta-inspecciones")).toBe(true);
-    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/admin/usuarios")).toBe(false);
-    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/dashboard")).toBe(false);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLEARIARI, "/aprobaciones/abc")).toBe(true);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLEARIARI, "/consulta-inspecciones")).toBe(true);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLEARIARI, "/admin/usuarios")).toBe(false);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLEARIARI, "/dashboard")).toBe(false);
     expect(puedeAccederARuta(Role.DIRECTOR, "/admin/usuarios")).toBe(false);
     expect(puedeAccederARuta(Role.TRABAJADOR, "/")).toBe(true);
   });

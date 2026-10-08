@@ -36,7 +36,7 @@ export async function crearUsuario(
     tipoVehiculo: TipoVehiculo | null;
     // Vehículo fijo asignado (placa). Sin override queda null: usuario legacy.
     vehicleId: string | null;
-    // Sede del trabajador (BOGOTA/OLARIARI). Sin override queda null.
+    // Sede del trabajador (BOGOTA/OLEARIARI). Sin override queda null.
     sede: Sede | null;
   }> = {},
 ) {

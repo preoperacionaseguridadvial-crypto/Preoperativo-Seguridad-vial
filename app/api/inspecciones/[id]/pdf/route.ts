@@ -3,6 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { auth } from "@/lib/auth/config";
 import { getInspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { InspeccionPdfDocument } from "@/lib/pdf/InspeccionPdfDocument";
+import { claveDiaBogota } from "@/lib/fechas/formato";
 
 // @react-pdf/renderer necesita Node.js (usa fs para leer el logo y fuentes
 // del sistema PDF) — no puede correr en Edge Runtime.
@@ -52,7 +53,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const buffer = await renderToBuffer(InspeccionPdfDocument({ data: inspection }));
 
-  const fecha = new Intl.DateTimeFormat("en-CA").format(inspection.startedAt).replaceAll("-", "");
+  const fecha = claveDiaBogota(inspection.startedAt).replaceAll("-", "");
   const placa = inspection.vehicle.placa.replace(/[^a-zA-Z0-9]/g, "");
   const filename = `FO-SVS-23_${placa}_${fecha}_${inspection.id}.pdf`;
 

@@ -27,18 +27,18 @@ enum Role {
   // como TRABAJADOR ni decide como SUPERVISOR (rompería la trazabilidad de
   // quién hizo cada acción).
   ADMINISTRADOR
-  // Supervisor de la sede Olariari: primera etapa de aprobación de las
-  // inspecciones de los recorredores de Olariari (el Director de Operaciones,
+  // Supervisor de la sede Oleariari: primera etapa de aprobación de las
+  // inspecciones de los recorredores de Oleariari (el Director de Operaciones,
   // código SUPERVISOR, decide después). Etiqueta visible: ver
   // lib/auth/etiquetas-rol.ts.
-  SUPERVISOR_OLARIARI
+  SUPERVISOR_OLEARIARI
 }
 
-// Sede (ciudad) del trabajador. Las inspecciones de OLARIARI pasan por dos
+// Sede (ciudad) del trabajador. Las inspecciones de OLEARIARI pasan por dos
 // etapas de aprobación; las de BOGOTA, por una sola.
 enum Sede {
   BOGOTA
-  OLARIARI
+  OLEARIARI
 }
 
 enum InspectionStatus {
@@ -124,7 +124,7 @@ enum TipoNovedad {
 enum TipoFirma {
   CONDUCTOR
   SUPERVISOR
-  SUPERVISOR_OLARIARI
+  SUPERVISOR_OLEARIARI
 }
 
 model User {
@@ -152,7 +152,7 @@ model User {
   telefono String?
   cargo    String?
 
-  // Sede del trabajador (roles-olariari). Nullable por la regla D4; se exige
+  // Sede del trabajador (roles-oleariari). Nullable por la regla D4; se exige
   // solo en el alta/edición de un TRABAJADOR (lib/admin/user-actions.ts) y se
   // guarda null para los demás roles. La migración rellena BOGOTA a los
   // TRABAJADOR existentes.
@@ -195,7 +195,7 @@ model User {
 
   inspectionsAsWorker             Inspection[] @relation("InspectionWorker")
   inspectionsAsSupervisor         Inspection[] @relation("InspectionSupervisor")
-  inspectionsAsSupervisorOlariari Inspection[] @relation("InspectionSupervisorOlariari")
+  inspectionsAsSupervisorOleariari Inspection[] @relation("InspectionSupervisorOleariari")
   inspectionsAsConductor          Inspection[] @relation("InspectionConductor")
   auditLogs                       AuditLog[]
   firmas                          Firma[]
@@ -289,18 +289,18 @@ model Inspection {
 
   // Sede del trabajador al crear la inspección (snapshot: un cambio de sede
   // posterior no re-enruta inspecciones en curso). Nullable por D4; la
-  // migración rellena BOGOTA a las existentes. Las de OLARIARI pasan primero
-  // por el Supervisor Olariari y luego por el Director de Operaciones.
+  // migración rellena BOGOTA a las existentes. Las de OLEARIARI pasan primero
+  // por el Supervisor Oleariari y luego por el Director de Operaciones.
   sede Sede?
 
-  // Primera etapa de aprobación (solo sede OLARIARI), a cargo de un usuario
-  // con rol SUPERVISOR_OLARIARI. Al aprobar se fijan `revisadaSupervisorOlariariAt`
+  // Primera etapa de aprobación (solo sede OLEARIARI), a cargo de un usuario
+  // con rol SUPERVISOR_OLEARIARI. Al aprobar se fijan `revisadaSupervisorOleariariAt`
   // y estos campos sin cambiar `status`; al rechazar la inspección se cierra
   // (RECHAZADA) y estos campos también quedan fijados.
-  supervisorOlariariId            String?
-  supervisorOlariari              User?     @relation("InspectionSupervisorOlariari", fields: [supervisorOlariariId], references: [id])
-  revisadaSupervisorOlariariAt    DateTime?
-  observacionesSupervisorOlariari String?
+  supervisorOleariariId            String?
+  supervisorOleariari              User?     @relation("InspectionSupervisorOleariari", fields: [supervisorOleariariId], references: [id])
+  revisadaSupervisorOleariariAt    DateTime?
+  observacionesSupervisorOleariari String?
 
   // Medida directa de la inspección (Fase 2): no es un check de
   // conforme/no-conforme, es un valor medible que el trabajador reporta una

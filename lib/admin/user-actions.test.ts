@@ -958,7 +958,7 @@ describe("actualizarUsuario — vehículo del trabajador", () => {
   });
 });
 
-describe("sede del usuario (roles-olariari)", () => {
+describe("sede del usuario (roles-oleariari)", () => {
   const base = () => ({
     name: "Usuario Sede",
     email: emailUnico(),
@@ -982,7 +982,7 @@ describe("sede del usuario (roles-olariari)", () => {
       ).rejects.toThrow(/sede/i);
     });
 
-    it.each([Sede.BOGOTA, Sede.OLARIARI])("crea un TRABAJADOR con sede %s", async (sede) => {
+    it.each([Sede.BOGOTA, Sede.OLEARIARI])("crea un TRABAJADOR con sede %s", async (sede) => {
       await loginComoAdmin();
 
       const usuario = await crearUsuario(altaTrabajador({ sede }));
@@ -992,28 +992,28 @@ describe("sede del usuario (roles-olariari)", () => {
       expect(guardado.sede).toBe(sede);
     });
 
-    it("SST también puede crear un TRABAJADOR de Olariari", async () => {
+    it("SST también puede crear un TRABAJADOR de Oleariari", async () => {
       const sst = await crearUsuarioDeTest(Role.SST);
       loginComo(sst);
 
-      const usuario = await crearUsuario(altaTrabajador({ sede: Sede.OLARIARI }));
+      const usuario = await crearUsuario(altaTrabajador({ sede: Sede.OLEARIARI }));
 
-      expect(usuario.sede).toBe(Sede.OLARIARI);
+      expect(usuario.sede).toBe(Sede.OLEARIARI);
     });
 
-    it("crea un SUPERVISOR_OLARIARI (sin sede, sin cédula ni vehículo)", async () => {
+    it("crea un SUPERVISOR_OLEARIARI (sin sede, sin cédula ni vehículo)", async () => {
       await loginComoAdmin();
 
-      const usuario = await crearUsuario({ ...base(), role: Role.SUPERVISOR_OLARIARI });
+      const usuario = await crearUsuario({ ...base(), role: Role.SUPERVISOR_OLEARIARI });
 
-      expect(usuario.role).toBe(Role.SUPERVISOR_OLARIARI);
+      expect(usuario.role).toBe(Role.SUPERVISOR_OLEARIARI);
       expect(usuario.sede).toBeNull();
     });
 
     it("guarda sede null para un rol que no es TRABAJADOR aunque llegue una sede", async () => {
       await loginComoAdmin();
 
-      const usuario = await crearUsuario({ ...base(), role: Role.SUPERVISOR, sede: Sede.OLARIARI });
+      const usuario = await crearUsuario({ ...base(), role: Role.SUPERVISOR, sede: Sede.OLEARIARI });
 
       expect(usuario.sede).toBeNull();
     });
@@ -1041,21 +1041,21 @@ describe("sede del usuario (roles-olariari)", () => {
       await loginComoAdmin();
       const trabajador = await crearUsuarioDeTest(Role.TRABAJADOR, { sede: Sede.BOGOTA });
 
-      const actualizado = await actualizarUsuario(trabajador.id, datos(trabajador, { sede: Sede.OLARIARI }));
+      const actualizado = await actualizarUsuario(trabajador.id, datos(trabajador, { sede: Sede.OLEARIARI }));
 
-      expect(actualizado.sede).toBe(Sede.OLARIARI);
+      expect(actualizado.sede).toBe(Sede.OLEARIARI);
     });
 
     it("pasar de TRABAJADOR a otro rol deja la sede en null", async () => {
       await loginComoAdmin();
-      const trabajador = await crearUsuarioDeTest(Role.TRABAJADOR, { sede: Sede.OLARIARI });
+      const trabajador = await crearUsuarioDeTest(Role.TRABAJADOR, { sede: Sede.OLEARIARI });
 
       const actualizado = await actualizarUsuario(
         trabajador.id,
-        datos(trabajador, { role: Role.SUPERVISOR_OLARIARI, sede: Sede.OLARIARI }),
+        datos(trabajador, { role: Role.SUPERVISOR_OLEARIARI, sede: Sede.OLEARIARI }),
       );
 
-      expect(actualizado.role).toBe(Role.SUPERVISOR_OLARIARI);
+      expect(actualizado.role).toBe(Role.SUPERVISOR_OLEARIARI);
       expect(actualizado.sede).toBeNull();
     });
   });
@@ -1080,25 +1080,25 @@ describe("sede del usuario (roles-olariari)", () => {
       if (!estado.ok) expect(estado.error).toMatch(/sede/i);
     });
 
-    it("crea un TRABAJADOR de Olariari desde el formulario", async () => {
+    it("crea un TRABAJADOR de Oleariari desde el formulario", async () => {
       await loginComoAdmin();
 
       const estado = await crearUsuarioDesdeFormulario(
         null,
         formularioDeUsuario({
           ...CAMPOS_SUPERVISOR,
-          email: "olariari.form@test.local",
+          email: "oleariari.form@test.local",
           role: Role.TRABAJADOR,
           cedula: "1234567890",
           tipoVehiculo: TipoVehiculo.MOTO,
-          sede: Sede.OLARIARI,
+          sede: Sede.OLEARIARI,
           ...CAMPOS_VEHICULO,
         }),
       );
 
       expect(estado.ok).toBe(true);
-      const creado = await prisma.user.findUniqueOrThrow({ where: { email: "olariari.form@test.local" } });
-      expect(creado.sede).toBe(Sede.OLARIARI);
+      const creado = await prisma.user.findUniqueOrThrow({ where: { email: "oleariari.form@test.local" } });
+      expect(creado.sede).toBe(Sede.OLEARIARI);
     });
   });
 });

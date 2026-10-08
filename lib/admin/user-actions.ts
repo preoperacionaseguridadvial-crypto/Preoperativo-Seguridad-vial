@@ -56,15 +56,15 @@ function errorDeDuplicado(err: unknown): Error | null {
 }
 
 /**
- * Sede (Bogotá/Olariari) del usuario. Solo el TRABAJADOR (Recorredor) tiene
+ * Sede (Bogotá/Oleariari) del usuario. Solo el TRABAJADOR (Recorredor) tiene
  * sede y es obligatoria: define si su inspección pasa por el Supervisor
- * Olariari. Se valida contra el enum acá porque el navegador no es de
+ * Oleariari. Se valida contra el enum acá porque el navegador no es de
  * confianza. Los demás roles guardan siempre null.
  */
 function sedeParaRol(role: Role, sede: Sede | null | undefined): Sede | null {
   if (role !== Role.TRABAJADOR) return null;
   if (!sede || !(Object.values(Sede) as string[]).includes(sede)) {
-    throw new ErrorDeUsuario("La sede es obligatoria para un recorredor (Bogotá u Olariari).");
+    throw new ErrorDeUsuario("La sede es obligatoria para un recorredor (Bogotá u Oleariari).");
   }
   return sede;
 }

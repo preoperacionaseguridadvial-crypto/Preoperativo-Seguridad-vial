@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { InspectionStatus, RespuestaChecklist, Role, type TipoNovedad } from "@/generated/prisma/client";
 import { esNovedad } from "@/lib/inspections/respuesta";
+import { claveDiaBogota, finDiaBogotaDeFecha, inicioDiaBogotaDeFecha } from "@/lib/fechas/formato";
 
 // Único conjunto de valores que cuentan como "falla real" para reportes,
 // derivado de `esNovedad()` (lib/inspections/respuesta.ts) — así este
@@ -22,6 +23,8 @@ const VALORES_FALLA = Object.values(RespuestaChecklist).filter(esNovedad);
 // total del período) — no debe confundirse con cumplimiento de horario.
 
 export type FiltrosReporte = {
+  // Días calendario (medianoche UTC, lo que da `new Date("2026-09-10")` desde un
+  // `<input type="date">`), interpretados como días de Bogotá.
   fechaDesde?: Date;
   fechaHasta?: Date;
   workerId?: string;
@@ -34,10 +37,6 @@ export type FiltrosReporte = {
 const TREINTA_DIAS_MS = 30 * 24 * 60 * 60 * 1000;
 const LIMITE_DIAS_TENDENCIA = 400; // salvaguarda ante un rango absurdamente largo
 
-function finDelDiaUTC(fecha: Date): Date {
-  return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate(), 23, 59, 59, 999));
-}
-
 /**
  * Sin `fechaDesde`/`fechaHasta` explícitos, default a los últimos 30 días —
  * así la comparación contra "período anterior" (`getKpisReporte`) siempre
@@ -45,8 +44,8 @@ function finDelDiaUTC(fecha: Date): Date {
  * Exportada para que el dashboard use el mismo rango en su lista de detalle.
  */
 export function normalizarRango(filtros: FiltrosReporte): { desde: Date; hasta: Date } {
-  const hasta = filtros.fechaHasta ? finDelDiaUTC(filtros.fechaHasta) : new Date();
-  const desde = filtros.fechaDesde ?? new Date(hasta.getTime() - TREINTA_DIAS_MS);
+  const hasta = filtros.fechaHasta ? finDiaBogotaDeFecha(filtros.fechaHasta) : new Date();
+  const desde = filtros.fechaDesde ? inicioDiaBogotaDeFecha(filtros.fechaDesde) : new Date(hasta.getTime() - TREINTA_DIAS_MS);
   return { desde, hasta };
 }
 
@@ -133,7 +132,7 @@ export async function getTendenciaDiaria(filtros: FiltrosReporte): Promise<Punto
 
   const porDia = new Map<string, { total: number; aprobadas: number }>();
   for (const insp of inspecciones) {
-    const clave = insp.startedAt.toISOString().slice(0, 10);
+    const clave = claveDiaBogota(insp.startedAt);
     const entry = porDia.get(clave) ?? { total: 0, aprobadas: 0 };
     entry.total += 1;
     if (insp.status === InspectionStatus.APROBADA) entry.aprobadas += 1;
@@ -141,8 +140,10 @@ export async function getTendenciaDiaria(filtros: FiltrosReporte): Promise<Punto
   }
 
   const resultado: PuntoTendencia[] = [];
-  const cursor = new Date(Date.UTC(rango.desde.getUTCFullYear(), rango.desde.getUTCMonth(), rango.desde.getUTCDate()));
-  const limite = new Date(Date.UTC(rango.hasta.getUTCFullYear(), rango.hasta.getUTCMonth(), rango.hasta.getUTCDate()));
+  // Los días se recorren como claves de Bogotá ("2026-10-07"); el cursor solo
+  // las incrementa de a un día calendario (aritmética en UTC, sin horas).
+  const cursor = new Date(`${claveDiaBogota(rango.desde)}T00:00:00Z`);
+  const limite = new Date(`${claveDiaBogota(rango.hasta)}T00:00:00Z`);
   let dias = 0;
   while (cursor.getTime() <= limite.getTime() && dias < LIMITE_DIAS_TENDENCIA) {
     const clave = cursor.toISOString().slice(0, 10);

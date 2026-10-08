@@ -87,8 +87,8 @@ describe("getInspectionForSupervisor — fotos diarias", () => {
   });
 });
 
-// Flujo de dos etapas (roles-olariari): cada aprobador ve solo su cola, y el
-// Supervisor Olariari solo consulta su propia sede.
+// Flujo de dos etapas (roles-oleariari): cada aprobador ve solo su cola, y el
+// Supervisor Oleariari solo consulta su propia sede.
 describe("colas por rol y consulta por sede", () => {
   beforeEach(async () => {
     await limpiarBaseDeTest();
@@ -105,31 +105,62 @@ describe("colas por rol y consulta por sede", () => {
         status: InspectionStatus.PENDIENTE_APROBACION,
         completedAt: new Date(),
         sede,
-        revisadaSupervisorOlariariAt: extra.revisada ? new Date() : null,
+        revisadaSupervisorOleariariAt: extra.revisada ? new Date() : null,
       },
     });
   }
 
   it("getInspeccionesPendientes(rol) devuelve la cola de cada aprobador", async () => {
     const bogota = await crear(Sede.BOGOTA);
-    const olariari1 = await crear(Sede.OLARIARI);
-    const olariari2 = await crear(Sede.OLARIARI, { revisada: true });
+    const oleariari1 = await crear(Sede.OLEARIARI);
+    const oleariari2 = await crear(Sede.OLEARIARI, { revisada: true });
 
-    const colaOlariari = await getInspeccionesPendientes(Role.SUPERVISOR_OLARIARI);
+    const colaOleariari = await getInspeccionesPendientes(Role.SUPERVISOR_OLEARIARI);
     const colaDirector = await getInspeccionesPendientes(Role.SUPERVISOR);
 
-    expect(colaOlariari.map((i) => i.id)).toEqual([olariari1.id]);
-    expect(colaDirector.map((i) => i.id).sort()).toEqual([bogota.id, olariari2.id].sort());
+    expect(colaOleariari.map((i) => i.id)).toEqual([oleariari1.id]);
+    expect(colaDirector.map((i) => i.id).sort()).toEqual([bogota.id, oleariari2.id].sort());
   });
 
   it("getAllInspeccionesForOversight filtra por sede cuando se pide", async () => {
     const bogota = await crear(Sede.BOGOTA);
-    const olariari = await crear(Sede.OLARIARI);
+    const oleariari = await crear(Sede.OLEARIARI);
 
-    const soloOlariari = await getAllInspeccionesForOversight({ sede: Sede.OLARIARI });
+    const soloOleariari = await getAllInspeccionesForOversight({ sede: Sede.OLEARIARI });
     const todas = await getAllInspeccionesForOversight();
 
-    expect(soloOlariari.map((i) => i.id)).toEqual([olariari.id]);
-    expect(todas.map((i) => i.id).sort()).toEqual([bogota.id, olariari.id].sort());
+    expect(soloOleariari.map((i) => i.id)).toEqual([oleariari.id]);
+    expect(todas.map((i) => i.id).sort()).toEqual([bogota.id, oleariari.id].sort());
+  });
+
+  // fechaDesde/fechaHasta llegan como día calendario (medianoche UTC) y se
+  // interpretan como días de Bogotá; `rangoInstantes` (rango ya calculado) manda.
+  it("getAllInspeccionesForOversight filtra por días de Bogotá", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    const en = (startedAt: string) =>
+      prisma.inspection.create({
+        data: {
+          workerId: worker.id,
+          conductorId: worker.id,
+          vehicleId: vehicle.id,
+          status: InspectionStatus.APROBADA,
+          startedAt: new Date(startedAt),
+        },
+      });
+    const nocheDel7 = await en("2026-10-08T00:30:00Z"); // 7 oct 19:30 Bogotá
+    const madrugadaDel8 = await en("2026-10-08T05:30:00Z"); // 8 oct 00:30 Bogotá
+    await en("2026-10-07T04:00:00Z"); // 6 oct 23:00 Bogotá
+
+    const dia7 = await getAllInspeccionesForOversight({
+      fechaDesde: new Date("2026-10-07T00:00:00Z"),
+      fechaHasta: new Date("2026-10-07T00:00:00Z"),
+    });
+    expect(dia7.map((i) => i.id)).toEqual([nocheDel7.id]);
+
+    const porInstantes = await getAllInspeccionesForOversight({
+      rangoInstantes: { desde: new Date("2026-10-08T05:00:00Z"), hasta: new Date("2026-10-08T06:00:00Z") },
+    });
+    expect(porInstantes.map((i) => i.id)).toEqual([madrugadaDel8.id]);
   });
 });

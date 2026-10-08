@@ -1,5 +1,7 @@
 # Feature: roles-olariari
 
+> Nota (2026-10-07): la ortografia de la sede se corrigio de "Olariari" a "OLEARIARI" (feature oleariari-y-hora-colombia); este documento conserva la grafia historica.
+
 ## Objective
 Align the app's roles with ESS's real job titles and add the two-stage approval flow for the Olariari site.
 

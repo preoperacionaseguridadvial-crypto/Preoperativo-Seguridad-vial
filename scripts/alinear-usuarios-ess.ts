@@ -1,14 +1,15 @@
 // Alinea los usuarios demo de la base de DESARROLLO con los cargos reales de ESS
-// (feature roles-olariari). Solo desarrollo: nunca corre contra la base de test
+// (feature roles-oleariari). Solo desarrollo: nunca corre contra la base de test
 // ni contra una base que no sea la local.
 //
 //   npx tsx --env-file=.env --conditions=react-server scripts/alinear-usuarios-ess.ts
 //
 // - Renombra EN SITIO los usuarios demo anteriores (trabajador@ → recorredor.bogota@,
-//   supervisor@ → director.operaciones@, sst@ → admin.sst@): conservan su id,
+//   supervisor@ → director.operaciones@, sst@ → admin.sst@, y los de la sede con
+//   la ortografía vieja recorredor/supervisor.olariari@ → .oleariari@): conservan su id,
 //   inspecciones, firmas y auditoría. Actualiza también el nombre visible.
-// - Crea los usuarios nuevos que falten (recorredor.olariari@ con su moto OLA123 y
-//   supervisor.olariari@), con la password de desarrollo.
+// - Crea los usuarios nuevos que falten (recorredor.oleariari@ con su moto OLA123 y
+//   supervisor.oleariari@), con la password de desarrollo.
 // - Es idempotente: correrlo de nuevo no cambia nada.
 //
 // Un esquema con `provider = "prisma-client"` emite TypeScript, por eso se corre
@@ -27,7 +28,7 @@ const SEED_PASSWORD = process.env.SEED_USER_PASSWORD ?? "Cambiar123!";
 
 // Usuarios que este script da de alta si faltan. Los demás usuarios demo del
 // seed (p. ej. el Recorredor de carro) los crea `npm run prisma:seed`, no esto.
-const USUARIOS_NUEVOS = new Set(["recorredor.olariari@ess.local", "supervisor.olariari@ess.local"]);
+const USUARIOS_NUEVOS = new Set(["recorredor.oleariari@ess.local", "supervisor.oleariari@ess.local"]);
 
 function esBaseLocalDeDesarrollo(url: string): boolean {
   try {

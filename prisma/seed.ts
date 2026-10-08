@@ -268,7 +268,7 @@ async function main() {
   );
 
   // Un vehículo demo por Recorredor (relación 1:1 `User.vehicleId`, decisión
-  // del usuario, 2026-09-18): MOTO de Bogotá, CARRO y MOTO de Olariari. Idempotente:
+  // del usuario, 2026-09-18): MOTO de Bogotá, CARRO y MOTO de Oleariari. Idempotente:
   // `vehicleId` es unique y cada par es fijo, así que correr el seed de nuevo
   // no choca.
   for (const { placa, tipo, tipoVehiculo, hojaDeVida, usuarioEmail } of SEED_VEHICULOS) {

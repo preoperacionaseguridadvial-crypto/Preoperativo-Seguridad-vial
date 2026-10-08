@@ -6,6 +6,7 @@ import { getSignedReadUrl } from "@/lib/storage/s3";
 import { estadoVencimiento, type EstadoVencimiento } from "@/lib/admin/vencimientos";
 import { Role } from "@/generated/prisma/client";
 import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
+import { formatFechaSoloDia } from "@/lib/fechas/formato";
 
 const ETIQUETA_ESTADO: Record<EstadoVencimiento, { texto: string; clase: string }> = {
   VIGENTE: { texto: "Vigente", clase: "bg-green-100 text-green-800" },
@@ -13,13 +14,6 @@ const ETIQUETA_ESTADO: Record<EstadoVencimiento, { texto: string; clase: string 
   VENCIDO: { texto: "Vencido", clase: "bg-red-100 text-red-800" },
   SIN_FECHA: { texto: "Sin fecha", clase: "bg-gray-100 text-gray-600" },
 };
-
-// Las fechas de vencimiento se guardan a medianoche UTC (`<input type="date">`):
-// se formatean en UTC para no mostrar el día anterior en zona horaria local.
-function formatFecha(fecha: Date | null | undefined) {
-  if (!fecha) return "—";
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium", timeZone: "UTC" }).format(fecha);
-}
 
 // Hoja de vida de un usuario (solo lectura): datos del conductor, datos del
 // vehículo (1:1) y estado de cada vencimiento. Se edita desde
@@ -122,7 +116,7 @@ export default async function HojaDeVidaPage({ params }: { params: Promise<{ id:
             <div key={etiqueta} className="flex items-center justify-between gap-3 text-sm">
               <div>
                 <p className="font-medium text-gray-700">{etiqueta}</p>
-                <p className="text-xs text-gray-500">{formatFecha(fecha)}</p>
+                <p className="text-xs text-gray-500">{formatFechaSoloDia(fecha)}</p>
               </div>
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${estado.clase}`}>
                 {estado.texto}

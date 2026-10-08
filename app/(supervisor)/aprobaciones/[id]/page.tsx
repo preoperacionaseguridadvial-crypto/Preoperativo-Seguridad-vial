@@ -17,6 +17,7 @@ import {
   etapaParaRol,
   tipoFirmaPendiente,
 } from "@/lib/inspections/cola-aprobacion";
+import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
 
 // Pantalla de detalle de la revisión de los aprobadores (Fase 3): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -29,10 +30,10 @@ import {
 // decidida (no existía otra) — en ese caso queda en modo lectura, con la
 // decisión tomada y la evidencia de las firmas.
 //
-// Dos etapas (roles-olariari): el formulario de decisión solo aparece cuando
-// LE TOCA al rol de la sesión (el Supervisor Olariari en la primera etapa de
-// Olariari; el Director de Operaciones en el resto); las server actions
-// vuelven a validarlo. El Director ve, en una inspección de Olariari, la
+// Dos etapas (roles-oleariari): el formulario de decisión solo aparece cuando
+// LE TOCA al rol de la sesión (el Supervisor Oleariari en la primera etapa de
+// Oleariari; el Director de Operaciones en el resto); las server actions
+// vuelven a validarlo. El Director ve, en una inspección de Oleariari, la
 // decisión y la firma de la primera etapa.
 export default async function AprobacionDetallePage({
   params,
@@ -54,8 +55,8 @@ export default async function AprobacionDetallePage({
   }
 
   const inspection = await getInspeccionDetalleOrNotFound(id);
-  // El Supervisor Olariari solo ve las inspecciones de su sede.
-  if (rol === Role.SUPERVISOR_OLARIARI && inspection.sede !== Sede.OLARIARI) {
+  // El Supervisor Oleariari solo ve las inspecciones de su sede.
+  if (rol === Role.SUPERVISOR_OLEARIARI && inspection.sede !== Sede.OLEARIARI) {
     notFound();
   }
   const decidida = inspection.reviewedAt !== null;
@@ -63,7 +64,7 @@ export default async function AprobacionDetallePage({
   const {
     conductor: firmaConductor,
     supervisor: firmaSupervisor,
-    supervisorOlariari: firmaSupervisorOlariari,
+    supervisorOleariari: firmaSupervisorOleariari,
   } = firmas;
 
   // Ya decidió pero todavía no firmó: lo mandamos a completar la firma antes
@@ -73,7 +74,7 @@ export default async function AprobacionDetallePage({
   const tiposFirmados: TipoFirma[] = [
     ...(firmaConductor ? [TipoFirma.CONDUCTOR] : []),
     ...(firmaSupervisor ? [TipoFirma.SUPERVISOR] : []),
-    ...(firmaSupervisorOlariari ? [TipoFirma.SUPERVISOR_OLARIARI] : []),
+    ...(firmaSupervisorOleariari ? [TipoFirma.SUPERVISOR_OLEARIARI] : []),
   ];
   if (tipoFirmaPendiente(rol, session.user.id, inspection, tiposFirmados)) {
     redirect(`/aprobaciones/${id}/firma`);
@@ -82,12 +83,12 @@ export default async function AprobacionDetallePage({
   // Solo decide quien tiene el turno (etapa); el resto ve el detalle en lectura.
   const puedeDecidir = etapaParaRol(rol, inspection) !== null;
   const esperaA = esperandoA(inspection);
-  const olariari = inspection.sede === Sede.OLARIARI;
-  const primeraEtapaHecha = olariari && inspection.revisadaSupervisorOlariariAt !== null;
+  const oleariari = inspection.sede === Sede.OLEARIARI;
+  const primeraEtapaHecha = oleariari && inspection.revisadaSupervisorOleariariAt !== null;
   // Rechazada en la primera etapa: cerrada, el Director nunca la decidió.
   const cerradaEnPrimeraEtapa = decidida && primeraEtapaHecha && inspection.supervisorId === null;
   const observacionDecision = cerradaEnPrimeraEtapa
-    ? inspection.observacionesSupervisorOlariari
+    ? inspection.observacionesSupervisorOleariari
     : inspection.observacionesSupervisor;
 
   const categorias = new Map<
@@ -321,23 +322,23 @@ export default async function AprobacionDetallePage({
       {primeraEtapaHecha && !cerradaEnPrimeraEtapa && (
         <section className="flex flex-col gap-3 border-t border-gray-200 pt-6">
           <h2 className="text-sm font-medium text-gray-500">
-            Primera etapa — {etiquetaRol(Role.SUPERVISOR_OLARIARI)}
+            Primera etapa — {etiquetaRol(Role.SUPERVISOR_OLEARIARI)}
           </h2>
           <div className="rounded-md bg-green-50 p-3 text-sm text-green-900">
             <p className="font-semibold">
-              ✓ Aprobada por {inspection.supervisorOlariari?.name ?? etiquetaRol(Role.SUPERVISOR_OLARIARI)} el{" "}
-              {formatFechaHora(inspection.revisadaSupervisorOlariariAt)}
+              ✓ Aprobada por {inspection.supervisorOleariari?.name ?? etiquetaRol(Role.SUPERVISOR_OLEARIARI)} el{" "}
+              {formatFechaHora(inspection.revisadaSupervisorOleariariAt)}
             </p>
-            {inspection.observacionesSupervisorOlariari && (
-              <p className="mt-1">{inspection.observacionesSupervisorOlariari}</p>
+            {inspection.observacionesSupervisorOleariari && (
+              <p className="mt-1">{inspection.observacionesSupervisorOleariari}</p>
             )}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FirmaEvidencia
-              etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
-              firma={firmaSupervisorOlariari}
-              nombre={inspection.supervisorOlariari?.name ?? null}
-              cedula={inspection.supervisorOlariari?.cedula ?? null}
+              etiqueta={etiquetaRol(Role.SUPERVISOR_OLEARIARI)}
+              firma={firmaSupervisorOleariari}
+              nombre={inspection.supervisorOleariari?.name ?? null}
+              cedula={inspection.supervisorOleariari?.cedula ?? null}
             />
           </div>
         </section>
@@ -353,7 +354,7 @@ export default async function AprobacionDetallePage({
           >
             <p className="font-semibold">
               {inspection.status === "APROBADA" ? "✓ Aprobada" : "✕ Rechazada"}
-              {cerradaEnPrimeraEtapa ? ` por ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}` : ""} el{" "}
+              {cerradaEnPrimeraEtapa ? ` por ${etiquetaRol(Role.SUPERVISOR_OLEARIARI)}` : ""} el{" "}
               {formatFechaHora(inspection.reviewedAt)}
             </p>
             {observacionDecision && <p className="mt-1">{observacionDecision}</p>}
@@ -368,10 +369,10 @@ export default async function AprobacionDetallePage({
             />
             {cerradaEnPrimeraEtapa ? (
               <FirmaEvidencia
-                etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
-                firma={firmaSupervisorOlariari}
-                nombre={inspection.supervisorOlariari?.name ?? null}
-                cedula={inspection.supervisorOlariari?.cedula ?? null}
+                etiqueta={etiquetaRol(Role.SUPERVISOR_OLEARIARI)}
+                firma={firmaSupervisorOleariari}
+                nombre={inspection.supervisorOleariari?.name ?? null}
+                cedula={inspection.supervisorOleariari?.cedula ?? null}
               />
             ) : (
               <FirmaEvidencia
@@ -464,23 +465,6 @@ function FirmaEvidencia({
       {cedula && <p className="text-xs text-gray-500">C.C. {cedula}</p>}
     </div>
   );
-}
-
-function formatFechaHora(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatFecha(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(date);
 }
 
 // Corrección Slice 3: antes solo distinguía OK/Falla — los ítems de
