@@ -3,25 +3,33 @@ import { InspectionStatus } from "@/generated/prisma/client";
 import { estadoLegible, type OpcionFiltro } from "@/lib/inspections/reportes-queries";
 import { buildDashboardUrl } from "./dashboard-url";
 import { Icono } from "./Iconos";
+import { claveDiaBogota } from "@/lib/fechas/formato";
 
+// Los períodos rápidos se calculan sobre el día de Bogotá (a las 7 p. m. el
+// día UTC ya cambió): "Hoy" tiene que ser el día que ven los trabajadores.
 function formatISO(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Medianoche UTC del día de Bogotá de `ahora` (aritmética de calendario, sin horas). */
+function hoyBogota(): Date {
+  return new Date(`${claveDiaBogota(new Date())}T00:00:00Z`);
+}
+
 function rangoUltimosDias(dias: number) {
-  const hoy = new Date();
+  const hoy = hoyBogota();
   const desde = new Date(hoy.getTime() - (dias - 1) * 24 * 60 * 60 * 1000);
   return { fechaDesde: formatISO(desde), fechaHasta: formatISO(hoy) };
 }
 
 function rangoEsteMes() {
-  const hoy = new Date();
+  const hoy = hoyBogota();
   const desde = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1));
   return { fechaDesde: formatISO(desde), fechaHasta: formatISO(hoy) };
 }
 
 function rangoMesAnterior() {
-  const hoy = new Date();
+  const hoy = hoyBogota();
   const desde = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() - 1, 1));
   const hasta = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 0)); // día 0 = último día del mes anterior
   return { fechaDesde: formatISO(desde), fechaHasta: formatISO(hasta) };

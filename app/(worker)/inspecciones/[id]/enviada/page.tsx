@@ -5,6 +5,7 @@ import { getOwnInspectionOrNotFound, getFirmasInspeccion } from "@/lib/inspectio
 import { Role } from "@/generated/prisma/enums";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { esperandoA } from "@/lib/inspections/cola-aprobacion";
+import { formatFechaHora } from "@/lib/fechas/formato";
 
 // Quién aprueba depende de la sede (roles-oleariari): en Oleariari pasa primero
 // por el Supervisor Oleariari y después por el Director de Operaciones.
@@ -144,8 +145,4 @@ export default async function InspeccionEnviadaPage({
       </Link>
     </main>
   );
-}
-
-function formatFechaHora(date: Date) {
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "short", timeStyle: "short" }).format(date);
 }

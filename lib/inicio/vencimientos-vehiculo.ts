@@ -1,4 +1,5 @@
 import { estadoVencimiento, type EstadoVencimiento } from "@/lib/admin/vencimientos";
+import { formatFechaSoloDiaCompacta } from "@/lib/fechas/formato";
 
 // Alertas de SOAT / tecnomecánica de un vehículo para el inicio por rol.
 // Reusa `estadoVencimiento` (mismo umbral de "por vencer" que la hoja de
@@ -18,20 +19,6 @@ export type FechasVehiculo = {
   fechaVencimientoTecnicomecanica: Date | null;
 };
 
-// Las fechas de vencimiento se guardan como día calendario (medianoche UTC),
-// igual que en la hoja de vida: se formatean y comparan en UTC.
-function formatoFecha(fecha: Date) {
-  // Se arma a mano ("4 oct 2026"): el formato corto de es-CO mete "de" entre las partes.
-  const partes = new Intl.DateTimeFormat("es-CO", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).formatToParts(fecha);
-  const parte = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "";
-  return `${parte("day")} ${parte("month").replace(".", "")} ${parte("year")}`;
-}
-
 function diaUtc(fecha: Date) {
   return Math.floor(fecha.getTime() / MS_POR_DIA);
 }
@@ -45,7 +32,7 @@ function alertaDe(
   if (!fecha || (estado !== "VENCIDO" && estado !== "POR_VENCER")) return null;
   if (estado === "VENCIDO") {
     const vencido = documento === "SOAT" ? "vencido" : "vencida";
-    return { documento, estado, fecha, texto: `${documento} ${vencido} el ${formatoFecha(fecha)}` };
+    return { documento, estado, fecha, texto: `${documento} ${vencido} el ${formatFechaSoloDiaCompacta(fecha)}` };
   }
   const dias = diaUtc(fecha) - diaUtc(ahora);
   const cuando = dias <= 0 ? "hoy" : `en ${dias} ${dias === 1 ? "día" : "días"}`;

@@ -17,6 +17,7 @@ import {
 } from "@/lib/pdf/pdf-helpers";
 import { TipoFirma } from "@/generated/prisma/enums";
 import { registrarFuentesPdf, FONT_FAMILY_REGULAR, FONT_FAMILY_BOLD } from "@/lib/pdf/fonts";
+import { formatFecha, formatFechaHora, formatHora } from "@/lib/fechas/formato";
 
 // Componente de presentación puro: recibe los datos ya resueltos por
 // `getInspeccionParaPdf` (lib/inspections/pdf-queries.ts). No accede a
@@ -319,16 +320,6 @@ const styles = StyleSheet.create({
 type Respuesta = InspeccionParaPdf["respuestas"][number];
 type Novedad = InspeccionParaPdf["novedades"][number];
 
-function formatFecha(date: Date | null | undefined) {
-  if (!date) return "—";
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(date);
-}
-
-function formatFechaHora(date: Date | null | undefined) {
-  if (!date) return "—";
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "short", timeStyle: "short" }).format(date);
-}
-
 const ESTILO_VALOR_ITEM: Record<ReturnType<typeof formatoValorItemPdf>["estilo"], Style> = {
   ok: styles.itemValorOk,
   warn: styles.itemValorWarn,
@@ -533,7 +524,7 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
             <View style={styles.datosCell}>
               <Text style={styles.datosLabel}>Hora</Text>
               <Text style={styles.datosValue}>
-                {new Intl.DateTimeFormat("es-CO", { timeStyle: "short" }).format(data.startedAt)}
+                {formatHora(data.startedAt)}
               </Text>
             </View>
             <View style={styles.datosCell}>

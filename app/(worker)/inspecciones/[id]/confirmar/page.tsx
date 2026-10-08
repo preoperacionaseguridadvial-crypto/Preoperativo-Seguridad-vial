@@ -12,6 +12,7 @@ import { guardarFirmaConductor } from "@/lib/inspections/firma-actions";
 import { filtrarNoConformes } from "@/lib/inspections/respuesta";
 import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { FirmaCanvas } from "@/app/_components/FirmaCanvas";
+import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
 
 // Pantalla de confirmación antes de enviar (última del flujo): resume lo
 // cargado y pide la firma manuscrita del conductor (Fase D) — es acá donde
@@ -207,15 +208,4 @@ export default async function ConfirmarPage({
       </form>
     </main>
   );
-}
-
-function formatFecha(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(date);
-}
-
-function formatFechaHora(date: Date) {
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "short", timeStyle: "short" }).format(date);
 }

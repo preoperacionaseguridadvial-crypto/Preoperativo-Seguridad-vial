@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { InspectionStatus } from "@/generated/prisma/client";
 import { DIAS_POR_VENCER } from "@/lib/admin/vencimientos";
 import { WHERE_PENDIENTES } from "@/lib/inspections/supervisor-queries";
-import { rangoDiaBogota } from "@/lib/inicio/rango-dia";
+import { rangoDiaBogota } from "@/lib/fechas/formato";
 import { alertasDocumentosVehiculo } from "@/lib/inicio/vencimientos-vehiculo";
 
 // Resúmenes de la pantalla de inicio por rol (SUPERVISOR, DIRECTOR/SST,

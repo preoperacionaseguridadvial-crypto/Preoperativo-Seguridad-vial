@@ -37,7 +37,7 @@ Evidence:
 
 ## Tasks
 - [x] T1: OLEARIARI rename (enums + columns migration, identifiers, UI copy, PDF, seed, dev data, README) (route: delegated writer)
-- [ ] T2: Colombia-time formatting module, applied everywhere, plus dashboard day boundaries in Bogotá (route: delegated writer)
+- [x] T2: Colombia-time formatting module, applied everywhere, plus dashboard day boundaries in Bogotá (route: delegated writer)
 
 ## Acceptance criteria
 - `rg -i olariari` finds no matches outside the historical odd doc note and the migration that renames it.
@@ -50,6 +50,7 @@ TDD: strict / user global config / `npx vitest run`. RDD: off.
 
 ## Progress / evidence
 - T1 (delegated writer, TDD): RED = tests renamed first, 77 failures; GREEN = 50 files / 708 tests. Migration `20261008120000_oleariari` (RENAME VALUE x3, RENAME COLUMN x3, RENAME CONSTRAINT fkey; no drop). Applied to dev and test; `migrate diff` no drift. Dev users renamed in place via `scripts/alinear-usuarios-ess.ts` (ids kept, idempotent). No old audit rows in dev. tsc and eslint clean. Remaining `rg -i olariari`: historical odd doc, old migration, and the rename mapping in `prisma/seed-usuarios.ts` / `scripts/alinear-usuarios-ess.ts`.
+- T2 (delegated writer, TDD): RED = `lib/fechas/formato.test.ts` (module missing) + 4 query tests (normalizarRango, getTendenciaDiaria, oversight filters); GREEN = 51 files / 742 tests, also with TZ=UTC and TZ=Asia/Tokyo. New `lib/fechas/formato.ts` (formatters fixed to America/Bogota es-CO, UTC date-only formatters, Bogota day helpers; `rangoDiaBogota` moved here from `lib/inicio/rango-dia.ts`). Dashboard filters, trend grouping, oversight list and quick periods now use Bogota days; Excel writes date/hour as text in Colombia time; PDF/Excel filename dates use the Bogota day. `rg "Intl.DateTimeFormat|toLocale" app lib` only matches `lib/fechas/formato.ts`.
 
 ## Next step
 T1–T2 via one delegated writer on branch `fix/oleariari-y-hora-colombia` (from main ad07219).

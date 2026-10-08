@@ -1,6 +1,7 @@
 import type { FilaVehiculo, SortVehiculo } from "@/lib/inspections/reportes-queries";
 import { SortableHeader } from "./SortableHeader";
 import { Tarjeta } from "./Tarjeta";
+import { formatFechaCorta } from "@/lib/fechas/formato";
 
 /** "Estado de vehículos": permite identificar rápido cuáles motos acumulan más novedades. */
 export function TablaVehiculos({
@@ -54,7 +55,7 @@ export function TablaVehiculos({
                   <td className="py-2 text-right">{f.rechazadas}</td>
                   <td className="py-2 text-right">{f.novedades}</td>
                   <td className="py-2 text-right">
-                    {new Intl.DateTimeFormat("es-CO", { dateStyle: "short" }).format(f.ultimaInspeccion)}
+                    {formatFechaCorta(f.ultimaInspeccion)}
                   </td>
                 </tr>
               ))}

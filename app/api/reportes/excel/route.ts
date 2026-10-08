@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { auth } from "@/lib/auth/config";
 import { getAllInspeccionesForOversight } from "@/lib/inspections/supervisor-queries";
 import { estadoLegible, parseFiltrosDesdeQuery } from "@/lib/inspections/reportes-queries";
+import { claveDiaBogota, formatFechaCorta, formatFechaHora, formatHora } from "@/lib/fechas/formato";
 
 // Node.js (exceljs no corre en Edge Runtime) — mismo criterio que
 // app/api/inspecciones/[id]/pdf/route.ts.
@@ -63,10 +64,12 @@ export async function GET(request: NextRequest) {
   ];
   hoja.getRow(1).font = { bold: true };
 
+  // Fecha y hora van como TEXTO ya en hora de Colombia (no como celdas Date): una
+  // celda Date de Excel no lleva zona y se vería en la zona del servidor/lector.
   for (const inspection of inspecciones) {
     hoja.addRow({
-      fecha: new Intl.DateTimeFormat("es-CO", { dateStyle: "short" }).format(inspection.startedAt),
-      hora: new Intl.DateTimeFormat("es-CO", { timeStyle: "short" }).format(inspection.startedAt),
+      fecha: formatFechaCorta(inspection.startedAt),
+      hora: formatHora(inspection.startedAt),
       trabajador: inspection.worker.name,
       placa: inspection.vehicle.placa,
       kilometraje: inspection.kilometraje ?? "",
@@ -77,12 +80,12 @@ export async function GET(request: NextRequest) {
       aprobacion:
         inspection.reviewedAt === null
           ? "Pendiente"
-          : `${estadoLegible(inspection.status)} — ${new Intl.DateTimeFormat("es-CO", { dateStyle: "short", timeStyle: "short" }).format(inspection.reviewedAt)}`,
+          : `${estadoLegible(inspection.status)} — ${formatFechaHora(inspection.reviewedAt)}`,
     });
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
-  const fecha = new Intl.DateTimeFormat("en-CA").format(new Date()).replaceAll("-", "");
+  const fecha = claveDiaBogota(new Date()).replaceAll("-", "");
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,

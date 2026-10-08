@@ -8,6 +8,7 @@ import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
 import { Role, Sede } from "@/generated/prisma/enums";
 import { etiquetaRol, etiquetaSede } from "@/lib/auth/etiquetas-rol";
 import { esperandoA, estadoEtapaOleariari } from "@/lib/inspections/cola-aprobacion";
+import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
 
 // Pantalla de detalle de la consulta de oversight (DIRECTOR/SST): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -323,23 +324,6 @@ function FirmaEvidencia({
       {cedula && <p className="text-xs text-gray-500">C.C. {cedula}</p>}
     </div>
   );
-}
-
-function formatFechaHora(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatFecha(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(date);
 }
 
 // Corrección Slice 3 (paridad con app/(supervisor)/aprobaciones/[id]/page.tsx,

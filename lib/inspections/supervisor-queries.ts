@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { InspectionStatus, type Sede } from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { whereColaPendientes, type RolAprobador } from "@/lib/inspections/cola-aprobacion";
+import { finDiaBogotaDeFecha, inicioDiaBogotaDeFecha } from "@/lib/fechas/formato";
 
 // Queries de la revisión de los aprobadores (Fase 3 + roles-oleariari). No hay
 // asignación trabajador→supervisor (decisión de negocio ya tomada), por eso
@@ -172,9 +173,10 @@ export async function getInspeccionDetalleOrNotFound(
 /**
  * Filtros opcionales de búsqueda para `getAllInspeccionesForOversight`.
  * `conductor`/`placa` son búsqueda parcial insensible a mayúsculas;
- * `fechaDesde`/`fechaHasta` acotan `startedAt` (inclusive de todo el día
- * calendario en `fechaHasta`, ya que llega sin componente de hora desde un
- * `<input type="date">`).
+ * `fechaDesde`/`fechaHasta` acotan `startedAt` como días de Bogotá (inclusive
+ * de todo el día en `fechaHasta`, ya que llegan sin hora desde un
+ * `<input type="date">`). `rangoInstantes` es un rango ya calculado (p. ej. el
+ * de `normalizarRango`) y tiene prioridad sobre ambos.
  */
 export type FiltrosInspecciones = {
   conductor?: string;
@@ -182,6 +184,7 @@ export type FiltrosInspecciones = {
   estado?: InspectionStatus;
   fechaDesde?: Date;
   fechaHasta?: Date;
+  rangoInstantes?: { desde: Date; hasta: Date };
   // Filtros que suma el dashboard ejecutivo (lib/inspections/reportes-queries.ts)
   // — opcionales, no rompen ningún uso existente de esta función.
   workerId?: string;
@@ -224,19 +227,12 @@ export function getAllInspeccionesForOversight(filtros?: FiltrosInspecciones) {
   if (filtros?.puedeOperar !== undefined) {
     where.puedeOperar = filtros.puedeOperar;
   }
-  if (filtros?.fechaDesde || filtros?.fechaHasta) {
+  if (filtros?.rangoInstantes) {
+    where.startedAt = { gte: filtros.rangoInstantes.desde, lte: filtros.rangoInstantes.hasta };
+  } else if (filtros?.fechaDesde || filtros?.fechaHasta) {
     where.startedAt = {
-      ...(filtros.fechaDesde && { gte: filtros.fechaDesde }),
-      ...(filtros.fechaHasta && {
-        lte: new Date(
-          Date.UTC(
-            filtros.fechaHasta.getUTCFullYear(),
-            filtros.fechaHasta.getUTCMonth(),
-            filtros.fechaHasta.getUTCDate(),
-            23, 59, 59, 999,
-          ),
-        ),
-      }),
+      ...(filtros.fechaDesde && { gte: inicioDiaBogotaDeFecha(filtros.fechaDesde) }),
+      ...(filtros.fechaHasta && { lte: finDiaBogotaDeFecha(filtros.fechaHasta) }),
     };
   }
 

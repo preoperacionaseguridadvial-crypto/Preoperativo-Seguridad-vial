@@ -17,6 +17,7 @@ import {
   etapaParaRol,
   tipoFirmaPendiente,
 } from "@/lib/inspections/cola-aprobacion";
+import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
 
 // Pantalla de detalle de la revisión de los aprobadores (Fase 3): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -464,23 +465,6 @@ function FirmaEvidencia({
       {cedula && <p className="text-xs text-gray-500">C.C. {cedula}</p>}
     </div>
   );
-}
-
-function formatFechaHora(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatFecha(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" }).format(date);
 }
 
 // Corrección Slice 3: antes solo distinguía OK/Falla — los ítems de

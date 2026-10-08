@@ -8,16 +8,9 @@ import { alertasDocumentosVehiculo } from "@/lib/inicio/vencimientos-vehiculo";
 import type { getDatosInicioTrabajador } from "@/lib/inicio/trabajador-queries";
 import { estadoLegible } from "@/lib/inspections/reportes-queries";
 import { TarjetaVehiculo } from "./TarjetaVehiculo";
+import { formatFechaHoraMedia } from "@/lib/fechas/formato";
 
 type Datos = Awaited<ReturnType<typeof getDatosInicioTrabajador>>;
-
-function formatoFechaHora(fecha: Date) {
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "America/Bogota",
-  }).format(fecha);
-}
 
 /** Panel del TRABAJADOR (presentacional): vehículo, acción principal, alertas de documentos y últimas inspecciones. */
 export function PanelTrabajador({ datos, ahora }: { datos: Datos; ahora: Date }) {
@@ -95,7 +88,7 @@ export function PanelTrabajador({ datos, ahora }: { datos: Datos; ahora: Date })
                 key={inspeccion.id}
                 className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 shadow-sm"
               >
-                <span className="text-sm text-ink">{formatoFechaHora(inspeccion.startedAt)}</span>
+                <span className="text-sm text-ink">{formatFechaHoraMedia(inspeccion.startedAt)}</span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CLASES_TONO[tonoEstadoInspeccion(inspeccion.status)]}`}
                 >

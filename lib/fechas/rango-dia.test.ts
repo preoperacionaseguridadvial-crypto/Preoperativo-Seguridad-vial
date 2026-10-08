@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rangoDiaBogota } from "@/lib/inicio/rango-dia";
+import { rangoDiaBogota } from "@/lib/fechas/formato";
 
 describe("rangoDiaBogota", () => {
   it("el día de Bogotá (UTC-5) empieza a las 05:00 UTC y dura 24 h", () => {

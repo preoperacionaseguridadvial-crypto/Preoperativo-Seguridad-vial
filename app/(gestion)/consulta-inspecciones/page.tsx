@@ -5,6 +5,7 @@ import { getAllInspeccionesForOversight } from "@/lib/inspections/supervisor-que
 import { InspectionStatus } from "@/generated/prisma/client";
 import { Role, Sede } from "@/generated/prisma/enums";
 import { estadoEtapaOleariari } from "@/lib/inspections/cola-aprobacion";
+import { formatFechaHora } from "@/lib/fechas/formato";
 
 const ESTADOS_FILTRO = [
   InspectionStatus.EN_PROCESO,
@@ -223,14 +224,4 @@ function badgeClass(status: string) {
     default:
       return `${base} bg-gray-100 text-gray-600`;
   }
-}
-
-function formatFechaHora(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
 }

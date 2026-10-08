@@ -1,4 +1,5 @@
 import type { Role } from "@/generated/prisma/client";
+import { formatFechaLarga } from "@/lib/fechas/formato";
 
 // Pantalla de inicio por rol: etiquetas y atajos. Todo puro (sin Prisma ni
 // Next) para poder testearlo; los atajos se validan en test contra el mapa de
@@ -15,10 +16,7 @@ export function primerNombre(nombre: string | null | undefined): string {
  * sin horario de verano): la gente la lee en hora local, no en UTC.
  */
 export function fechaLegible(fecha: Date): string {
-  const texto = new Intl.DateTimeFormat("es-CO", {
-    dateStyle: "full",
-    timeZone: "America/Bogota",
-  }).format(fecha);
+  const texto = formatFechaLarga(fecha);
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 

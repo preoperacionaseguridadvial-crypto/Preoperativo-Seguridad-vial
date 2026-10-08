@@ -35,6 +35,7 @@ import { TablaDetalle } from "./_components/TablaDetalle";
 import { Icono } from "./_components/Iconos";
 import { puedeExportarExcel } from "./_components/acciones-rapidas";
 import { buildDashboardUrl } from "./_components/dashboard-url";
+import { formatFechaHora } from "@/lib/fechas/formato";
 
 type SearchParams = {
   fechaDesde?: string;
@@ -122,8 +123,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       estado: filtrosReporte.status,
       // Mismo rango efectivo (30 días por defecto) que KPIs, tendencia y heatmap:
       // sin esto "Inspecciones recientes" y el detalle mostraban todo el histórico.
-      fechaDesde: rangoEfectivo.desde,
-      fechaHasta: rangoEfectivo.hasta,
+      rangoInstantes: rangoEfectivo,
       workerId: filtrosReporte.workerId,
       supervisorId: filtrosReporte.supervisorId,
       puedeOperar: filtrosReporte.puedeOperar,
@@ -136,7 +136,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const role = session.user.role;
   const urlExcel = buildDashboardUrl("/api/reportes/excel", sp, {});
-  const ahora = new Intl.DateTimeFormat("es-CO", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+  const ahora = formatFechaHora(new Date());
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6">

@@ -132,4 +132,35 @@ describe("colas por rol y consulta por sede", () => {
     expect(soloOleariari.map((i) => i.id)).toEqual([oleariari.id]);
     expect(todas.map((i) => i.id).sort()).toEqual([bogota.id, oleariari.id].sort());
   });
+
+  // fechaDesde/fechaHasta llegan como día calendario (medianoche UTC) y se
+  // interpretan como días de Bogotá; `rangoInstantes` (rango ya calculado) manda.
+  it("getAllInspeccionesForOversight filtra por días de Bogotá", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    const en = (startedAt: string) =>
+      prisma.inspection.create({
+        data: {
+          workerId: worker.id,
+          conductorId: worker.id,
+          vehicleId: vehicle.id,
+          status: InspectionStatus.APROBADA,
+          startedAt: new Date(startedAt),
+        },
+      });
+    const nocheDel7 = await en("2026-10-08T00:30:00Z"); // 7 oct 19:30 Bogotá
+    const madrugadaDel8 = await en("2026-10-08T05:30:00Z"); // 8 oct 00:30 Bogotá
+    await en("2026-10-07T04:00:00Z"); // 6 oct 23:00 Bogotá
+
+    const dia7 = await getAllInspeccionesForOversight({
+      fechaDesde: new Date("2026-10-07T00:00:00Z"),
+      fechaHasta: new Date("2026-10-07T00:00:00Z"),
+    });
+    expect(dia7.map((i) => i.id)).toEqual([nocheDel7.id]);
+
+    const porInstantes = await getAllInspeccionesForOversight({
+      rangoInstantes: { desde: new Date("2026-10-08T05:00:00Z"), hasta: new Date("2026-10-08T06:00:00Z") },
+    });
+    expect(porInstantes.map((i) => i.id)).toEqual([madrugadaDel8.id]);
+  });
 });
