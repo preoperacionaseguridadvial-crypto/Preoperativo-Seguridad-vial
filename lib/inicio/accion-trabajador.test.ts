@@ -17,6 +17,7 @@ function inspeccion(
     observacionesSupervisor: string | null;
     sede: Sede | null;
     revisadaSupervisorOleariariAt: Date | null;
+    firmaSupervisorOleariari: boolean;
   }> = {},
 ) {
   return {
@@ -28,6 +29,7 @@ function inspeccion(
     observacionesSupervisor: null,
     sede: Sede.BOGOTA as Sede | null,
     revisadaSupervisorOleariariAt: null as Date | null,
+    firmaSupervisorOleariari: false,
     ...extra,
   };
 }
@@ -83,11 +85,25 @@ describe("accionPrincipalTrabajador", () => {
     expect(accion.detalle).toBe("Enviada hace 10 min");
   });
 
-  it("Oleariari ya aprobada por el Supervisor Oleariari: espera al Director de Operaciones", () => {
+  it("Oleariari aprobada por el Supervisor Oleariari pero sin firmar: espera su firma", () => {
     const accion = accionPrincipalTrabajador(
       inspeccion(InspectionStatus.PENDIENTE_APROBACION, {
         sede: Sede.OLEARIARI,
         revisadaSupervisorOleariariAt: hace(1),
+        completedAt: hace(2),
+      }),
+      ahora,
+    );
+    expect(accion.titulo).toBe("Esperando la firma del Supervisor Oleariari");
+    expect(accion.detalle).toBe("Ya la aprobó el Supervisor Oleariari · Enviada hace 2 h");
+  });
+
+  it("Oleariari aprobada y firmada por el Supervisor Oleariari: espera al Director de Operaciones", () => {
+    const accion = accionPrincipalTrabajador(
+      inspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+        sede: Sede.OLEARIARI,
+        revisadaSupervisorOleariariAt: hace(1),
+        firmaSupervisorOleariari: true,
         completedAt: hace(2),
       }),
       ahora,

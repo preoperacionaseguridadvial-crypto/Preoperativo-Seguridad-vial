@@ -23,11 +23,12 @@ async function crearInspeccion(
     consumioAlcohol: boolean | null;
     sede: Sede | null;
     revisadaSupervisorOleariariAt: Date | null;
+    firmaSupervisorOleariari: boolean;
   }> = {},
 ) {
   const worker = await crearUsuario(Role.TRABAJADOR);
   const vehicle = await crearVehiculo();
-  return prisma.inspection.create({
+  const inspection = await prisma.inspection.create({
     data: {
       workerId: worker.id,
       conductorId: worker.id,
@@ -42,6 +43,18 @@ async function crearInspeccion(
       revisadaSupervisorOleariariAt: overrides.revisadaSupervisorOleariariAt ?? null,
     },
   });
+  if (overrides.firmaSupervisorOleariari) {
+    const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
+    await prisma.firma.create({
+      data: {
+        inspectionId: inspection.id,
+        userId: supOleariari.id,
+        tipo: TipoFirma.SUPERVISOR_OLEARIARI,
+        s3Key: "firmas/test-so.png",
+      },
+    });
+  }
+  return inspection;
 }
 
 async function firmarComoSupervisor(inspectionId: string, userId: string) {
@@ -442,11 +455,28 @@ describe("flujo de dos etapas — Director de Operaciones (etapa 2)", () => {
     expect(despues.supervisorId).toBeNull();
   });
 
+  it("no puede decidir una de Oleariari aprobada por la primera etapa pero SIN la firma del Supervisor Oleariari", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      sede: Sede.OLEARIARI,
+      revisadaSupervisorOleariariAt: new Date(),
+    });
+    loginComo(director);
+
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/firma del Supervisor Oleariari/);
+    await expect(rechazarInspeccion(inspection.id, "x")).rejects.toThrow(/firma del Supervisor Oleariari/);
+    const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(despues.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
+    expect(despues.reviewedAt).toBeNull();
+    expect(despues.supervisorId).toBeNull();
+  });
+
   it("aprueba una de Oleariari ya aprobada por la primera etapa, como siempre", async () => {
     const director = await crearUsuario(Role.SUPERVISOR);
     const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
       sede: Sede.OLEARIARI,
       revisadaSupervisorOleariariAt: new Date(),
+      firmaSupervisorOleariari: true,
     });
     loginComo(director);
 
@@ -462,6 +492,7 @@ describe("flujo de dos etapas — Director de Operaciones (etapa 2)", () => {
     const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
       sede: Sede.OLEARIARI,
       revisadaSupervisorOleariariAt: new Date(),
+      firmaSupervisorOleariari: true,
     });
     loginComo(director);
 

@@ -81,8 +81,9 @@ export default async function AprobacionDetallePage({
   }
 
   // Solo decide quien tiene el turno (etapa); el resto ve el detalle en lectura.
-  const puedeDecidir = etapaParaRol(rol, inspection) !== null;
-  const esperaA = esperandoA(inspection);
+  const datosEtapa = { ...inspection, firmaSupervisorOleariari: firmaSupervisorOleariari !== null };
+  const puedeDecidir = etapaParaRol(rol, datosEtapa) !== null;
+  const esperaA = esperandoA(datosEtapa);
   const oleariari = inspection.sede === Sede.OLEARIARI;
   const primeraEtapaHecha = oleariari && inspection.revisadaSupervisorOleariariAt !== null;
   // Rechazada en la primera etapa: cerrada, el Director nunca la decidió.

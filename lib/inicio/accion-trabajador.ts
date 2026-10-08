@@ -28,6 +28,9 @@ export type InspeccionResumen = {
   // etapa (Director de Operaciones).
   sede?: Sede | null;
   revisadaSupervisorOleariariAt?: Date | null;
+  // El Supervisor Oleariari ya firmó su decisión de la primera etapa. Obligatorio:
+  // sin la firma la inspección todavía no llega al Director.
+  firmaSupervisorOleariari: boolean;
 };
 
 /** Estado de aprobación de una inspección ya enviada y todavía sin decidir. */
@@ -37,6 +40,7 @@ function datosEspera(ultima: InspeccionResumen) {
     sede: ultima.sede ?? null,
     reviewedAt: null,
     revisadaSupervisorOleariariAt: ultima.revisadaSupervisorOleariariAt ?? null,
+    firmaSupervisorOleariari: ultima.firmaSupervisorOleariari,
   };
 }
 

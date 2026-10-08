@@ -23,6 +23,7 @@ function datos(
     revisadaSupervisorOleariariAt: Date | null;
     supervisorId: string | null;
     supervisorOleariariId: string | null;
+    firmaSupervisorOleariari: boolean;
   }> = {},
 ) {
   return {
@@ -32,6 +33,7 @@ function datos(
     revisadaSupervisorOleariariAt: null as Date | null,
     supervisorId: null as string | null,
     supervisorOleariariId: null as string | null,
+    firmaSupervisorOleariari: false,
     ...overrides,
   };
 }
@@ -60,8 +62,16 @@ describe("etapaPendiente — a quién espera la inspección", () => {
     expect(etapaPendiente(datos({ sede: Sede.OLEARIARI }))).toBe("OLEARIARI");
   });
 
-  it("Oleariari con la primera etapa aprobada espera al Director", () => {
-    expect(etapaPendiente(datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA }))).toBe("DIRECTOR");
+  it("Oleariari con la primera etapa aprobada y firmada espera al Director", () => {
+    expect(
+      etapaPendiente(datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA, firmaSupervisorOleariari: true })),
+    ).toBe("DIRECTOR");
+  });
+
+  it("Oleariari con la primera etapa aprobada pero SIN firmar espera la firma del Supervisor Oleariari", () => {
+    expect(
+      etapaPendiente(datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA, firmaSupervisorOleariari: false })),
+    ).toBe("FIRMA_OLEARIARI");
   });
 
   it("NO_APTA_PARA_OPERAR también es revisable", () => {
@@ -89,8 +99,22 @@ describe("etapaParaRol — le toca a este rol", () => {
     expect(etapaParaRol(Role.SUPERVISOR, datos({ sede: Sede.BOGOTA }))).toBe("DIRECTOR");
     expect(etapaParaRol(Role.SUPERVISOR, datos({ sede: null }))).toBe("DIRECTOR");
     expect(
-      etapaParaRol(Role.SUPERVISOR, datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA })),
+      etapaParaRol(
+        Role.SUPERVISOR,
+        datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA, firmaSupervisorOleariari: true }),
+      ),
     ).toBe("DIRECTOR");
+  });
+
+  it("aprobada por la primera etapa pero sin firmar: nadie puede decidir", () => {
+    const sinFirmar = datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA, firmaSupervisorOleariari: false });
+    expect(etapaParaRol(Role.SUPERVISOR, sinFirmar)).toBeNull();
+    expect(etapaParaRol(Role.SUPERVISOR_OLEARIARI, sinFirmar)).toBeNull();
+  });
+
+  it("la firma no altera Bogotá ni legacy", () => {
+    expect(etapaParaRol(Role.SUPERVISOR, datos({ sede: Sede.BOGOTA, firmaSupervisorOleariari: false }))).toBe("DIRECTOR");
+    expect(etapaParaRol(Role.SUPERVISOR, datos({ sede: null, firmaSupervisorOleariari: false }))).toBe("DIRECTOR");
   });
 
   it("el Director NO actúa en Oleariari antes de la primera etapa", () => {
@@ -115,6 +139,18 @@ describe("esperandoA / textoEsperandoAprobacion", () => {
     expect(textoEsperandoAprobacion(datos())).toBe("Esperando aprobación del Director de Operaciones");
     expect(textoEsperandoAprobacion(datos({ reviewedAt: AHORA }))).toBeNull();
   });
+
+  it("aprobada por la primera etapa y sin firmar espera la firma del Supervisor Oleariari", () => {
+    const sinFirmar = datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA });
+    expect(esperandoA(sinFirmar)).toBe(Role.SUPERVISOR_OLEARIARI);
+    expect(textoEsperandoAprobacion(sinFirmar)).toBe("Esperando la firma del Supervisor Oleariari");
+  });
+
+  it("firmada por la primera etapa espera al Director", () => {
+    const firmada = datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA, firmaSupervisorOleariari: true });
+    expect(esperandoA(firmada)).toBe(Role.SUPERVISOR);
+    expect(textoEsperandoAprobacion(firmada)).toBe("Esperando aprobación del Director de Operaciones");
+  });
 });
 
 describe("estadoEtapaOleariari — texto para consulta", () => {
@@ -127,9 +163,17 @@ describe("estadoEtapaOleariari — texto para consulta", () => {
     expect(estadoEtapaOleariari(datos({ sede: Sede.OLEARIARI }))).toBe("Pendiente Supervisor Oleariari");
   });
 
-  it("aprobada por el Supervisor Oleariari y pendiente del Director", () => {
+  it("aprobada por el Supervisor Oleariari pero sin firmar: pendiente de su firma", () => {
     expect(
       estadoEtapaOleariari(datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA })),
+    ).toBe("Aprobada por Supervisor Oleariari · pendiente de su firma");
+  });
+
+  it("aprobada y firmada por el Supervisor Oleariari y pendiente del Director", () => {
+    expect(
+      estadoEtapaOleariari(
+        datos({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: AHORA, firmaSupervisorOleariari: true }),
+      ),
     ).toBe("Aprobada por Supervisor Oleariari · pendiente Director de Operaciones");
   });
 
@@ -220,10 +264,11 @@ describe("whereColaPendientes (Postgres real)", () => {
     status?: InspectionStatus;
     reviewedAt?: Date | null;
     revisadaSupervisorOleariariAt?: Date | null;
+    firmada?: boolean;
   }) {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
-    return prisma.inspection.create({
+    const inspection = await prisma.inspection.create({
       data: {
         workerId: worker.id,
         conductorId: worker.id,
@@ -235,6 +280,18 @@ describe("whereColaPendientes (Postgres real)", () => {
         revisadaSupervisorOleariariAt: overrides.revisadaSupervisorOleariariAt ?? null,
       },
     });
+    if (overrides.firmada) {
+      const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
+      await prisma.firma.create({
+        data: {
+          inspectionId: inspection.id,
+          userId: supOleariari.id,
+          tipo: TipoFirma.SUPERVISOR_OLEARIARI,
+          s3Key: "firmas/test-so.png",
+        },
+      });
+    }
+    return inspection;
   }
 
   async function ids(role: typeof Role.SUPERVISOR | typeof Role.SUPERVISOR_OLEARIARI) {
@@ -247,7 +304,13 @@ describe("whereColaPendientes (Postgres real)", () => {
     const legacy = await crear({ sede: null });
     const oleariariEtapa1 = await crear({ sede: Sede.OLEARIARI });
     const oleariariNoApta = await crear({ sede: Sede.OLEARIARI, status: InspectionStatus.NO_APTA_PARA_OPERAR });
-    const oleariariEtapa2 = await crear({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: new Date() });
+    const oleariariEtapa2 = await crear({
+      sede: Sede.OLEARIARI,
+      revisadaSupervisorOleariariAt: new Date(),
+      firmada: true,
+    });
+    // Aprobada por la primera etapa pero sin firmar: todavia NO llega al Director.
+    await crear({ sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: new Date() });
     await crear({ sede: Sede.BOGOTA, status: InspectionStatus.APROBADA, reviewedAt: new Date() });
     await crear({ sede: Sede.OLEARIARI, status: InspectionStatus.EN_PROCESO });
     await crear({

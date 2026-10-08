@@ -178,8 +178,10 @@ export default async function ConsultaInspeccionesPage({
                 <span>Inicio: {formatFechaHora(inspection.startedAt)}</span>
                 <span>Fin: {formatFechaHora(inspection.completedAt)}</span>
               </div>
-              {estadoEtapaOleariari(inspection) && (
-                <p className="mt-1 text-xs font-medium text-[#0B3B60]">{estadoEtapaOleariari(inspection)}</p>
+              {estadoEtapaOleariari({ ...inspection, firmaSupervisorOleariari: inspection._count.firmas > 0 }) && (
+                <p className="mt-1 text-xs font-medium text-[#0B3B60]">
+                  {estadoEtapaOleariari({ ...inspection, firmaSupervisorOleariari: inspection._count.firmas > 0 })}
+                </p>
               )}
             </Link>
           </li>

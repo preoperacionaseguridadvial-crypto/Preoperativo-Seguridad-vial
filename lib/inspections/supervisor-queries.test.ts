@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, Role, Sede, TipoFotoInspeccion } from "@/generated/prisma/client";
+import { InspectionStatus, Role, Sede, TipoFirma, TipoFotoInspeccion } from "@/generated/prisma/client";
 import {
   getAllInspeccionesForOversight,
   getInspeccionesPendientes,
@@ -97,7 +97,7 @@ describe("colas por rol y consulta por sede", () => {
   async function crear(sede: Sede | null, extra: { revisada?: boolean } = {}) {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
-    return prisma.inspection.create({
+    const inspection = await prisma.inspection.create({
       data: {
         workerId: worker.id,
         conductorId: worker.id,
@@ -108,6 +108,19 @@ describe("colas por rol y consulta por sede", () => {
         revisadaSupervisorOleariariAt: extra.revisada ? new Date() : null,
       },
     });
+    // La cola del Director exige ademas la firma del Supervisor Oleariari.
+    if (extra.revisada) {
+      const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
+      await prisma.firma.create({
+        data: {
+          inspectionId: inspection.id,
+          userId: supOleariari.id,
+          tipo: TipoFirma.SUPERVISOR_OLEARIARI,
+          s3Key: "firmas/test-so.png",
+        },
+      });
+    }
+    return inspection;
   }
 
   it("getInspeccionesPendientes(rol) devuelve la cola de cada aprobador", async () => {
