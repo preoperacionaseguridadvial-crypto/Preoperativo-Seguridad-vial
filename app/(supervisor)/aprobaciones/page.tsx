@@ -5,6 +5,7 @@ import { getInspeccionesPendientes } from "@/lib/inspections/supervisor-queries"
 import { requiereAtencionEstadoConductor, requiereAtencionPendiente } from "@/lib/inspections/estado-conductor";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 import { getSignedReadUrl } from "@/lib/storage/s3";
+import { avisoDecisionFirmada } from "@/lib/inspections/aviso-decision";
 // "Buscar todas las inspecciones" reusa la pantalla de solo lectura de
 // oversight (app/(gestion)/consulta-inspecciones), a la que SUPERVISOR ya
 // tiene acceso — no se duplica una pantalla de búsqueda propia acá.
@@ -22,7 +23,12 @@ type Pendiente = Awaited<ReturnType<typeof getInspeccionesPendientes>>[number] &
 // celular): tarjetas con área táctil completa, placa grande, y las alertas
 // (NO APTA, estado del conductor, novedades) visibles sin abrir el detalle.
 // Las que requieren atención van en su propia sección, arriba.
-export default async function AprobacionesPage() {
+export default async function AprobacionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ decision?: string; placa?: string }>;
+}) {
+  const aviso = avisoDecisionFirmada(await searchParams);
   const session = await auth();
   if (!session?.user) {
     redirect("/login");
@@ -59,6 +65,20 @@ export default async function AprobacionesPage() {
               } tu revisión`}
         </p>
       </header>
+
+      {aviso && (
+        <p
+          role="status"
+          className={`rounded-xl px-4 py-3 text-sm font-medium ${
+            aviso.tono === "ok"
+              ? "bg-status-ok-soft text-status-ok-ink"
+              : "bg-status-crit-soft text-status-crit-ink"
+          }`}
+        >
+          {aviso.tono === "ok" ? "✓ " : "✕ "}
+          {aviso.texto}
+        </p>
+      )}
 
       {pendientes.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
