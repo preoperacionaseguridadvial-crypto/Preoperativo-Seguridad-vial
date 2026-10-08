@@ -7,6 +7,8 @@ import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
 import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
+import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirmacion-aprobacion";
+import { AprobarInspeccionForm } from "@/app/_components/AprobarInspeccionForm";
 
 // Pantalla de detalle de la revisión del Supervisor (Fase 3): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -66,6 +68,11 @@ export default async function AprobacionDetallePage({
   // solo decide si esta pantalla muestra la advertencia.
   const alertaEstadoConductor = requiereAtencionEstadoConductor(inspection);
 
+  // Qué hay reportado que obliga a confirmar la aprobación (lista vacía = se
+  // aprueba como siempre). La server action lo recalcula; esto solo alimenta
+  // el diálogo.
+  const motivosConfirmacion = motivosConfirmacionAprobacion(inspection);
+
   const ahora = new Date();
   const tecnicomecanicaVencida = Boolean(
     inspection.vehicle.fechaVencimientoTecnicomecanica &&
@@ -75,8 +82,9 @@ export default async function AprobacionDetallePage({
   async function aprobarAction(formData: FormData) {
     "use server";
     const observacion = formData.get("observacion")?.toString();
+    const confirmado = formData.get("confirmado")?.toString() === "true";
     try {
-      await aprobarInspeccion(id, observacion);
+      await aprobarInspeccion(id, observacion, confirmado);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo aprobar la inspección.";
       redirect(`/aprobaciones/${id}?error=${encodeURIComponent(message)}`);
@@ -298,26 +306,7 @@ export default async function AprobacionDetallePage({
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
 
-          <form action={aprobarAction} className="flex flex-col gap-3">
-            <div>
-              <label htmlFor="observacion-aprobar" className="mb-1 block text-sm font-medium text-gray-700">
-                Observaciones (opcional)
-              </label>
-              <textarea
-                id="observacion-aprobar"
-                name="observacion"
-                rows={3}
-                placeholder="Comentarios adicionales para el trabajador."
-                className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#2E9BD6] focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full rounded-md bg-green-600 px-4 py-4 text-base font-semibold text-white hover:bg-green-700"
-            >
-              ✓ Aprobar
-            </button>
-          </form>
+          <AprobarInspeccionForm action={aprobarAction} motivos={motivosConfirmacion} />
 
           <form action={rechazarAction} className="flex flex-col gap-3">
             <div>

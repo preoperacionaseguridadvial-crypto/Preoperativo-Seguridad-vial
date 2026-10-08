@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus } from "@/generated/prisma/client";
+import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirmacion-aprobacion";
 
 // Server actions de la revisión del SUPERVISOR (Fase 3). Decisión de negocio
 // ya tomada: cualquier Supervisor puede ver y decidir sobre cualquier
@@ -46,10 +47,35 @@ async function getInspeccionRevisable(inspectionId: string) {
 
 /**
  * Aprueba una inspección pendiente. La observación es opcional.
+ *
+ * Si la inspección tiene algo reportado (ver `motivosConfirmacionAprobacion`)
+ * exige `confirmadoConNovedades = true` — el supervisor sigue decidiendo, pero
+ * no puede aprobar "a ciegas". Los motivos se recalculan acá desde la base de
+ * datos: el flag del cliente es solo un acuse de recibo, nunca la fuente de la
+ * lista. Con confirmación, la auditoría guarda que se aprobó con novedades y
+ * cuáles eran.
  */
-export async function aprobarInspeccion(inspectionId: string, observacion?: string) {
+export async function aprobarInspeccion(
+  inspectionId: string,
+  observacion?: string,
+  confirmadoConNovedades = false,
+) {
   const session = await requireRole([Role.SUPERVISOR]);
   await getInspeccionRevisable(inspectionId);
+
+  const paraConfirmar = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+    include: {
+      respuestas: { include: { checklistItem: { include: { category: true } } } },
+      novedades: true,
+    },
+  });
+  const motivos = motivosConfirmacionAprobacion(paraConfirmar);
+  if (motivos.length > 0 && !confirmadoConNovedades) {
+    throw new Error(
+      "Esta inspección tiene novedades reportadas. Debe confirmar la aprobación para continuar.",
+    );
+  }
 
   const observacionLimpia = observacion?.trim() || null;
   const now = new Date();
@@ -70,7 +96,10 @@ export async function aprobarInspeccion(inspectionId: string, observacion?: stri
     action: "APROBAR_INSPECCION",
     entityType: "Inspection",
     entityId: inspectionId,
-    metadata: { observacion: observacionLimpia },
+    metadata:
+      motivos.length > 0
+        ? { observacion: observacionLimpia, aprobadaConNovedades: true, motivos }
+        : { observacion: observacionLimpia },
   });
 
   return updated;

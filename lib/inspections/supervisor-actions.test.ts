@@ -6,10 +6,10 @@ vi.mock("@/lib/auth/config", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { Role, InspectionStatus, TipoFirma } from "@/generated/prisma/client";
+import { Role, InspectionStatus, TipoFirma, RespuestaChecklist } from "@/generated/prisma/client";
 import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervisor-actions";
 import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
-import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
+import { crearCatalogoMinimo, crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 
 function loginComo(user: { id: string; role: Role }) {
   mockAuth.mockResolvedValue({ user: { id: user.id, role: user.role } });
@@ -106,6 +106,105 @@ describe("aprobarInspeccion", () => {
       /no está en un estado que admita revisión/i,
     );
   });
+
+  describe("confirmación al aprobar con novedades", () => {
+    async function agregarRespuesta(inspectionId: string, valor: RespuestaChecklist) {
+      const { item } = await crearCatalogoMinimo();
+      await prisma.inspectionItemResponse.create({
+        data: { inspectionId, checklistItemId: item.id, valor },
+      });
+    }
+
+    async function auditoriaAprobar(inspectionId: string) {
+      return prisma.auditLog.findFirstOrThrow({
+        where: { entityId: inspectionId, action: "APROBAR_INSPECCION" },
+      });
+    }
+
+    it("sin motivos aprueba sin confirmación y deja la metadata como siempre", async () => {
+      const supervisor = await crearUsuario(Role.SUPERVISOR);
+      const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
+      await agregarRespuesta(inspection.id, RespuestaChecklist.OK);
+      loginComo(supervisor);
+
+      await aprobarInspeccion(inspection.id, "Todo bien");
+
+      const log = await auditoriaAprobar(inspection.id);
+      expect(log.metadata).toEqual({ observacion: "Todo bien" });
+    });
+
+    it("con una respuesta FALLA y sin confirmación lanza un error en español y no toca la inspección", async () => {
+      const supervisor = await crearUsuario(Role.SUPERVISOR);
+      const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
+      await agregarRespuesta(inspection.id, RespuestaChecklist.FALLA);
+      loginComo(supervisor);
+
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(
+        /novedades reportadas.*confirmar/i,
+      );
+
+      const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+      expect(despues.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
+      expect(despues.approvedAt).toBeNull();
+      expect(despues.reviewedAt).toBeNull();
+      expect(await prisma.auditLog.count({ where: { entityId: inspection.id } })).toBe(0);
+    });
+
+    it("con confirmación aprueba y registra en la auditoría que fue con novedades y cuáles", async () => {
+      const supervisor = await crearUsuario(Role.SUPERVISOR);
+      const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+        consumioAlcohol: true,
+      });
+      await agregarRespuesta(inspection.id, RespuestaChecklist.MALO);
+      loginComo(supervisor);
+
+      const resultado = await aprobarInspeccion(inspection.id, "  Revisado en sitio  ", true);
+
+      expect(resultado.status).toBe(InspectionStatus.APROBADA);
+      const log = await auditoriaAprobar(inspection.id);
+      const metadata = log.metadata as {
+        observacion: string;
+        aprobadaConNovedades: boolean;
+        motivos: string[];
+      };
+      expect(metadata.observacion).toBe("Revisado en sitio");
+      expect(metadata.aprobadaConNovedades).toBe(true);
+      expect(metadata.motivos).toHaveLength(2);
+      expect(metadata.motivos[0]).toBe("Item de prueba: Malo");
+      expect(metadata.motivos[1]).toMatch(/alcohol/i);
+    });
+
+    it("BAJO no exige confirmación", async () => {
+      const supervisor = await crearUsuario(Role.SUPERVISOR);
+      const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
+      await agregarRespuesta(inspection.id, RespuestaChecklist.BAJO);
+      loginComo(supervisor);
+
+      const resultado = await aprobarInspeccion(inspection.id);
+      expect(resultado.status).toBe(InspectionStatus.APROBADA);
+    });
+
+    it("una inspección NO_APTA_PARA_OPERAR (puedeOperar=false) exige confirmación", async () => {
+      const supervisor = await crearUsuario(Role.SUPERVISOR);
+      const inspection = await crearInspeccion(InspectionStatus.NO_APTA_PARA_OPERAR);
+      loginComo(supervisor);
+
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
+      const aprobada = await aprobarInspeccion(inspection.id, undefined, true);
+      expect(aprobada.status).toBe(InspectionStatus.APROBADA);
+    });
+
+    it("una novedad general (sin ítem) exige confirmación", async () => {
+      const supervisor = await crearUsuario(Role.SUPERVISOR);
+      const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
+      await prisma.novedad.create({
+        data: { inspectionId: inspection.id, tipo: "RAYON", descripcion: "Rayón en el costado" },
+      });
+      loginComo(supervisor);
+
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
+    });
+  });
 });
 
 describe("rechazarInspeccion", () => {
@@ -181,7 +280,9 @@ describe("declaración de estado del conductor — advertencia derivada, nunca a
     });
     loginComo(supervisor);
 
-    const resultado = await aprobarInspeccion(inspection.id);
+    // Sigue sin bloquearse: el Supervisor decide, pero ahora debe confirmar.
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
+    const resultado = await aprobarInspeccion(inspection.id, undefined, true);
 
     expect(resultado.status).toBe(InspectionStatus.APROBADA);
   });
