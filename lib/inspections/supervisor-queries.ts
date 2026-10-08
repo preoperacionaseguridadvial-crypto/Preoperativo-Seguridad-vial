@@ -1,15 +1,20 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus } from "@/generated/prisma/client";
+import { InspectionStatus, type Sede } from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
+import { whereColaPendientes, type RolAprobador } from "@/lib/inspections/cola-aprobacion";
 
-// Queries de la revisión del SUPERVISOR (Fase 3). Cualquier Supervisor puede
-// ver y decidir sobre cualquier inspección pendiente — no hay asignación
-// trabajador→supervisor (decisión de negocio ya tomada), por eso estas
-// queries no filtran por `supervisorId`.
+// Queries de la revisión de los aprobadores (Fase 3 + roles-olariari). No hay
+// asignación trabajador→supervisor (decisión de negocio ya tomada), por eso
+// estas queries no filtran por `supervisorId`; lo que sí filtra es la ETAPA:
+// cada aprobador ve su cola (ver lib/inspections/cola-aprobacion.ts).
 
-/** Filtro de "pendiente de revisión", compartido con el resumen del inicio del Supervisor. */
+/**
+ * Filtro de "pendiente de revisión" en cualquier etapa (todas las colas
+ * juntas), usado por los KPIs del Director/SST. La cola de cada aprobador sale
+ * de `whereColaPendientes`.
+ */
 export const WHERE_PENDIENTES = {
   reviewedAt: null,
   status: {
@@ -18,13 +23,14 @@ export const WHERE_PENDIENTES = {
 } satisfies NonNullable<Parameters<typeof prisma.inspection.findMany>[0]>["where"];
 
 /**
- * Inspecciones pendientes de revisión: `reviewedAt` nulo y estado
- * PENDIENTE_APROBACION o NO_APTA_PARA_OPERAR. Ordenadas por `completedAt`
+ * Cola de pendientes del aprobador `role`: `reviewedAt` nulo, estado
+ * PENDIENTE_APROBACION o NO_APTA_PARA_OPERAR y, según su etapa, la sede /
+ * primera etapa (ver `whereColaPendientes`). Ordenadas por `completedAt`
  * ascendente (las más antiguas primero).
  */
-export function getInspeccionesPendientes() {
+export function getInspeccionesPendientes(role: RolAprobador) {
   return prisma.inspection.findMany({
-    where: WHERE_PENDIENTES,
+    where: whereColaPendientes(role),
     include: {
       worker: true,
       vehicle: true,
@@ -54,6 +60,8 @@ function getInspectionForSupervisorRaw(inspectionId: string) {
       conductor: true,
       vehicle: true,
       supervisor: true,
+      // Primera etapa de las inspecciones de Olariari (roles-olariari).
+      supervisorOlariari: true,
       respuestas: {
         include: {
           checklistItem: { include: { category: true } },
@@ -179,6 +187,8 @@ export type FiltrosInspecciones = {
   workerId?: string;
   supervisorId?: string;
   puedeOperar?: boolean;
+  // El Supervisor Olariari solo consulta su sede (roles-olariari).
+  sede?: Sede;
 };
 
 /**
@@ -207,6 +217,9 @@ export function getAllInspeccionesForOversight(filtros?: FiltrosInspecciones) {
   }
   if (filtros?.supervisorId) {
     where.supervisorId = filtros.supervisorId;
+  }
+  if (filtros?.sede) {
+    where.sede = filtros.sede;
   }
   if (filtros?.puedeOperar !== undefined) {
     where.puedeOperar = filtros.puedeOperar;

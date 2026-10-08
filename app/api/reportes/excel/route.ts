@@ -52,13 +52,13 @@ export async function GET(request: NextRequest) {
   hoja.columns = [
     { header: "Fecha", key: "fecha", width: 12 },
     { header: "Hora", key: "hora", width: 10 },
-    { header: "Trabajador", key: "trabajador", width: 24 },
+    { header: "Recorredor", key: "trabajador", width: 24 },
     { header: "Placa", key: "placa", width: 12 },
     { header: "Kilometraje", key: "kilometraje", width: 14 },
     { header: "Estado", key: "estado", width: 20 },
     { header: "Resultado", key: "resultado", width: 12 },
     { header: "Novedades", key: "novedades", width: 12 },
-    { header: "Supervisor", key: "supervisor", width: 24 },
+    { header: "Director de Operaciones", key: "supervisor", width: 24 },
     { header: "Aprobación", key: "aprobacion", width: 30 },
   ];
   hoja.getRow(1).font = { bold: true };

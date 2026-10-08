@@ -3,15 +3,17 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getPendientesConFoto } from "@/lib/inspections/pendientes-con-foto";
 import { partirPendientes } from "@/lib/inspections/partir-pendientes";
+import { esRolAprobador } from "@/lib/inspections/cola-aprobacion";
 import { TarjetaPendiente } from "@/app/_components/TarjetaPendiente";
 // "Buscar todas las inspecciones" reusa la pantalla de solo lectura de
 // oversight (app/(gestion)/consulta-inspecciones), a la que SUPERVISOR ya
 // tiene acceso — no se duplica una pantalla de búsqueda propia acá.
 
-// Punto de entrada de la revisión del Supervisor (Fase 3): lista de
-// inspecciones pendientes de decisión. Cualquier Supervisor puede ver y
-// decidir sobre cualquier inspección pendiente — no hay asignación
-// trabajador→supervisor.
+// Punto de entrada de la revisión de los aprobadores (Fase 3 + roles-olariari):
+// lista de inspecciones pendientes de decisión EN LA COLA DE SU ROL — el
+// Supervisor Olariari ve las de su sede sin revisar; el Director de Operaciones
+// las de Bogotá y las de Olariari que ya pasaron la primera etapa. No hay
+// asignación trabajador→supervisor.
 //
 // Diseño mobile-first (la mayoría de los Supervisores la abre desde el
 // celular): tarjetas con área táctil completa, placa grande, y las alertas
@@ -23,8 +25,13 @@ export default async function AprobacionesPage() {
     redirect("/login");
   }
 
+  const rol = session.user.role;
+  if (!esRolAprobador(rol)) {
+    redirect("/");
+  }
+
   // Miniatura del vehículo firmada: ver getPendientesConFoto.
-  const pendientes = await getPendientesConFoto();
+  const pendientes = await getPendientesConFoto(rol);
   const ahora = new Date();
 
   const { conAlerta, sinAlerta } = partirPendientes(pendientes);
@@ -121,7 +128,7 @@ function EstadoVacio() {
         </svg>
       </span>
       <p className="font-medium text-ink">No hay inspecciones pendientes</p>
-      <p className="text-sm text-ink-muted">Cuando un trabajador envíe una, aparecerá aquí.</p>
+      <p className="text-sm text-ink-muted">Cuando un recorredor envíe una, aparecerá aquí.</p>
     </div>
   );
 }

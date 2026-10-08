@@ -83,7 +83,7 @@ export function FiltrosReporte({
       <Campo label="Hasta">
         <input type="date" name="fechaHasta" defaultValue={searchParams.fechaHasta ?? ""} className={CLASE_CONTROL} />
       </Campo>
-      <Campo label="Trabajador">
+      <Campo label="Recorredor">
         <select name="trabajador" defaultValue={searchParams.trabajador ?? ""} className={CLASE_CONTROL}>
           <option value="">Todos</option>
           {trabajadores.map((t) => (
@@ -93,7 +93,7 @@ export function FiltrosReporte({
           ))}
         </select>
       </Campo>
-      <Campo label="Supervisor">
+      <Campo label="Director de Operaciones">
         <select name="supervisor" defaultValue={searchParams.supervisor ?? ""} className={CLASE_CONTROL}>
           <option value="">Todos</option>
           {supervisores.map((s) => (

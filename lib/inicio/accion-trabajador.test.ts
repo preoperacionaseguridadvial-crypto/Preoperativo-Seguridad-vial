@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InspectionStatus } from "@/generated/prisma/client";
+import { InspectionStatus, Sede } from "@/generated/prisma/client";
 import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
 import { accionPrincipalTrabajador, tonoEstadoInspeccion } from "@/lib/inicio/accion-trabajador";
 
@@ -15,6 +15,8 @@ function inspeccion(
     completedAt: Date | null;
     reviewedAt: Date | null;
     observacionesSupervisor: string | null;
+    sede: Sede | null;
+    revisadaSupervisorOlariariAt: Date | null;
   }> = {},
 ) {
   return {
@@ -24,6 +26,8 @@ function inspeccion(
     completedAt: null,
     reviewedAt: null,
     observacionesSupervisor: null,
+    sede: Sede.BOGOTA as Sede | null,
+    revisadaSupervisorOlariariAt: null as Date | null,
     ...extra,
   };
 }
@@ -60,11 +64,37 @@ describe("accionPrincipalTrabajador", () => {
         ahora,
       );
       expect(accion.estado).toBe("ESPERANDO");
-      expect(accion.titulo).toBe("Enviada · esperando aprobación");
+      expect(accion.titulo).toBe("Esperando aprobación del Director de Operaciones");
       expect(accion.detalle).toBe("Enviada hace 35 min");
       expect(accion.boton).toEqual({ texto: "Hacer una nueva inspección", href: "/inspecciones" });
     },
   );
+
+  it("Olariari sin la primera etapa: espera al Supervisor Olariari", () => {
+    const accion = accionPrincipalTrabajador(
+      inspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+        sede: Sede.OLARIARI,
+        completedAt: new Date(ahora.getTime() - 10 * 60_000),
+      }),
+      ahora,
+    );
+    expect(accion.estado).toBe("ESPERANDO");
+    expect(accion.titulo).toBe("Esperando aprobación del Supervisor Olariari");
+    expect(accion.detalle).toBe("Enviada hace 10 min");
+  });
+
+  it("Olariari ya aprobada por el Supervisor Olariari: espera al Director de Operaciones", () => {
+    const accion = accionPrincipalTrabajador(
+      inspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+        sede: Sede.OLARIARI,
+        revisadaSupervisorOlariariAt: hace(1),
+        completedAt: hace(2),
+      }),
+      ahora,
+    );
+    expect(accion.titulo).toBe("Esperando aprobación del Director de Operaciones");
+    expect(accion.detalle).toBe("Ya la aprobó el Supervisor Olariari · Enviada hace 2 h");
+  });
 
   it("APROBADA reciente: muestra aprobada y permite iniciar una nueva", () => {
     const accion = accionPrincipalTrabajador(
@@ -93,7 +123,7 @@ describe("accionPrincipalTrabajador", () => {
 
   it("RECHAZADA sin observación: detalle genérico", () => {
     const accion = accionPrincipalTrabajador(inspeccion(InspectionStatus.RECHAZADA), ahora);
-    expect(accion.detalle).toBe("El supervisor no dejó observaciones.");
+    expect(accion.detalle).toBe("No se dejaron observaciones.");
   });
 
   it("NO_APTA_PARA_OPERAR: avisa que no está apta y permite iniciar una nueva", () => {
@@ -101,6 +131,14 @@ describe("accionPrincipalTrabajador", () => {
     expect(accion.estado).toBe("NO_APTA");
     expect(accion.titulo).toBe("No apta para operar");
     expect(accion.boton).toEqual({ texto: "Hacer una nueva inspección", href: "/inspecciones" });
+  });
+
+  it("NO_APTA de Olariari: nombra a quién la revisa", () => {
+    const accion = accionPrincipalTrabajador(
+      inspeccion(InspectionStatus.NO_APTA_PARA_OPERAR, { sede: Sede.OLARIARI }),
+      ahora,
+    );
+    expect(accion.detalle).toBe("Tu vehículo no debe operar hasta que lo revise el Supervisor Olariari.");
   });
 
   it.each([

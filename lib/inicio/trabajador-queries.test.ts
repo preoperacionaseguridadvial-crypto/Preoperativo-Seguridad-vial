@@ -59,6 +59,30 @@ describe("getDatosInicioTrabajador", () => {
     ]);
   });
 
+  it("expone la sede y la primera etapa de cada inspección, y la observación del Supervisor Olariari si la rechazó", async () => {
+    const vehicle = await crearVehiculo();
+    const worker = await crearUsuario(Role.TRABAJADOR, { vehicleId: vehicle.id, sede: Sede.OLARIARI });
+    const ahora = new Date();
+    await prisma.inspection.create({
+      data: {
+        workerId: worker.id,
+        conductorId: worker.id,
+        vehicleId: vehicle.id,
+        status: InspectionStatus.RECHAZADA,
+        sede: Sede.OLARIARI,
+        reviewedAt: ahora,
+        revisadaSupervisorOlariariAt: ahora,
+        observacionesSupervisorOlariari: "Falta el casco",
+      },
+    });
+
+    const [inspeccion] = (await getDatosInicioTrabajador(worker.id)).inspecciones;
+
+    expect(inspeccion.sede).toBe(Sede.OLARIARI);
+    expect(inspeccion.revisadaSupervisorOlariariAt).toEqual(ahora);
+    expect(inspeccion.observacionesSupervisor).toBe("Falta el casco");
+  });
+
   it("no mezcla inspecciones de otros trabajadores", async () => {
     const vehicle = await crearVehiculo();
     const worker = await crearUsuario(Role.TRABAJADOR, { vehicleId: vehicle.id });

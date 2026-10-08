@@ -1,4 +1,6 @@
-import type { InspectionStatus } from "@/generated/prisma/client";
+import { InspectionStatus, Role, type Sede } from "@/generated/prisma/enums";
+import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
+import { esperandoA, textoEsperandoAprobacion } from "@/lib/inspections/cola-aprobacion";
 import { esReutilizable } from "@/lib/inspections/reuso-inspeccion";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 
@@ -21,7 +23,22 @@ export type InspeccionResumen = {
   completedAt: Date | null;
   reviewedAt: Date | null;
   observacionesSupervisor: string | null;
+  // Flujo de dos etapas (roles-olariari): de la sede y de la primera etapa
+  // sale a quién espera la inspección. Opcionales: sin ellos se asume una sola
+  // etapa (Director de Operaciones).
+  sede?: Sede | null;
+  revisadaSupervisorOlariariAt?: Date | null;
 };
+
+/** Estado de aprobación de una inspección ya enviada y todavía sin decidir. */
+function datosEspera(ultima: InspeccionResumen) {
+  return {
+    status: InspectionStatus.PENDIENTE_APROBACION,
+    sede: ultima.sede ?? null,
+    reviewedAt: null,
+    revisadaSupervisorOlariariAt: ultima.revisadaSupervisorOlariariAt ?? null,
+  };
+}
 
 export type TonoEstado = "ok" | "warn" | "crit" | "info" | "neutral";
 
@@ -64,10 +81,14 @@ export function accionPrincipalTrabajador(
     case "ENVIADA":
     case "PENDIENTE_APROBACION": {
       const espera = tiempoTranscurrido(ultima.completedAt, ahora);
+      const enviada = espera ? `Enviada ${espera}` : null;
+      const primeraEtapaLista = Boolean(ultima.revisadaSupervisorOlariariAt);
       return {
         estado: "ESPERANDO",
-        titulo: "Enviada · esperando aprobación",
-        detalle: espera ? `Enviada ${espera}` : null,
+        titulo: textoEsperandoAprobacion(datosEspera(ultima)) ?? "Esperando aprobación",
+        detalle: primeraEtapaLista
+          ? [`Ya la aprobó el ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}`, enviada].filter(Boolean).join(" · ")
+          : enviada,
         boton: BOTON_NUEVA,
         tono: "warn",
       };
@@ -84,7 +105,7 @@ export function accionPrincipalTrabajador(
       return {
         estado: "RECHAZADA",
         titulo: "Rechazada",
-        detalle: ultima.observacionesSupervisor?.trim() || "El supervisor no dejó observaciones.",
+        detalle: ultima.observacionesSupervisor?.trim() || "No se dejaron observaciones.",
         boton: BOTON_NUEVA,
         tono: "crit",
       };
@@ -92,7 +113,7 @@ export function accionPrincipalTrabajador(
       return {
         estado: "NO_APTA",
         titulo: "No apta para operar",
-        detalle: "Tu vehículo no debe operar hasta que el supervisor lo revise.",
+        detalle: `Tu vehículo no debe operar hasta que lo revise el ${etiquetaRol(esperandoA(datosEspera(ultima)) ?? Role.SUPERVISOR)}.`,
         boton: BOTON_NUEVA,
         tono: "crit",
       };

@@ -1,10 +1,13 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getInspeccionDetalleForOversight } from "@/lib/inspections/supervisor-queries";
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
+import { Role, Sede } from "@/generated/prisma/enums";
+import { etiquetaRol, etiquetaSede } from "@/lib/auth/etiquetas-rol";
+import { esperandoA, estadoEtapaOlariari } from "@/lib/inspections/cola-aprobacion";
 
 // Pantalla de detalle de la consulta de oversight (DIRECTOR/SST): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -25,8 +28,24 @@ export default async function ConsultaInspeccionDetallePage({
   }
 
   const inspection = await getInspeccionDetalleForOversight(id);
+  // El Supervisor Olariari solo consulta las inspecciones de su sede.
+  if (session.user.role === Role.SUPERVISOR_OLARIARI && inspection.sede !== Sede.OLARIARI) {
+    notFound();
+  }
   const decidida = inspection.reviewedAt !== null;
-  const { conductor: firmaConductor, supervisor: firmaSupervisor } = await getFirmasInspeccion(id);
+  const {
+    conductor: firmaConductor,
+    supervisor: firmaSupervisor,
+    supervisorOlariari: firmaSupervisorOlariari,
+  } = await getFirmasInspeccion(id);
+  const olariari = inspection.sede === Sede.OLARIARI;
+  const primeraEtapaHecha = olariari && inspection.revisadaSupervisorOlariariAt !== null;
+  const cerradaEnPrimeraEtapa = decidida && primeraEtapaHecha && inspection.supervisorId === null;
+  const etapaOlariari = estadoEtapaOlariari(inspection);
+  const esperaA = esperandoA(inspection);
+  const observacionDecision = cerradaEnPrimeraEtapa
+    ? inspection.observacionesSupervisorOlariari
+    : inspection.observacionesSupervisor;
 
   const categorias = new Map<
     string,
@@ -80,9 +99,15 @@ export default async function ConsultaInspeccionDetallePage({
       <section className="rounded-md border border-gray-200 p-4 text-sm">
         <dl className="flex flex-col gap-2">
           <div className="flex justify-between">
-            <dt className="text-gray-500">Trabajador</dt>
+            <dt className="text-gray-500">Recorredor</dt>
             <dd className="font-medium">{inspection.worker.name}</dd>
           </div>
+          {inspection.sede && (
+            <div className="flex justify-between">
+              <dt className="text-gray-500">Sede</dt>
+              <dd className="font-medium">{etiquetaSede(inspection.sede)}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt className="text-gray-500">Conductor</dt>
             <dd className="font-medium">{inspection.conductor.name}</dd>
@@ -193,6 +218,28 @@ export default async function ConsultaInspeccionDetallePage({
 
       <section className="flex flex-col gap-4 border-t border-gray-200 pt-6">
         <h2 className="text-sm font-medium text-gray-500">Decisión</h2>
+        {etapaOlariari && (
+          <p className="rounded-md bg-sky-50 p-3 text-sm font-medium text-[#0B3B60]">{etapaOlariari}</p>
+        )}
+        {primeraEtapaHecha && !cerradaEnPrimeraEtapa && (
+          <div className="flex flex-col gap-3">
+            <div className="rounded-md bg-green-50 p-3 text-sm text-green-900">
+              <p className="font-semibold">
+                ✓ Aprobada por {inspection.supervisorOlariari?.name ?? etiquetaRol(Role.SUPERVISOR_OLARIARI)} el{" "}
+                {formatFechaHora(inspection.revisadaSupervisorOlariariAt)}
+              </p>
+              {inspection.observacionesSupervisorOlariari && (
+                <p className="mt-1">{inspection.observacionesSupervisorOlariari}</p>
+              )}
+            </div>
+            <FirmaEvidencia
+              etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
+              firma={firmaSupervisorOlariari}
+              nombre={inspection.supervisorOlariari?.name ?? null}
+              cedula={inspection.supervisorOlariari?.cedula ?? null}
+            />
+          </div>
+        )}
         {decidida ? (
           <>
             <div
@@ -201,10 +248,11 @@ export default async function ConsultaInspeccionDetallePage({
               }`}
             >
               <p className="font-semibold">
-                {inspection.status === "APROBADA" ? "✓ Aprobada" : "✕ Rechazada"} el{" "}
+                {inspection.status === "APROBADA" ? "✓ Aprobada" : "✕ Rechazada"}
+                {cerradaEnPrimeraEtapa ? ` por ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}` : ""} el{" "}
                 {formatFechaHora(inspection.reviewedAt)}
               </p>
-              {inspection.observacionesSupervisor && <p className="mt-1">{inspection.observacionesSupervisor}</p>}
+              {observacionDecision && <p className="mt-1">{observacionDecision}</p>}
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -214,17 +262,26 @@ export default async function ConsultaInspeccionDetallePage({
                 nombre={inspection.conductor.name}
                 cedula={inspection.conductor.cedula}
               />
-              <FirmaEvidencia
-                etiqueta="Supervisor"
-                firma={firmaSupervisor}
-                nombre={inspection.supervisor?.name ?? null}
-                cedula={inspection.supervisor?.cedula ?? null}
-              />
+              {cerradaEnPrimeraEtapa ? (
+                <FirmaEvidencia
+                  etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
+                  firma={firmaSupervisorOlariari}
+                  nombre={inspection.supervisorOlariari?.name ?? null}
+                  cedula={inspection.supervisorOlariari?.cedula ?? null}
+                />
+              ) : (
+                <FirmaEvidencia
+                  etiqueta={etiquetaRol(Role.SUPERVISOR)}
+                  firma={firmaSupervisor}
+                  nombre={inspection.supervisor?.name ?? null}
+                  cedula={inspection.supervisor?.cedula ?? null}
+                />
+              )}
             </div>
           </>
         ) : (
           <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-900">
-            Pendiente de decisión del supervisor.
+            {esperaA ? `Pendiente de decisión del ${etiquetaRol(esperaA)}.` : "Pendiente de decisión."}
           </p>
         )}
       </section>

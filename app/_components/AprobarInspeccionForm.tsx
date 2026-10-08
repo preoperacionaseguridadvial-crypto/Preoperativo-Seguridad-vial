@@ -51,7 +51,7 @@ export function AprobarInspeccionForm({
             id="observacion-aprobar"
             name="observacion"
             rows={3}
-            placeholder="Comentarios adicionales para el trabajador."
+            placeholder="Comentarios adicionales para el recorredor."
             className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#2E9BD6] focus:outline-none"
           />
         </div>

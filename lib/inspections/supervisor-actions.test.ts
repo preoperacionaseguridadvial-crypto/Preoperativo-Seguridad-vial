@@ -6,7 +6,7 @@ vi.mock("@/lib/auth/config", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { Role, InspectionStatus, TipoFirma, RespuestaChecklist } from "@/generated/prisma/client";
+import { Role, InspectionStatus, Sede, TipoFirma, RespuestaChecklist } from "@/generated/prisma/client";
 import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervisor-actions";
 import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import { crearCatalogoMinimo, crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
@@ -21,6 +21,8 @@ async function crearInspeccion(
     tomaMedicamentos: boolean | null;
     condicionesAptas: boolean | null;
     consumioAlcohol: boolean | null;
+    sede: Sede | null;
+    revisadaSupervisorOlariariAt: Date | null;
   }> = {},
 ) {
   const worker = await crearUsuario(Role.TRABAJADOR);
@@ -36,6 +38,8 @@ async function crearInspeccion(
       tomaMedicamentos: overrides.tomaMedicamentos ?? null,
       condicionesAptas: overrides.condicionesAptas ?? null,
       consumioAlcohol: overrides.consumioAlcohol ?? null,
+      sede: overrides.sede ?? null,
+      revisadaSupervisorOlariariAt: overrides.revisadaSupervisorOlariariAt ?? null,
     },
   });
 }
@@ -295,5 +299,183 @@ describe("declaración de estado del conductor — advertencia derivada, nunca a
     });
 
     expect(requiereAtencionEstadoConductor(inspection)).toBe(false);
+  });
+});
+
+// Flujo de dos etapas (roles-olariari): la etapa se decide en el servidor a
+// partir de la sede de la inspección y del rol de la sesión; el cliente no
+// elige nada.
+describe("flujo de dos etapas — Supervisor Olariari (etapa 1)", () => {
+  it("aprobar fija la etapa 1 y deja la inspección en la cola del Director, sin cambiar el estado", async () => {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.OLARIARI });
+    loginComo(supOlariari);
+
+    const antes = Date.now();
+    const resultado = await aprobarInspeccion(inspection.id, "  Visto en sitio  ");
+
+    expect(resultado.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
+    expect(resultado.reviewedAt).toBeNull();
+    expect(resultado.approvedAt).toBeNull();
+    expect(resultado.supervisorId).toBeNull();
+    expect(resultado.supervisorOlariariId).toBe(supOlariari.id);
+    expect(resultado.observacionesSupervisorOlariari).toBe("Visto en sitio");
+    expect(resultado.revisadaSupervisorOlariariAt!.getTime()).toBeGreaterThanOrEqual(antes);
+
+    const log = await prisma.auditLog.findFirstOrThrow({
+      where: { entityId: inspection.id, action: "APROBAR_INSPECCION_SUPERVISOR_OLARIARI" },
+    });
+    expect(log.userId).toBe(supOlariari.id);
+    expect(log.metadata).toEqual({ observacion: "Visto en sitio" });
+  });
+
+  it("mantiene el estado NO_APTA_PARA_OPERAR al pasar al Director", async () => {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const inspection = await crearInspeccion(InspectionStatus.NO_APTA_PARA_OPERAR, { sede: Sede.OLARIARI });
+    loginComo(supOlariari);
+
+    const resultado = await aprobarInspeccion(inspection.id, undefined, true);
+    expect(resultado.status).toBe(InspectionStatus.NO_APTA_PARA_OPERAR);
+    expect(resultado.revisadaSupervisorOlariariAt).not.toBeNull();
+  });
+
+  it("también exige confirmar las novedades antes de aprobar", async () => {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      sede: Sede.OLARIARI,
+      consumioAlcohol: true,
+    });
+    loginComo(supOlariari);
+
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
+    const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(despues.revisadaSupervisorOlariariAt).toBeNull();
+
+    await aprobarInspeccion(inspection.id, undefined, true);
+    const log = await prisma.auditLog.findFirstOrThrow({
+      where: { entityId: inspection.id, action: "APROBAR_INSPECCION_SUPERVISOR_OLARIARI" },
+    });
+    expect((log.metadata as { aprobadaConNovedades: boolean }).aprobadaConNovedades).toBe(true);
+  });
+
+  it("rechazar cierra la inspección y nunca llega al Director", async () => {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.OLARIARI });
+    loginComo(supOlariari);
+
+    const resultado = await rechazarInspeccion(inspection.id, "Falta el casco");
+
+    expect(resultado.status).toBe(InspectionStatus.RECHAZADA);
+    expect(resultado.rejectedAt).not.toBeNull();
+    expect(resultado.reviewedAt).not.toBeNull();
+    expect(resultado.revisadaSupervisorOlariariAt).not.toBeNull();
+    expect(resultado.supervisorOlariariId).toBe(supOlariari.id);
+    expect(resultado.observacionesSupervisorOlariari).toBe("Falta el casco");
+    expect(resultado.supervisorId).toBeNull();
+    expect(
+      await prisma.auditLog.count({
+        where: { entityId: inspection.id, action: "RECHAZAR_INSPECCION_SUPERVISOR_OLARIARI" },
+      }),
+    ).toBe(1);
+
+    loginComo(director);
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/no está en un estado que admita revisión/i);
+  });
+
+  it("rechazar exige observación", async () => {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.OLARIARI });
+    loginComo(supOlariari);
+
+    await expect(rechazarInspeccion(inspection.id, " ")).rejects.toThrow(/la observación es obligatoria/i);
+  });
+
+  it("no puede decidir una inspección de Bogotá ni una legacy sin sede", async () => {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const bogota = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.BOGOTA });
+    const legacy = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: null });
+    loginComo(supOlariari);
+
+    for (const inspection of [bogota, legacy]) {
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/no le corresponde/i);
+      await expect(rechazarInspeccion(inspection.id, "x")).rejects.toThrow(/no le corresponde/i);
+      const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+      expect(despues.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
+      expect(despues.supervisorOlariariId).toBeNull();
+    }
+  });
+
+  it("no puede volver a decidir una inspección que ya pasó su etapa", async () => {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      sede: Sede.OLARIARI,
+      revisadaSupervisorOlariariAt: new Date(),
+    });
+    loginComo(supOlariari);
+
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/no le corresponde/i);
+    await expect(rechazarInspeccion(inspection.id, "x")).rejects.toThrow(/no le corresponde/i);
+  });
+
+  it("un rol sin facultad de aprobar (Recorredor, SST, Director) es rechazado", async () => {
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.OLARIARI });
+    for (const rol of [Role.TRABAJADOR, Role.SST, Role.DIRECTOR]) {
+      loginComo(await crearUsuario(rol));
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow();
+      await expect(rechazarInspeccion(inspection.id, "x")).rejects.toThrow();
+    }
+  });
+});
+
+describe("flujo de dos etapas — Director de Operaciones (etapa 2)", () => {
+  it("no puede decidir una inspección de Olariari antes de la primera etapa", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.OLARIARI });
+    loginComo(director);
+
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/Supervisor Olariari/);
+    await expect(rechazarInspeccion(inspection.id, "x")).rejects.toThrow(/Supervisor Olariari/);
+    const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(despues.status).toBe(InspectionStatus.PENDIENTE_APROBACION);
+    expect(despues.reviewedAt).toBeNull();
+    expect(despues.supervisorId).toBeNull();
+  });
+
+  it("aprueba una de Olariari ya aprobada por la primera etapa, como siempre", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      sede: Sede.OLARIARI,
+      revisadaSupervisorOlariariAt: new Date(),
+    });
+    loginComo(director);
+
+    const resultado = await aprobarInspeccion(inspection.id, "Conforme");
+    expect(resultado.status).toBe(InspectionStatus.APROBADA);
+    expect(resultado.supervisorId).toBe(director.id);
+    expect(resultado.observacionesSupervisor).toBe("Conforme");
+    expect(resultado.reviewedAt).not.toBeNull();
+  });
+
+  it("rechaza una de Olariari ya aprobada por la primera etapa", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
+      sede: Sede.OLARIARI,
+      revisadaSupervisorOlariariAt: new Date(),
+    });
+    loginComo(director);
+
+    const resultado = await rechazarInspeccion(inspection.id, "No cumple");
+    expect(resultado.status).toBe(InspectionStatus.RECHAZADA);
+    expect(resultado.supervisorId).toBe(director.id);
+  });
+
+  it("sigue decidiendo Bogotá directamente", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.BOGOTA });
+    loginComo(director);
+
+    const resultado = await aprobarInspeccion(inspection.id);
+    expect(resultado.status).toBe(InspectionStatus.APROBADA);
   });
 });

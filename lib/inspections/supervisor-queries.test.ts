@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { Role, TipoFotoInspeccion } from "@/generated/prisma/client";
-import { getInspectionForSupervisor } from "@/lib/inspections/supervisor-queries";
+import { InspectionStatus, Role, Sede, TipoFotoInspeccion } from "@/generated/prisma/client";
+import {
+  getAllInspeccionesForOversight,
+  getInspeccionesPendientes,
+  getInspectionForSupervisor,
+} from "@/lib/inspections/supervisor-queries";
 import * as s3 from "@/lib/storage/s3";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 
@@ -80,5 +84,52 @@ describe("getInspectionForSupervisor — fotos diarias", () => {
       getSignedReadUrlSpy.mockRestore();
       consoleErrorSpy.mockRestore();
     });
+  });
+});
+
+// Flujo de dos etapas (roles-olariari): cada aprobador ve solo su cola, y el
+// Supervisor Olariari solo consulta su propia sede.
+describe("colas por rol y consulta por sede", () => {
+  beforeEach(async () => {
+    await limpiarBaseDeTest();
+  });
+
+  async function crear(sede: Sede | null, extra: { revisada?: boolean } = {}) {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo();
+    return prisma.inspection.create({
+      data: {
+        workerId: worker.id,
+        conductorId: worker.id,
+        vehicleId: vehicle.id,
+        status: InspectionStatus.PENDIENTE_APROBACION,
+        completedAt: new Date(),
+        sede,
+        revisadaSupervisorOlariariAt: extra.revisada ? new Date() : null,
+      },
+    });
+  }
+
+  it("getInspeccionesPendientes(rol) devuelve la cola de cada aprobador", async () => {
+    const bogota = await crear(Sede.BOGOTA);
+    const olariari1 = await crear(Sede.OLARIARI);
+    const olariari2 = await crear(Sede.OLARIARI, { revisada: true });
+
+    const colaOlariari = await getInspeccionesPendientes(Role.SUPERVISOR_OLARIARI);
+    const colaDirector = await getInspeccionesPendientes(Role.SUPERVISOR);
+
+    expect(colaOlariari.map((i) => i.id)).toEqual([olariari1.id]);
+    expect(colaDirector.map((i) => i.id).sort()).toEqual([bogota.id, olariari2.id].sort());
+  });
+
+  it("getAllInspeccionesForOversight filtra por sede cuando se pide", async () => {
+    const bogota = await crear(Sede.BOGOTA);
+    const olariari = await crear(Sede.OLARIARI);
+
+    const soloOlariari = await getAllInspeccionesForOversight({ sede: Sede.OLARIARI });
+    const todas = await getAllInspeccionesForOversight();
+
+    expect(soloOlariari.map((i) => i.id)).toEqual([olariari.id]);
+    expect(todas.map((i) => i.id).sort()).toEqual([bogota.id, olariari.id].sort());
   });
 });

@@ -2,14 +2,30 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound, getFirmasInspeccion } from "@/lib/inspections/queries";
+import { Role } from "@/generated/prisma/enums";
+import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
+import { esperandoA } from "@/lib/inspections/cola-aprobacion";
 
-const MENSAJES: Record<string, string> = {
-  PENDIENTE_APROBACION: "Tu inspección fue enviada y quedó pendiente de aprobación del Supervisor.",
-  NO_APTA_PARA_OPERAR:
-    "Tu inspección fue enviada. El vehículo quedó marcado como NO apto para operar; el Supervisor la revisará.",
-  APROBADA: "Tu inspección fue aprobada por el Supervisor.",
-  RECHAZADA: "Tu inspección fue rechazada por el Supervisor.",
-};
+// Quién aprueba depende de la sede (roles-olariari): en Olariari pasa primero
+// por el Supervisor Olariari y después por el Director de Operaciones.
+function mensajeEstado(inspection: Awaited<ReturnType<typeof getOwnInspectionOrNotFound>>): string {
+  const director = etiquetaRol(Role.SUPERVISOR);
+  const supOlariari = etiquetaRol(Role.SUPERVISOR_OLARIARI);
+  const revisor = esperandoA(inspection);
+  switch (inspection.status) {
+    case "PENDIENTE_APROBACION":
+      return `Tu inspección fue enviada y quedó pendiente de aprobación del ${revisor ? etiquetaRol(revisor) : director}.`;
+    case "NO_APTA_PARA_OPERAR":
+      return `Tu inspección fue enviada. El vehículo quedó marcado como NO apto para operar; lo revisará el ${revisor ? etiquetaRol(revisor) : director}.`;
+    case "APROBADA":
+      return `Tu inspección fue aprobada por el ${director}.`;
+    case "RECHAZADA":
+      // Sin Director de por medio, la rechazó el Supervisor Olariari.
+      return `Tu inspección fue rechazada por el ${inspection.supervisorId === null && inspection.supervisorOlariariId ? supOlariari : director}.`;
+    default:
+      return "Tu inspección fue enviada correctamente.";
+  }
+}
 
 // Única pantalla del flujo del trabajador donde se puede volver a ver una
 // inspección ya decidida (aprobada/rechazada) — por eso, además del mensaje
@@ -36,16 +52,20 @@ export default async function InspeccionEnviadaPage({
     redirect("/inspecciones");
   }
 
-  const { conductor: firmaConductor, supervisor: firmaSupervisor } = await getFirmasInspeccion(id);
+  const {
+    conductor: firmaConductor,
+    supervisor: firmaSupervisor,
+    supervisorOlariari: firmaSupervisorOlariari,
+  } = await getFirmasInspeccion(id);
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center gap-4 px-4 py-16 text-center">
       <h1 className="text-2xl font-semibold text-[#0B3B60]">Inspección enviada</h1>
       <p className="text-sm text-gray-600">
-        {MENSAJES[inspection.status] ?? "Tu inspección fue enviada correctamente."}
+        {mensajeEstado(inspection)}
       </p>
 
-      {(firmaConductor || firmaSupervisor) && (
+      {(firmaConductor || firmaSupervisorOlariari || firmaSupervisor) && (
         <section className="flex w-full flex-col gap-4 rounded-md border border-gray-200 p-4 text-left">
           <h2 className="text-center text-sm font-medium text-gray-500">Firmas</h2>
           {firmaConductor && (
@@ -65,15 +85,31 @@ export default async function InspeccionEnviadaPage({
               )}
             </div>
           )}
+          {firmaSupervisorOlariari && (
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-xs text-gray-500">
+                {etiquetaRol(Role.SUPERVISOR_OLARIARI)} — {formatFechaHora(firmaSupervisorOlariari.createdAt)}
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal, no candidata a next/image remoto. */}
+              <img
+                src={firmaSupervisorOlariari.url}
+                alt="Firma del Supervisor Olariari"
+                className="h-24 w-full max-w-xs rounded-md border border-gray-200 bg-white object-contain"
+              />
+              {inspection.supervisorOlariari && (
+                <p className="text-sm font-medium text-gray-700">{inspection.supervisorOlariari.name}</p>
+              )}
+            </div>
+          )}
           {firmaSupervisor && (
             <div className="flex flex-col items-center gap-1">
               <p className="text-xs text-gray-500">
-                Supervisor — {formatFechaHora(firmaSupervisor.createdAt)}
+                {etiquetaRol(Role.SUPERVISOR)} — {formatFechaHora(firmaSupervisor.createdAt)}
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal, no candidata a next/image remoto. */}
               <img
                 src={firmaSupervisor.url}
-                alt="Firma del supervisor"
+                alt="Firma del Director de Operaciones"
                 className="h-24 w-full max-w-xs rounded-md border border-gray-200 bg-white object-contain"
               />
               {inspection.supervisor && (

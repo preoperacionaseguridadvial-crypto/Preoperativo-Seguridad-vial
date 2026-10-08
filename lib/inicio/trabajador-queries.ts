@@ -25,6 +25,9 @@ export async function getDatosInicioTrabajador(workerId: string) {
         completedAt: true,
         reviewedAt: true,
         observacionesSupervisor: true,
+        observacionesSupervisorOlariari: true,
+        sede: true,
+        revisadaSupervisorOlariariAt: true,
         fotos: { where: { tipo: "LATERAL" }, take: 1, select: { s3Key: true } },
       },
     }),
@@ -44,7 +47,10 @@ export async function getDatosInicioTrabajador(workerId: string) {
       startedAt: inspeccion.startedAt,
       completedAt: inspeccion.completedAt,
       reviewedAt: inspeccion.reviewedAt,
-      observacionesSupervisor: inspeccion.observacionesSupervisor,
+      // Una rechazada en la primera etapa lleva la observación del Supervisor Olariari.
+      observacionesSupervisor: inspeccion.observacionesSupervisor ?? inspeccion.observacionesSupervisorOlariari,
+      sede: inspeccion.sede,
+      revisadaSupervisorOlariariAt: inspeccion.revisadaSupervisorOlariariAt,
     })),
     fotoVehiculoUrl,
   };

@@ -14,6 +14,7 @@ import { ResumenDelDia } from "@/app/_components/inicio/ResumenDelDia";
 import { VencimientosVehiculos } from "@/app/_components/inicio/VencimientosVehiculos";
 import { AvisoDecision } from "@/app/_components/inicio/AvisoDecision";
 import { avisoDecisionFirmada } from "@/lib/inspections/aviso-decision";
+import { esRolAprobador } from "@/lib/inspections/cola-aprobacion";
 
 // Inicio por rol (contenedor): lee la sesión, consulta solo lo que el rol va
 // a ver y arma el panel. Los paneles viven en app/_components/inicio/ y los
@@ -43,11 +44,14 @@ export default async function Home({
 
   const ahora = new Date();
   const rol = user.role;
-  // Aviso "aprobada/rechazada y firmada" al volver de firmar (solo Supervisor).
-  const avisoDecision = rol === "SUPERVISOR" ? avisoDecisionFirmada(await searchParams) : null;
+  // Los dos aprobadores (Director de Operaciones y Supervisor Olariari) tienen
+  // el mismo panel: las tarjetas de SU cola y los atajos.
+  const rolAprobador = esRolAprobador(rol) ? rol : null;
+  // Aviso "aprobada/rechazada y firmada" al volver de firmar (solo aprobadores).
+  const avisoDecision = rolAprobador ? avisoDecisionFirmada(await searchParams) : null;
   const [datosTrabajador, pendientes, resumenDia, vencimientos] = await Promise.all([
     rol === "TRABAJADOR" ? getDatosInicioTrabajador(user.id) : null,
-    rol === "SUPERVISOR" ? getPendientesConFoto().then(ordenarPendientesPorAtencion) : null,
+    rolAprobador ? getPendientesConFoto(rolAprobador).then(ordenarPendientesPorAtencion) : null,
     rol === "DIRECTOR" || rol === "SST" ? getResumenDelDia(ahora) : null,
     rol === "ADMINISTRADOR" || rol === "SST" ? getVehiculosConDocumentosPorVencer(ahora) : null,
   ]);

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getAllInspeccionesForOversight } from "@/lib/inspections/supervisor-queries";
 import { InspectionStatus } from "@/generated/prisma/client";
+import { Role, Sede } from "@/generated/prisma/enums";
+import { estadoEtapaOlariari } from "@/lib/inspections/cola-aprobacion";
 
 const ESTADOS_FILTRO = [
   InspectionStatus.EN_PROCESO,
@@ -22,8 +24,9 @@ type SearchParams = {
   fechaHasta?: string;
 };
 
-// Punto de entrada de la consulta de oversight (DIRECTOR/SST/SUPERVISOR):
-// lista de TODAS las inspecciones, cualquier estado, cualquier trabajador,
+// Punto de entrada de la consulta de oversight (DIRECTOR/SST/SUPERVISOR/
+// ADMINISTRADOR y Supervisor Olariari, este último solo de su sede): lista de
+// las inspecciones, cualquier estado, cualquier recorredor,
 // con filtros opcionales por conductor/placa/estado/rango de fecha vía query
 // params (form GET puro, sin JS). Pantalla de solo lectura — sin ninguna
 // acción de mutación (ver [id]/page.tsx para el detalle, también de solo
@@ -49,6 +52,8 @@ export default async function ConsultaInspeccionesPage({
     estado: estadoValido,
     fechaDesde: fechaDesde ? new Date(fechaDesde) : undefined,
     fechaHasta: fechaHasta ? new Date(fechaHasta) : undefined,
+    // El Supervisor Olariari solo consulta las inspecciones de su sede.
+    sede: session.user.role === Role.SUPERVISOR_OLARIARI ? Sede.OLARIARI : undefined,
   });
 
   return (
@@ -172,6 +177,9 @@ export default async function ConsultaInspeccionesPage({
                 <span>Inicio: {formatFechaHora(inspection.startedAt)}</span>
                 <span>Fin: {formatFechaHora(inspection.completedAt)}</span>
               </div>
+              {estadoEtapaOlariari(inspection) && (
+                <p className="mt-1 text-xs font-medium text-[#0B3B60]">{estadoEtapaOlariari(inspection)}</p>
+              )}
             </Link>
           </li>
         ))}
