@@ -7,30 +7,26 @@ import {
   getPreviousStepPath,
   getFotosInspeccion,
 } from "@/lib/inspections/queries";
-import { subirFotoInspeccion } from "@/lib/inspections/foto-actions";
+import { getSignedReadUrl } from "@/lib/storage/s3";
 import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
-import { CapturaFotoInput } from "@/app/(worker)/inspecciones/_components/CapturaFotoInput";
-import { TipoFotoInspeccion } from "@/generated/prisma/client";
+import { SubirFotoInspeccion } from "@/app/(worker)/inspecciones/_components/SubirFotoInspeccion";
 
 // Fotos diarias obligatorias (Fase soporte-moto-carro, Slice 3, A7):
 // lateral y placa del vehículo, independiente del resultado del checklist —
-// por eso este paso vive aparte, no dentro de ningún ChecklistItem. Mismo
-// patrón de captura que la foto de novedad
-// (app/(worker)/inspecciones/[id]/novedades/[novedadId]/foto/page.tsx):
-// cámara trasera directo (`CapturaFotoInput`), auto-submit al elegir la
-// foto. `subirFotoInspeccion` (lib/inspections/foto-actions.ts) es la
-// validación real de backend — `enviarInspeccion` vuelve a exigir ambas
-// fotos antes de enviar. Una foto ya subida se puede reemplazar ("Cambiar
-// foto") mientras la inspección siga EN_PROCESO.
+// por eso este paso vive aparte, no dentro de ningún ChecklistItem. La captura
+// y la subida las hace `SubirFotoInspeccion` (cámara trasera, compresión en el
+// navegador, barra de progreso real) contra el route handler
+// `/inspecciones/[id]/fotos/[tipo]/subir`, que delega en `subirFotoInspeccion`
+// (lib/inspections/foto-actions.ts): esa es la validación real de backend —
+// `enviarInspeccion` vuelve a exigir ambas fotos antes de enviar. Una foto ya
+// subida se puede reemplazar ("Cambiar foto") mientras la inspección siga
+// EN_PROCESO.
 export default async function FotosInspeccionPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
   const session = await auth();
   if (!session?.user) {
     redirect("/login");
@@ -45,27 +41,11 @@ export default async function FotosInspeccionPage({
   const hrefAtras =
     (await getPreviousStepPath(id, "fotos")) ?? `/inspecciones/${id}/estado-conductor?paso=3`;
 
-  async function subirLateralAction(formData: FormData) {
-    "use server";
-    try {
-      await subirFotoInspeccion(id, TipoFotoInspeccion.LATERAL, formData);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo subir la foto.";
-      redirect(`/inspecciones/${id}/fotos?error=${encodeURIComponent(message)}`);
-    }
-    redirect(`/inspecciones/${id}/fotos`);
-  }
-
-  async function subirPlacaAction(formData: FormData) {
-    "use server";
-    try {
-      await subirFotoInspeccion(id, TipoFotoInspeccion.PLACA, formData);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo subir la foto.";
-      redirect(`/inspecciones/${id}/fotos?error=${encodeURIComponent(message)}`);
-    }
-    redirect(`/inspecciones/${id}/fotos`);
-  }
+  // URL firmada de cada foto guardada para la miniatura. Si la firma falla la
+  // página igual carga, solo que sin miniatura.
+  const [urlLateral, urlPlaca] = await Promise.all(
+    [lateral, placa].map((foto) => (foto ? getSignedReadUrl(foto.s3Key).catch(() => null) : null)),
+  );
 
   const ambasCompletas = Boolean(lateral && placa);
 
@@ -78,23 +58,21 @@ export default async function FotosInspeccionPage({
         <p className="mt-1 text-sm text-gray-500">Dos fotos obligatorias antes de continuar.</p>
       </div>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <SubirFotoInspeccion
+        inspectionId={id}
+        tipo="lateral"
+        titulo="Foto lateral del vehículo"
+        existe={Boolean(lateral)}
+        urlMiniatura={urlLateral}
+      />
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-gray-700">Foto lateral del vehículo</h2>
-        {lateral && <p className="text-sm text-green-700">✓ Foto adjuntada.</p>}
-        <form action={subirLateralAction}>
-          <CapturaFotoInput etiqueta={lateral ? "Cambiar foto" : "Tomar foto"} secundario={Boolean(lateral)} />
-        </form>
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-gray-700">Foto de la placa</h2>
-        {placa && <p className="text-sm text-green-700">✓ Foto adjuntada.</p>}
-        <form action={subirPlacaAction}>
-          <CapturaFotoInput etiqueta={placa ? "Cambiar foto" : "Tomar foto"} secundario={Boolean(placa)} />
-        </form>
-      </section>
+      <SubirFotoInspeccion
+        inspectionId={id}
+        tipo="placa"
+        titulo="Foto de la placa"
+        existe={Boolean(placa)}
+        urlMiniatura={urlPlaca}
+      />
 
       {ambasCompletas && <ContinuarLink inspectionId={id} />}
     </main>

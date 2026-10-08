@@ -13,8 +13,8 @@ import { comprimirFotoEnNavegador } from "@/lib/imagenes/adaptador-navegador";
  * auto-submit al elegir/capturar la foto (`requestSubmit`), para que sacar la
  * foto sea un solo paso en vez de "elegir" + "confirmar" con dos botones.
  *
- * Antes de enviar, la foto se comprime en el navegador (lado largo 1920 px,
- * JPEG 0.8; ver lib/imagenes/compresion-cliente.ts): una foto de teléfono pesa
+ * Antes de enviar, la foto se comprime en el navegador (lado largo 1600 px,
+ * JPEG 0.75; ver lib/imagenes/compresion-cliente.ts): una foto de teléfono pesa
  * 3–12 MB y el servidor topa en 8 MB y no acepta HEIC. Si algo falla al
  * comprimir, se envía la foto original y el servidor responde con su propio
  * error en español — nunca se bloquea el envío.

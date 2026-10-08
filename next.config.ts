@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Solo desarrollo: permite abrir `next dev` desde el celular en la misma red
+  // Wi-Fi (la app se usa sobre todo en el teléfono). Sin esto Next 16 bloquea
+  // los recursos de desarrollo (HMR) pedidos desde otra IP. Si cambia la IP
+  // del PC, actualizarla acá. No tiene efecto en build/producción.
+  allowedDevOrigins: ["192.168.1.7"],
   experimental: {
     // El worker de validación de Next 16 (aislado en un thread) se cae al
     // navegar tras un server action ("Jest worker encountered N child

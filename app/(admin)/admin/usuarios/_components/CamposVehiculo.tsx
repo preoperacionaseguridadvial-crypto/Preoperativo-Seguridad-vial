@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 // el cliente de Prisma (pg) al bundle del navegador.
 import { TipoVehiculo } from "@/generated/prisma/enums";
 import { MAX_FOTO_BYTES, TIPOS_FOTO_ACEPTADOS } from "@/lib/admin/foto-vehiculo";
+import { comprimirFotoEnNavegador } from "@/lib/imagenes/adaptador-navegador";
 
 const TIPOS_VEHICULO: TipoVehiculo[] = [TipoVehiculo.MOTO, TipoVehiculo.CARRO];
 
@@ -36,22 +37,49 @@ export function CamposVehiculo({
 }) {
   const [vistaPrevia, setVistaPrevia] = useState<string | null>(null);
   const [errorFoto, setErrorFoto] = useState<string | null>(null);
+  const [procesando, setProcesando] = useState(false);
 
   // Libera la URL local de la miniatura al cambiarla o al desmontar.
   useEffect(() => () => {
     if (vistaPrevia) URL.revokeObjectURL(vistaPrevia);
   }, [vistaPrevia]);
 
-  function alElegirFoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const archivo = e.target.files?.[0];
+  // Misma compresión en el navegador que las fotos de la inspección
+  // (lib/imagenes/compresion-cliente.ts): la foto de la hoja de vida se usa
+  // como miniatura en listas que se abren desde el celular, y sin comprimir
+  // llegaba a pesar varios MB. Si algo falla se conserva el original y el
+  // servidor sigue validando tipo y peso.
+  async function alElegirFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    // `currentTarget` deja de existir tras el primer `await`: se captura antes.
+    const input = e.currentTarget;
+    const original = input.files?.[0];
     setErrorFoto(null);
-    if (!archivo) {
+    if (!original) {
       setVistaPrevia(null);
       return;
     }
+
+    setProcesando(true);
+    let archivo = original;
+    try {
+      const comprimido = await comprimirFotoEnNavegador(original);
+      if (comprimido !== original) {
+        try {
+          const transferencia = new DataTransfer();
+          transferencia.items.add(comprimido);
+          input.files = transferencia.files;
+          archivo = comprimido;
+        } catch {
+          // Sin DataTransfer (navegador viejo): se envía la foto original.
+        }
+      }
+    } finally {
+      setProcesando(false);
+    }
+
     // Aviso temprano: evita subir varios MB para que el servidor la rechace.
     if (archivo.size > MAX_FOTO_BYTES) {
-      e.target.value = "";
+      input.value = "";
       setVistaPrevia(null);
       setErrorFoto(`La foto no puede superar ${MAX_FOTO_BYTES / (1024 * 1024)} MB.`);
       return;
@@ -132,6 +160,11 @@ export function CamposVehiculo({
             ? "Obligatoria. JPG, PNG o WEBP, máximo 8 MB. Si el alta falla, hay que volver a elegir la foto."
             : "Sube una nueva solo para reemplazar la actual. JPG, PNG o WEBP, máximo 8 MB."}
         </p>
+        {procesando && (
+          <p role="status" className="mt-1 text-xs font-medium text-brand">
+            Optimizando foto…
+          </p>
+        )}
         {errorFoto && (
           <p role="alert" className="mt-1 text-xs font-medium text-red-700">
             {errorFoto}
