@@ -18,7 +18,7 @@ vi.mock("@/lib/storage/s3", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { Role, TipoVehiculo } from "@/generated/prisma/client";
+import { Role, Sede, TipoVehiculo } from "@/generated/prisma/client";
 import { MAX_FOTO_BYTES, type DatosVehiculo } from "@/lib/admin/hoja-de-vida";
 import {
   actualizarUsuario,
@@ -72,6 +72,7 @@ function altaTrabajador(overrides: Partial<Parameters<typeof crearUsuario>[0]> =
     password: "password123",
     passwordConfirmacion: "password123",
     role: Role.TRABAJADOR,
+    sede: Sede.BOGOTA,
     cedula: "1234567890",
     tipoVehiculo: TipoVehiculo.MOTO,
     vehiculo: datosVehiculo(),
@@ -104,6 +105,7 @@ describe("crearUsuario — soporte-moto-carro (Slice 1)", () => {
         password: "password123",
         passwordConfirmacion: "password123",
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         tipoVehiculo: TipoVehiculo.MOTO,
       }),
     ).rejects.toThrow(/cédula/i);
@@ -119,6 +121,7 @@ describe("crearUsuario — soporte-moto-carro (Slice 1)", () => {
         password: "password123",
         passwordConfirmacion: "password123",
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         cedula: "1234567890",
       }),
     ).rejects.toThrow(/tipo de vehículo/i);
@@ -167,6 +170,7 @@ describe("actualizarUsuario — soporte-moto-carro (Slice 1)", () => {
         name: legacy.name,
         email: legacy.email,
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         activo: true,
         cedula: "9999",
       }),
@@ -181,6 +185,7 @@ describe("actualizarUsuario — soporte-moto-carro (Slice 1)", () => {
       name: legacy.name,
       email: legacy.email,
       role: Role.TRABAJADOR,
+      sede: Sede.BOGOTA,
       activo: true,
       cedula: "9999",
       tipoVehiculo: TipoVehiculo.MOTO,
@@ -259,6 +264,7 @@ describe("crearUsuario/actualizarUsuario/restablecerPassword — SST con paridad
         password: "password123",
         passwordConfirmacion: "password123",
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         cedula: "1",
         tipoVehiculo: TipoVehiculo.MOTO,
       }),
@@ -325,6 +331,7 @@ describe("crearUsuarioDesdeFormulario — estado para la pantalla de éxito", ()
         ...CAMPOS_SUPERVISOR,
         email: "trabajador.form@test.local",
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         cedula: "1234567890",
         tipoVehiculo: TipoVehiculo.CARRO,
         ...CAMPOS_VEHICULO,
@@ -400,6 +407,7 @@ describe("crearUsuarioDesdeFormulario — estado para la pantalla de éxito", ()
         ...CAMPOS_SUPERVISOR,
         email: "sin.cedula@test.local",
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         tipoVehiculo: TipoVehiculo.MOTO,
       }),
     );
@@ -451,6 +459,7 @@ describe("crearUsuarioDesdeFormulario — errores de dominio vs. inesperados", (
         ...CAMPOS_SUPERVISOR,
         email: "sin.marca@test.local",
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         cedula: "123",
         tipoVehiculo: TipoVehiculo.MOTO,
         ...CAMPOS_VEHICULO,
@@ -497,6 +506,7 @@ describe("crearUsuarioDesdeFormulario — errores de dominio vs. inesperados", (
         ...CAMPOS_SUPERVISOR,
         email: "trabajador.s3@test.local",
         role: Role.TRABAJADOR,
+        sede: Sede.BOGOTA,
         cedula: "1234567890",
         tipoVehiculo: TipoVehiculo.MOTO,
         ...CAMPOS_VEHICULO,
@@ -705,6 +715,7 @@ describe("actualizarUsuario — vehículo del trabajador", () => {
     name: u.name,
     email: u.email,
     role: Role.TRABAJADOR,
+    sede: Sede.BOGOTA,
     activo: true,
     cedula: "9999",
     tipoVehiculo: TipoVehiculo.MOTO,
@@ -944,5 +955,150 @@ describe("actualizarUsuario — vehículo del trabajador", () => {
 
     const vehiculo = await prisma.vehicle.findUniqueOrThrow({ where: { id: trabajador.vehicleId! } });
     expect(vehiculo.activo).toBe(false);
+  });
+});
+
+describe("sede del usuario (roles-olariari)", () => {
+  const base = () => ({
+    name: "Usuario Sede",
+    email: emailUnico(),
+    password: "password123",
+    passwordConfirmacion: "password123",
+  });
+
+  describe("crearUsuario", () => {
+    it("rechaza crear un TRABAJADOR sin sede", async () => {
+      await loginComoAdmin();
+
+      await expect(crearUsuario(altaTrabajador({ sede: undefined }))).rejects.toThrow(/sede/i);
+      expect(await prisma.user.count({ where: { role: Role.TRABAJADOR } })).toBe(0);
+    });
+
+    it("rechaza una sede que no existe (el navegador no es de confianza)", async () => {
+      await loginComoAdmin();
+
+      await expect(
+        crearUsuario(altaTrabajador({ sede: "MEDELLIN" as unknown as Sede })),
+      ).rejects.toThrow(/sede/i);
+    });
+
+    it.each([Sede.BOGOTA, Sede.OLARIARI])("crea un TRABAJADOR con sede %s", async (sede) => {
+      await loginComoAdmin();
+
+      const usuario = await crearUsuario(altaTrabajador({ sede }));
+
+      expect(usuario.sede).toBe(sede);
+      const guardado = await prisma.user.findUniqueOrThrow({ where: { id: usuario.id } });
+      expect(guardado.sede).toBe(sede);
+    });
+
+    it("SST también puede crear un TRABAJADOR de Olariari", async () => {
+      const sst = await crearUsuarioDeTest(Role.SST);
+      loginComo(sst);
+
+      const usuario = await crearUsuario(altaTrabajador({ sede: Sede.OLARIARI }));
+
+      expect(usuario.sede).toBe(Sede.OLARIARI);
+    });
+
+    it("crea un SUPERVISOR_OLARIARI (sin sede, sin cédula ni vehículo)", async () => {
+      await loginComoAdmin();
+
+      const usuario = await crearUsuario({ ...base(), role: Role.SUPERVISOR_OLARIARI });
+
+      expect(usuario.role).toBe(Role.SUPERVISOR_OLARIARI);
+      expect(usuario.sede).toBeNull();
+    });
+
+    it("guarda sede null para un rol que no es TRABAJADOR aunque llegue una sede", async () => {
+      await loginComoAdmin();
+
+      const usuario = await crearUsuario({ ...base(), role: Role.SUPERVISOR, sede: Sede.OLARIARI });
+
+      expect(usuario.sede).toBeNull();
+    });
+  });
+
+  describe("actualizarUsuario", () => {
+    const datos = (u: { name: string; email: string }, extra: Record<string, unknown> = {}) => ({
+      name: u.name,
+      email: u.email,
+      role: Role.TRABAJADOR,
+      activo: true,
+      cedula: "9999",
+      tipoVehiculo: TipoVehiculo.MOTO,
+      ...extra,
+    });
+
+    it("rechaza editar a un TRABAJADOR sin sede", async () => {
+      await loginComoAdmin();
+      const trabajador = await crearUsuarioDeTest(Role.TRABAJADOR, { sede: Sede.BOGOTA });
+
+      await expect(actualizarUsuario(trabajador.id, datos(trabajador))).rejects.toThrow(/sede/i);
+    });
+
+    it("cambia la sede de un TRABAJADOR", async () => {
+      await loginComoAdmin();
+      const trabajador = await crearUsuarioDeTest(Role.TRABAJADOR, { sede: Sede.BOGOTA });
+
+      const actualizado = await actualizarUsuario(trabajador.id, datos(trabajador, { sede: Sede.OLARIARI }));
+
+      expect(actualizado.sede).toBe(Sede.OLARIARI);
+    });
+
+    it("pasar de TRABAJADOR a otro rol deja la sede en null", async () => {
+      await loginComoAdmin();
+      const trabajador = await crearUsuarioDeTest(Role.TRABAJADOR, { sede: Sede.OLARIARI });
+
+      const actualizado = await actualizarUsuario(
+        trabajador.id,
+        datos(trabajador, { role: Role.SUPERVISOR_OLARIARI, sede: Sede.OLARIARI }),
+      );
+
+      expect(actualizado.role).toBe(Role.SUPERVISOR_OLARIARI);
+      expect(actualizado.sede).toBeNull();
+    });
+  });
+
+  describe("crearUsuarioDesdeFormulario", () => {
+    it("rechaza el alta de un TRABAJADOR sin sede y repuebla el campo", async () => {
+      await loginComoAdmin();
+
+      const estado = await crearUsuarioDesdeFormulario(
+        null,
+        formularioDeUsuario({
+          ...CAMPOS_SUPERVISOR,
+          email: "sin.sede@test.local",
+          role: Role.TRABAJADOR,
+          cedula: "1234567890",
+          tipoVehiculo: TipoVehiculo.MOTO,
+          ...CAMPOS_VEHICULO,
+        }),
+      );
+
+      expect(estado.ok).toBe(false);
+      if (!estado.ok) expect(estado.error).toMatch(/sede/i);
+    });
+
+    it("crea un TRABAJADOR de Olariari desde el formulario", async () => {
+      await loginComoAdmin();
+
+      const estado = await crearUsuarioDesdeFormulario(
+        null,
+        formularioDeUsuario({
+          ...CAMPOS_SUPERVISOR,
+          email: "olariari.form@test.local",
+          role: Role.TRABAJADOR,
+          cedula: "1234567890",
+          tipoVehiculo: TipoVehiculo.MOTO,
+          sede: Sede.OLARIARI,
+          ...CAMPOS_VEHICULO,
+        }),
+      );
+
+      expect(estado.ok).toBe(true);
+      const creado = await prisma.user.findUniqueOrThrow({ where: { email: "olariari.form@test.local" } });
+      expect(creado.sede).toBe(Sede.OLARIARI);
+    });
   });
 });

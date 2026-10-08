@@ -97,36 +97,51 @@ export async function guardarFirmaConductor(inspectionId: string, formData: Form
 }
 
 /**
- * Firma del supervisor: ahora es un paso POSTERIOR a la decisión (no un
- * requisito previo — ver `getInspeccionRevisable` en
- * lib/inspections/supervisor-actions.ts, que ya no la exige). Solo se puede
- * firmar una inspección ya decidida (APROBADA o RECHAZADA), y solo puede
- * firmarla el mismo Supervisor que tomó esa decisión (`supervisorId`) — sin
- * este chequeo, como no hay asignación trabajador→supervisor, cualquier
- * otro Supervisor podría firmar una decisión que no tomó.
+ * Firma del aprobador: es un paso POSTERIOR a la decisión (no un requisito
+ * previo — ver `getInspeccionRevisable` en lib/inspections/supervisor-actions.ts,
+ * que no la exige). Cada aprobador firma SU decisión y el tipo de firma lo
+ * decide el servidor por el rol de la sesión:
+ * - SUPERVISOR (Director de Operaciones): decisión definitiva (APROBADA o
+ *   RECHAZADA), tipo SUPERVISOR.
+ * - SUPERVISOR_OLARIARI: su revisión de la primera etapa
+ *   (`revisadaSupervisorOlariariAt`), tipo SUPERVISOR_OLARIARI.
+ * Solo puede firmar el mismo usuario que tomó esa decisión — sin este chequeo,
+ * como no hay asignación trabajador→supervisor, cualquier otro aprobador del
+ * mismo rol podría firmar una decisión que no tomó.
  */
 export async function guardarFirmaSupervisor(inspectionId: string, formData: FormData) {
-  const session = await requireRole([Role.SUPERVISOR]);
+  const session = await requireRole([Role.SUPERVISOR, Role.SUPERVISOR_OLARIARI]);
+  const esOlariari = session.user.role === Role.SUPERVISOR_OLARIARI;
 
   const inspection = await prisma.inspection.findUnique({ where: { id: inspectionId } });
   if (!inspection) {
     throw new Error("Inspección no encontrada.");
   }
-  if (
-    inspection.status !== InspectionStatus.APROBADA &&
-    inspection.status !== InspectionStatus.RECHAZADA
-  ) {
-    throw new Error("La inspección todavía no fue decidida: no se puede firmar.");
-  }
-  if (inspection.supervisorId !== session.user.id) {
-    throw new ForbiddenError("Solo el supervisor que tomó la decisión puede firmar.");
+
+  if (esOlariari) {
+    if (inspection.revisadaSupervisorOlariariAt === null) {
+      throw new Error("La inspección todavía no fue decidida: no se puede firmar.");
+    }
+    if (inspection.supervisorOlariariId !== session.user.id) {
+      throw new ForbiddenError("Solo el supervisor que tomó la decisión puede firmar.");
+    }
+  } else {
+    if (
+      inspection.status !== InspectionStatus.APROBADA &&
+      inspection.status !== InspectionStatus.RECHAZADA
+    ) {
+      throw new Error("La inspección todavía no fue decidida: no se puede firmar.");
+    }
+    if (inspection.supervisorId !== session.user.id) {
+      throw new ForbiddenError("Solo el supervisor que tomó la decisión puede firmar.");
+    }
   }
 
   await crearFirma({
     inspectionId,
     userId: session.user.id,
-    tipo: TipoFirma.SUPERVISOR,
+    tipo: esOlariari ? TipoFirma.SUPERVISOR_OLARIARI : TipoFirma.SUPERVISOR,
     formData,
-    auditAction: "FIRMAR_SUPERVISOR",
+    auditAction: esOlariari ? "FIRMAR_SUPERVISOR_OLARIARI" : "FIRMAR_SUPERVISOR",
   });
 }

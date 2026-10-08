@@ -5,10 +5,9 @@ import { getUsuarioPorId } from "@/lib/admin/queries";
 import { actualizarUsuario, restablecerPassword } from "@/lib/admin/user-actions";
 import { leerVehiculoDeFormulario } from "@/lib/admin/hoja-de-vida";
 import { getSignedReadUrl } from "@/lib/storage/s3";
-import { Role, TipoVehiculo } from "@/generated/prisma/client";
+import { Role, Sede, TipoVehiculo } from "@/generated/prisma/client";
 import { CamposVehiculo } from "../_components/CamposVehiculo";
-
-const ROLES: Role[] = [Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR, Role.SST, Role.ADMINISTRADOR];
+import { SelectorRolYSede } from "../_components/SelectorRolYSede";
 
 function toDateInputValue(date: Date | null): string {
   if (!date) return "";
@@ -61,6 +60,7 @@ export default async function EditarUsuarioPage({
         name: formData.get("name")?.toString() ?? "",
         email: formData.get("email")?.toString() ?? "",
         role: formData.get("role") as Role,
+        sede: (formData.get("sede")?.toString() || null) as Sede | null,
         activo: formData.get("activo") === "on",
         cedula: formData.get("cedula")?.toString(),
         telefono: formData.get("telefono")?.toString(),
@@ -141,24 +141,7 @@ export default async function EditarUsuarioPage({
           />
         </div>
 
-        <div>
-          <label htmlFor="role" className="mb-1 block text-sm font-medium text-gray-700">
-            Rol
-          </label>
-          <select
-            id="role"
-            name="role"
-            required
-            defaultValue={usuario.role}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          >
-            {ROLES.map((rol) => (
-              <option key={rol} value={rol}>
-                {rol}
-              </option>
-            ))}
-          </select>
-        </div>
+        <SelectorRolYSede rolInicial={usuario.role} sedeInicial={usuario.sede ?? ""} />
 
         <div>
           <label htmlFor="cedula" className="mb-1 block text-sm font-medium text-gray-700">

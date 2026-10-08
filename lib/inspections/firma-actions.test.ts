@@ -13,8 +13,8 @@ vi.mock("@/lib/storage/s3", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { Role, TipoFirma } from "@/generated/prisma/client";
-import { guardarFirmaConductor } from "@/lib/inspections/firma-actions";
+import { InspectionStatus, Role, Sede, TipoFirma } from "@/generated/prisma/client";
+import { guardarFirmaConductor, guardarFirmaSupervisor } from "@/lib/inspections/firma-actions";
 import { MAX_FIRMA_BYTES } from "@/lib/storage/validar-archivo";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 
@@ -99,5 +99,103 @@ describe("guardarFirmaConductor — validación del archivo de la firma", () => 
     await expect(
       guardarFirmaConductor(inspection.id, formDataConFirma(new Uint8Array(0), "image/png")),
     ).rejects.toThrow(/dibujar la firma/i);
+  });
+});
+
+// Firma del aprobador (roles-olariari): cada aprobador firma SU decisión con su
+// propio tipo de firma; el tipo lo decide el servidor por el rol de la sesión.
+describe("guardarFirmaSupervisor — dos etapas", () => {
+  async function crearOlariariAprobadaEtapa1() {
+    const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    const worker = await crearUsuario(Role.TRABAJADOR, { sede: Sede.OLARIARI });
+    const vehicle = await crearVehiculo();
+    const inspection = await prisma.inspection.create({
+      data: {
+        workerId: worker.id,
+        conductorId: worker.id,
+        vehicleId: vehicle.id,
+        status: InspectionStatus.PENDIENTE_APROBACION,
+        completedAt: new Date(),
+        sede: Sede.OLARIARI,
+        revisadaSupervisorOlariariAt: new Date(),
+        supervisorOlariariId: supOlariari.id,
+      },
+    });
+    return { supOlariari, inspection };
+  }
+
+  const png = () => formDataConFirma(PNG_MINIMO, "image/png");
+
+  it("el Supervisor Olariari firma su aprobación con el tipo SUPERVISOR_OLARIARI", async () => {
+    const { supOlariari, inspection } = await crearOlariariAprobadaEtapa1();
+    mockAuth.mockResolvedValue({ user: { id: supOlariari.id, role: supOlariari.role } });
+
+    await guardarFirmaSupervisor(inspection.id, png());
+
+    expect(mockUploadObject).toHaveBeenCalledWith(
+      expect.objectContaining({ key: `firmas/${inspection.id}/SUPERVISOR_OLARIARI.png` }),
+    );
+    const firma = await prisma.firma.findUniqueOrThrow({
+      where: { inspectionId_tipo: { inspectionId: inspection.id, tipo: TipoFirma.SUPERVISOR_OLARIARI } },
+    });
+    expect(firma.userId).toBe(supOlariari.id);
+    expect(
+      await prisma.auditLog.count({ where: { entityId: inspection.id, action: "FIRMAR_SUPERVISOR_OLARIARI" } }),
+    ).toBe(1);
+  });
+
+  it("no puede firmar dos veces", async () => {
+    const { supOlariari, inspection } = await crearOlariariAprobadaEtapa1();
+    mockAuth.mockResolvedValue({ user: { id: supOlariari.id, role: supOlariari.role } });
+    await guardarFirmaSupervisor(inspection.id, png());
+
+    await expect(guardarFirmaSupervisor(inspection.id, png())).rejects.toThrow(/Ya existe una firma/);
+  });
+
+  it("no firma si su etapa todavía no fue decidida", async () => {
+    const { supOlariari, inspection } = await crearOlariariAprobadaEtapa1();
+    await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: { revisadaSupervisorOlariariAt: null, supervisorOlariariId: null },
+    });
+    mockAuth.mockResolvedValue({ user: { id: supOlariari.id, role: supOlariari.role } });
+
+    await expect(guardarFirmaSupervisor(inspection.id, png())).rejects.toThrow(/todavía no fue decidida/);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("otro Supervisor Olariari no puede firmar una decisión ajena", async () => {
+    const { inspection } = await crearOlariariAprobadaEtapa1();
+    const otro = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+    mockAuth.mockResolvedValue({ user: { id: otro.id, role: otro.role } });
+
+    await expect(guardarFirmaSupervisor(inspection.id, png())).rejects.toThrow(/Solo el supervisor que tomó la decisión/);
+  });
+
+  it("el Director no puede firmar con solo la primera etapa decidida", async () => {
+    const { inspection } = await crearOlariariAprobadaEtapa1();
+    const director = await crearUsuario(Role.SUPERVISOR);
+    mockAuth.mockResolvedValue({ user: { id: director.id, role: director.role } });
+
+    await expect(guardarFirmaSupervisor(inspection.id, png())).rejects.toThrow(/todavía no fue decidida/);
+  });
+
+  it("el Director firma su decisión con el tipo SUPERVISOR, como siempre", async () => {
+    const { inspection } = await crearOlariariAprobadaEtapa1();
+    const director = await crearUsuario(Role.SUPERVISOR);
+    await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: { status: InspectionStatus.APROBADA, reviewedAt: new Date(), supervisorId: director.id },
+    });
+    mockAuth.mockResolvedValue({ user: { id: director.id, role: director.role } });
+
+    await guardarFirmaSupervisor(inspection.id, png());
+
+    expect(
+      await prisma.firma.count({ where: { inspectionId: inspection.id, tipo: TipoFirma.SUPERVISOR } }),
+    ).toBe(1);
+    expect(
+      await prisma.auditLog.count({ where: { entityId: inspection.id, action: "FIRMAR_SUPERVISOR" } }),
+    ).toBe(1);
   });
 });

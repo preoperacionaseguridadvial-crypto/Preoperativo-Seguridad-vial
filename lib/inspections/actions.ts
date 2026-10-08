@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, Prisma, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
-import type { TipoNovedad } from "@/generated/prisma/client";
+import type { Sede, TipoNovedad } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
 import { PERFIL_ADJUNTO_NOVEDAD, validarArchivo } from "@/lib/storage/validar-archivo";
 import { PREGUNTAS_ESTADO_CONDUCTOR, type CampoEstadoConductor } from "@/lib/inspections/estado-conductor";
@@ -77,6 +77,7 @@ async function reemplazarInspeccionAbandonada(
   abandonadaId: string,
   workerId: string,
   vehicleId: string,
+  sede: Sede | null,
 ) {
   return prisma.$transaction(async (tx) => {
     const cancelada = await tx.inspection.updateMany({
@@ -85,7 +86,7 @@ async function reemplazarInspeccionAbandonada(
     });
 
     const nueva = await tx.inspection.create({
-      data: { workerId, conductorId: workerId, vehicleId },
+      data: { workerId, conductorId: workerId, vehicleId, sede },
     });
 
     if (cancelada.count > 0) {
@@ -130,11 +131,11 @@ export async function iniciarInspeccion(vehicleId: string) {
   // ninguna inspección hasta que SST/Administrador complete su hoja de vida.
   const trabajador = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { vehicleId: true, tipoVehiculo: true },
+    select: { vehicleId: true, tipoVehiculo: true, sede: true },
   });
   if (!trabajador?.vehicleId) {
     throw new Error(
-      "Pendiente de asignación de vehículo: solicita a SST o al Administrador que complete tu hoja de vida.",
+      "Pendiente de asignación de vehículo: solicita al Administrador SST o al Administrador que complete tu hoja de vida.",
     );
   }
   if (trabajador.vehicleId !== vehicleId) {
@@ -180,9 +181,11 @@ export async function iniciarInspeccion(vehicleId: string) {
   let inspection;
   try {
     inspection = enProceso
-      ? await reemplazarInspeccionAbandonada(enProceso.id, trabajadorId, vehicleId)
+      ? await reemplazarInspeccionAbandonada(enProceso.id, trabajadorId, vehicleId, trabajador.sede)
       : await prisma.inspection.create({
-          data: { workerId: trabajadorId, conductorId: trabajadorId, vehicleId },
+          // `sede` es un snapshot de la sede del trabajador: define el circuito de
+          // aprobación (Olariari: dos etapas) aunque luego cambie de sede.
+          data: { workerId: trabajadorId, conductorId: trabajadorId, vehicleId, sede: trabajador.sede },
         });
   } catch (err) {
     // Solo la violación de unicidad (P2002) significa "otra request ya creó la

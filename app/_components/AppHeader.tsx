@@ -15,7 +15,9 @@ import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
  */
 export function AppHeader({ enInicio = false }: { enInicio?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-[#D9E2EA] bg-white px-4 py-2">
+    // Alto fijo (h-12): el "← Atrás" del flujo del trabajador se ubica en esta
+    // misma barra, al lado del logo (ver BotonAtras), y necesita conocerlo.
+    <div className="flex h-12 items-center justify-between gap-3 border-b border-[#D9E2EA] bg-white px-4">
       <Image
         src="/logo/ess-ltda.png"
         alt="ESS LTDA"

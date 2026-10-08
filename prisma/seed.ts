@@ -1,68 +1,17 @@
 import bcrypt from "bcrypt";
-import { PrismaClient, Role, TipoVehiculo, TipoRespuestaItem } from "../generated/prisma/client";
+import { PrismaClient, TipoVehiculo, TipoRespuestaItem } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { CLAVE_FECHA_VIGENCIA, PLACEHOLDER_FECHA_VIGENCIA } from "../lib/settings/constants";
+import { SEED_FECHA_VENCIMIENTO_TECNICOMECANICA, SEED_USERS, SEED_VEHICULOS } from "./seed-usuarios";
 
 const adapter = new PrismaPg(process.env.DATABASE_URL ?? "");
 const prisma = new PrismaClient({ adapter });
 
-// Password de desarrollo para los 4 usuarios seed. Se puede sobreescribir
+// Password de desarrollo para los usuarios seed (ver prisma/seed-usuarios.ts). Se puede sobreescribir
 // con la variable de entorno SEED_USER_PASSWORD. NUNCA usar este valor por
 // defecto en un ambiente real: los usuarios de producción no se crean con
 // este script sino con una contraseña propia.
 const SEED_PASSWORD = process.env.SEED_USER_PASSWORD ?? "Cambiar123!";
-
-const SEED_USERS: Array<{
-  email: string;
-  name: string;
-  role: Role;
-  cedula: string;
-  // Fase soporte-moto-carro (Slice 2): solo los TRABAJADORES demo necesitan
-  // un tipo asignado para poder probar el flujo de inspección de punta a
-  // punta — el resto de los roles no lo usa para nada. Cada trabajador queda
-  // además vinculado a SU vehículo (1:1, ver más abajo).
-  tipoVehiculo?: TipoVehiculo;
-}> = [
-  {
-    email: "trabajador@ess.local",
-    name: "Trabajador Demo",
-    role: Role.TRABAJADOR,
-    cedula: "1001234567",
-    tipoVehiculo: TipoVehiculo.MOTO,
-  },
-  {
-    email: "trabajador.carro@ess.local",
-    name: "Trabajador Carro Demo",
-    role: Role.TRABAJADOR,
-    cedula: "1001234568",
-    tipoVehiculo: TipoVehiculo.CARRO,
-  },
-  { email: "supervisor@ess.local", name: "Supervisor Demo", role: Role.SUPERVISOR, cedula: "1002345678" },
-  { email: "director@ess.local", name: "Director Demo", role: Role.DIRECTOR, cedula: "1003456789" },
-  { email: "sst@ess.local", name: "SST Demo", role: Role.SST, cedula: "1004567890" },
-  // Usuario de PRUEBA para entrar al panel de administración — la cuenta
-  // real que va a operar el dueño de producto se crea desde adentro del
-  // panel (o se reemplaza esta con credenciales propias).
-  { email: "admin@ess.local", name: "Administrador Demo", role: Role.ADMINISTRADOR, cedula: "1005678901" },
-];
-
-// Vencimiento de tecnicomecánica del vehículo demo, también futuro.
-const SEED_FECHA_VENCIMIENTO_TECNICOMECANICA = new Date("2027-03-15T00:00:00.000Z");
-
-// Hoja de vida demo de los vehículos (sin foto: la foto real se sube desde el
-// panel de administración al crear/editar el usuario).
-const SEED_HOJA_DE_VIDA_MOTO = {
-  marca: "Yamaha",
-  modelo: "FZ 150",
-  color: "Negro",
-  fechaVencimientoSoat: new Date("2027-04-30T00:00:00.000Z"),
-};
-const SEED_HOJA_DE_VIDA_CARRO = {
-  marca: "Chevrolet",
-  modelo: "Spark GT",
-  color: "Blanco",
-  fechaVencimientoSoat: new Date("2027-05-31T00:00:00.000Z"),
-};
 
 // Catálogo REAL del checklist, auditado contra el formato oficial FO-SVS-23
 // y autorizado por el dueño de producto — reemplaza al catálogo del Slice 1
@@ -233,7 +182,7 @@ async function limpiarDatosDePruebaObsoletos() {
 async function main() {
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
 
-  for (const { email, name, role, cedula, tipoVehiculo } of SEED_USERS) {
+  for (const { email, name, role, cedula, tipoVehiculo, sede } of SEED_USERS) {
     await prisma.user.upsert({
       where: { email },
       update: {
@@ -243,6 +192,7 @@ async function main() {
         activo: true,
         conductorActivo: true,
         tipoVehiculo: tipoVehiculo ?? null,
+        sede: sede ?? null,
       },
       create: {
         email,
@@ -252,6 +202,7 @@ async function main() {
         passwordHash,
         conductorActivo: true,
         tipoVehiculo: tipoVehiculo ?? null,
+        sede: sede ?? null,
       },
     });
   }
@@ -316,61 +267,31 @@ async function main() {
     `Seed OK: ${CHECKLIST.length} categorías y ${totalItems} ítems de checklist creados/actualizados.`,
   );
 
-  // Vehículo demo MOTO para poder probar el flujo de inspección de punta a
-  // punta con el trabajador demo (también MOTO, ver SEED_USERS): se vincula
-  // al final (relación 1:1 `User.vehicleId`).
-  await prisma.vehicle.upsert({
-    where: { placa: "ABC123" },
-    update: {
-      activo: true,
-      fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
-      tipoVehiculo: TipoVehiculo.MOTO,
-      ...SEED_HOJA_DE_VIDA_MOTO,
-    },
-    create: {
-      placa: "ABC123",
-      tipo: "Motocicleta",
-      activo: true,
-      fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
-      tipoVehiculo: TipoVehiculo.MOTO,
-      ...SEED_HOJA_DE_VIDA_MOTO,
-    },
-  });
-  console.log('Seed OK: vehículo demo "ABC123" (MOTO) creado/actualizado.');
-
-  // Fase soporte-moto-carro (Slice 2): vehículo demo CARRO, del trabajador
-  // demo CARRO (SEED_USERS), para verificar el catálogo CARRO de punta a
-  // punta sin tener que crear un usuario desde el panel.
-  await prisma.vehicle.upsert({
-    where: { placa: "XYZ789" },
-    update: {
-      activo: true,
-      fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
-      tipoVehiculo: TipoVehiculo.CARRO,
-      ...SEED_HOJA_DE_VIDA_CARRO,
-    },
-    create: {
-      placa: "XYZ789",
-      tipo: "Automóvil",
-      activo: true,
-      fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
-      tipoVehiculo: TipoVehiculo.CARRO,
-      ...SEED_HOJA_DE_VIDA_CARRO,
-    },
-  });
-  console.log('Seed OK: vehículo demo "XYZ789" (CARRO) creado/actualizado.');
-
-  // Relación 1:1 (decisión del usuario, 2026-09-18): cada trabajador demo
-  // queda con su propio vehículo. Idempotente: `vehicleId` es unique y cada
-  // par es fijo, así que correr el seed de nuevo no choca.
-  for (const [email, placa] of [
-    ["trabajador@ess.local", "ABC123"],
-    ["trabajador.carro@ess.local", "XYZ789"],
-  ] as const) {
-    const vehiculo = await prisma.vehicle.findUniqueOrThrow({ where: { placa } });
-    await prisma.user.update({ where: { email }, data: { vehicleId: vehiculo.id } });
+  // Un vehículo demo por Recorredor (relación 1:1 `User.vehicleId`, decisión
+  // del usuario, 2026-09-18): MOTO de Bogotá, CARRO y MOTO de Olariari. Idempotente:
+  // `vehicleId` es unique y cada par es fijo, así que correr el seed de nuevo
+  // no choca.
+  for (const { placa, tipo, tipoVehiculo, hojaDeVida, usuarioEmail } of SEED_VEHICULOS) {
+    const vehiculo = await prisma.vehicle.upsert({
+      where: { placa },
+      update: {
+        activo: true,
+        fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
+        tipoVehiculo,
+        ...hojaDeVida,
+      },
+      create: {
+        placa,
+        tipo,
+        activo: true,
+        fechaVencimientoTecnicomecanica: SEED_FECHA_VENCIMIENTO_TECNICOMECANICA,
+        tipoVehiculo,
+        ...hojaDeVida,
+      },
+    });
+    await prisma.user.update({ where: { email: usuarioEmail }, data: { vehicleId: vehiculo.id } });
+    console.log(`Seed OK: vehículo demo "${placa}" (${tipoVehiculo}) vinculado a ${usuarioEmail}.`);
   }
-  console.log("Seed OK: trabajadores demo vinculados a su vehículo (1:1).");
 
   // Fase soporte-moto-carro (Slice 4, ADR A5): placeholder de
   // "Fecha vigencia" del PDF hasta que un Administrador defina la fecha

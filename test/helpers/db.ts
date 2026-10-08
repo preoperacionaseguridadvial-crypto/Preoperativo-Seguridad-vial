@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { Role, TipoVehiculo, TipoRespuestaItem } from "@/generated/prisma/client";
+import { Role, Sede, TipoVehiculo, TipoRespuestaItem } from "@/generated/prisma/client";
 
 /**
  * Limpia todas las tablas relevantes entre tests, respetando FKs (hijos
@@ -36,6 +36,8 @@ export async function crearUsuario(
     tipoVehiculo: TipoVehiculo | null;
     // Vehículo fijo asignado (placa). Sin override queda null: usuario legacy.
     vehicleId: string | null;
+    // Sede del trabajador (BOGOTA/OLARIARI). Sin override queda null.
+    sede: Sede | null;
   }> = {},
 ) {
   return prisma.user.create({
@@ -46,6 +48,7 @@ export async function crearUsuario(
       passwordHash: "no-se-usa-en-tests",
       cedula: overrides.cedula,
       vehicleId: overrides.vehicleId,
+      sede: overrides.sede,
       // Fase soporte-moto-carro: default MOTO (el sistema era moto-only),
       // overridable para tests de CARRO — ver Testing Strategy en el
       // design del cambio. `overrides.tipoVehiculo === null` permite

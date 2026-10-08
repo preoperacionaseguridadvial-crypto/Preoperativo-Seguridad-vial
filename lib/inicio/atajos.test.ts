@@ -1,17 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Role } from "@/generated/prisma/client";
 import { puedeAccederARuta } from "@/lib/auth/route-roles";
-import { atajosPorRol, etiquetaRol, fechaLegible, primerNombre } from "@/lib/inicio/atajos";
-
-describe("etiquetaRol", () => {
-  it("devuelve una etiqueta legible para cada rol", () => {
-    expect(etiquetaRol(Role.TRABAJADOR)).toBe("Trabajador");
-    expect(etiquetaRol(Role.SUPERVISOR)).toBe("Supervisor");
-    expect(etiquetaRol(Role.DIRECTOR)).toBe("Director");
-    expect(etiquetaRol(Role.SST)).toBe("SST");
-    expect(etiquetaRol(Role.ADMINISTRADOR)).toBe("Administrador");
-  });
-});
+import { atajosPorRol, fechaLegible, primerNombre } from "@/lib/inicio/atajos";
 
 describe("primerNombre", () => {
   it("toma la primera palabra del nombre", () => {
@@ -54,6 +44,7 @@ describe("atajosPorRol", () => {
   it("entrega los atajos esperados por rol", () => {
     const hrefs = (rol: Role) => atajosPorRol(rol).map((a) => a.href);
     expect(hrefs(Role.SUPERVISOR)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
+    expect(hrefs(Role.SUPERVISOR_OLARIARI)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
     expect(hrefs(Role.DIRECTOR)).toEqual(["/dashboard", "/consulta-inspecciones"]);
     expect(hrefs(Role.SST)).toEqual(["/dashboard", "/consulta-inspecciones", "/admin/usuarios"]);
     expect(hrefs(Role.ADMINISTRADOR)).toEqual([
@@ -68,6 +59,10 @@ describe("atajosPorRol", () => {
   it("puedeAccederARuta rechaza rutas de otro rol y acepta subrutas", () => {
     expect(puedeAccederARuta(Role.TRABAJADOR, "/dashboard")).toBe(false);
     expect(puedeAccederARuta(Role.SUPERVISOR, "/aprobaciones/abc")).toBe(true);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/aprobaciones/abc")).toBe(true);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/consulta-inspecciones")).toBe(true);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/admin/usuarios")).toBe(false);
+    expect(puedeAccederARuta(Role.SUPERVISOR_OLARIARI, "/dashboard")).toBe(false);
     expect(puedeAccederARuta(Role.DIRECTOR, "/admin/usuarios")).toBe(false);
     expect(puedeAccederARuta(Role.TRABAJADOR, "/")).toBe(true);
   });

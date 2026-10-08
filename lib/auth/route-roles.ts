@@ -13,8 +13,8 @@ import type { Role } from "@/generated/prisma/client";
  */
 export const ROLE_ROUTE_PREFIXES: Record<string, Role[]> = {
   "/inspecciones": ["TRABAJADOR"],
-  "/aprobaciones": ["SUPERVISOR"],
-  "/consulta-inspecciones": ["DIRECTOR", "SST", "SUPERVISOR", "ADMINISTRADOR"],
+  "/aprobaciones": ["SUPERVISOR", "SUPERVISOR_OLARIARI"],
+  "/consulta-inspecciones": ["DIRECTOR", "SST", "SUPERVISOR", "SUPERVISOR_OLARIARI", "ADMINISTRADOR"],
   "/dashboard": ["DIRECTOR", "SST", "ADMINISTRADOR"],
   // SST tiene los mismos permisos que ADMINISTRADOR en todo el panel
   // (decisión del usuario, 2026-09-18): usuarios, hoja de vida y

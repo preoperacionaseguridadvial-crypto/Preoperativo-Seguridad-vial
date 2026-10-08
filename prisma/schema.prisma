@@ -27,6 +27,18 @@ enum Role {
   // como TRABAJADOR ni decide como SUPERVISOR (rompería la trazabilidad de
   // quién hizo cada acción).
   ADMINISTRADOR
+  // Supervisor de la sede Olariari: primera etapa de aprobación de las
+  // inspecciones de los recorredores de Olariari (el Director de Operaciones,
+  // código SUPERVISOR, decide después). Etiqueta visible: ver
+  // lib/auth/etiquetas-rol.ts.
+  SUPERVISOR_OLARIARI
+}
+
+// Sede (ciudad) del trabajador. Las inspecciones de OLARIARI pasan por dos
+// etapas de aprobación; las de BOGOTA, por una sola.
+enum Sede {
+  BOGOTA
+  OLARIARI
 }
 
 enum InspectionStatus {
@@ -112,6 +124,7 @@ enum TipoNovedad {
 enum TipoFirma {
   CONDUCTOR
   SUPERVISOR
+  SUPERVISOR_OLARIARI
 }
 
 model User {
@@ -138,6 +151,12 @@ model User {
   // de forzarlos retroactivamente en los usuarios ya existentes).
   telefono String?
   cargo    String?
+
+  // Sede del trabajador (roles-olariari). Nullable por la regla D4; se exige
+  // solo en el alta/edición de un TRABAJADOR (lib/admin/user-actions.ts) y se
+  // guarda null para los demás roles. La migración rellena BOGOTA a los
+  // TRABAJADOR existentes.
+  sede Sede?
 
   // Fase soporte-moto-carro: tipo de vehículo que el trabajador está
   // habilitado a operar (MOTO/CARRO). Debe coincidir con el tipo de su
@@ -174,12 +193,13 @@ model User {
   // usuario).
   conductorActivo Boolean @default(true)
 
-  inspectionsAsWorker     Inspection[] @relation("InspectionWorker")
-  inspectionsAsSupervisor Inspection[] @relation("InspectionSupervisor")
-  inspectionsAsConductor  Inspection[] @relation("InspectionConductor")
-  auditLogs               AuditLog[]
-  firmas                  Firma[]
-  configuracionesActualizadas AppSetting[]
+  inspectionsAsWorker             Inspection[] @relation("InspectionWorker")
+  inspectionsAsSupervisor         Inspection[] @relation("InspectionSupervisor")
+  inspectionsAsSupervisorOlariari Inspection[] @relation("InspectionSupervisorOlariari")
+  inspectionsAsConductor          Inspection[] @relation("InspectionConductor")
+  auditLogs                       AuditLog[]
+  firmas                          Firma[]
+  configuracionesActualizadas     AppSetting[]
 
   @@index([role])
 }
@@ -227,7 +247,7 @@ model Vehicle {
   inspections Inspection[]
   // Trabajador dueño de este vehículo (1:1, ver `User.vehicleId`). Null en
   // vehículos legacy que ningún usuario reclama.
-  conductor User? @relation("VehiculoAsignado")
+  conductor   User?        @relation("VehiculoAsignado")
 }
 
 // Registro inmutable: no se agrega deletedAt ni mutation de borrado. Los
@@ -241,43 +261,58 @@ model Vehicle {
 // con Prisma 7.9.1: `migrate diff` / `migrate dev` NO lo detectan como drift
 // ni intentan borrarlo. No lo declares con @@unique/@@index (rompería el WHERE).
 model Inspection {
-  id            String            @id @default(cuid())
-  workerId      String
-  worker        User              @relation("InspectionWorker", fields: [workerId], references: [id])
+  id           String           @id @default(cuid())
+  workerId     String
+  worker       User             @relation("InspectionWorker", fields: [workerId], references: [id])
   // Conductor responsable de la unidad (formato oficial FO-SVS-23), separado
   // de `workerId` ("quién hace la inspección") aunque en el flujo normal sea
   // la misma persona — ver `iniciarInspeccion` en lib/inspections/actions.ts,
   // que hoy setea `conductorId = workerId` automáticamente por defecto.
-  conductorId   String
-  conductor     User              @relation("InspectionConductor", fields: [conductorId], references: [id])
-  vehicleId     String
-  vehicle       Vehicle           @relation(fields: [vehicleId], references: [id])
-  supervisorId  String?
-  supervisor    User?             @relation("InspectionSupervisor", fields: [supervisorId], references: [id])
-  status        InspectionStatus  @default(EN_PROCESO)
+  conductorId  String
+  conductor    User             @relation("InspectionConductor", fields: [conductorId], references: [id])
+  vehicleId    String
+  vehicle      Vehicle          @relation(fields: [vehicleId], references: [id])
+  supervisorId String?
+  supervisor   User?            @relation("InspectionSupervisor", fields: [supervisorId], references: [id])
+  status       InspectionStatus @default(EN_PROCESO)
 
   // Todos los timestamps siguientes se asignan con la hora del servidor
   // (nunca con un valor enviado por el cliente).
-  startedAt     DateTime          @default(now())
-  completedAt   DateTime?
-  approvedAt    DateTime?
-  rejectedAt    DateTime?
-  reviewedAt    DateTime?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  reviewedAt  DateTime?
 
   // Observaciones que deja el Supervisor al aprobar o rechazar (Fase 3).
   observacionesSupervisor String?
+
+  // Sede del trabajador al crear la inspección (snapshot: un cambio de sede
+  // posterior no re-enruta inspecciones en curso). Nullable por D4; la
+  // migración rellena BOGOTA a las existentes. Las de OLARIARI pasan primero
+  // por el Supervisor Olariari y luego por el Director de Operaciones.
+  sede Sede?
+
+  // Primera etapa de aprobación (solo sede OLARIARI), a cargo de un usuario
+  // con rol SUPERVISOR_OLARIARI. Al aprobar se fijan `revisadaSupervisorOlariariAt`
+  // y estos campos sin cambiar `status`; al rechazar la inspección se cierra
+  // (RECHAZADA) y estos campos también quedan fijados.
+  supervisorOlariariId            String?
+  supervisorOlariari              User?     @relation("InspectionSupervisorOlariari", fields: [supervisorOlariariId], references: [id])
+  revisadaSupervisorOlariariAt    DateTime?
+  observacionesSupervisorOlariari String?
 
   // Medida directa de la inspección (Fase 2): no es un check de
   // conforme/no-conforme, es un valor medible que el trabajador reporta una
   // sola vez por inspección — por eso vive acá como campo y NO como
   // ChecklistItem. Ver `registrarKilometraje` en lib/inspections/actions.ts.
-  kilometraje       Int?
+  kilometraje Int?
 
   // Resultado final reportado por el trabajador (sección 13 del brief). Si
   // `puedeOperar` es false, `justificacionNoOperar` es obligatoria (validado
   // en `registrarResultado`, lib/inspections/actions.ts).
-  puedeOperar             Boolean?
-  justificacionNoOperar   String?
+  puedeOperar           Boolean?
+  justificacionNoOperar String?
 
   // Fase soporte-moto-carro (Slice 3, A6): declaración de estado del
   // conductor — 3 preguntas sí/no del formato, respondidas de a una y
@@ -295,13 +330,13 @@ model Inspection {
   consumioAlcohol     Boolean?
   declaracionEstadoAt DateTime?
 
-  respuestas    InspectionItemResponse[]
-  novedades     Novedad[]
-  firmas        Firma[]
-  fotos         FotoInspeccion[]
+  respuestas InspectionItemResponse[]
+  novedades  Novedad[]
+  firmas     Firma[]
+  fotos      FotoInspeccion[]
 
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([workerId])
   @@index([conductorId])
@@ -313,21 +348,21 @@ model Inspection {
 // FO-SVS-23 (columna MOTOS): "Inspección Visual" y "Documentación". Se
 // pueblan vía prisma/seed.ts, no se crean desde la UI en esta fase.
 model ChecklistCategory {
-  id        String          @id @default(cuid())
-  nombre    String          @unique
-  orden     Int
-  items     ChecklistItem[]
+  id     String          @id @default(cuid())
+  nombre String          @unique
+  orden  Int
+  items  ChecklistItem[]
 
   @@index([orden])
 }
 
 // Ítem individual del checklist (ej: "Luces Altas y Bajas", "SOAT").
 model ChecklistItem {
-  id          String                    @id @default(cuid())
-  categoryId  String
-  category    ChecklistCategory         @relation(fields: [categoryId], references: [id])
-  nombre      String
-  orden       Int
+  id               String            @id @default(cuid())
+  categoryId       String
+  category         ChecklistCategory @relation(fields: [categoryId], references: [id])
+  nombre           String
+  orden            Int
   // Rutas públicas (bajo /public/checklist/) de las fotos de referencia que
   // se muestran al trabajador para que asocie visualmente sobre qué parte de
   // la moto se le está preguntando (feedback del dueño de producto). Galería
@@ -336,12 +371,12 @@ model ChecklistItem {
   // referencia; mientras un archivo no exista, la UI cae a un placeholder
   // neutro (ver GaleriaReferencia/ImagenReferencia en
   // app/(worker)/inspecciones/_components).
-  imagenesUrl String[]                  @default([])
+  imagenesUrl      String[]          @default([])
   // Imágenes propias para CARRO en las preguntas compartidas con moto
   // (Espejos, Frenos, fluidos): si el vehículo es CARRO y esta lista no está
   // vacía, reemplaza a `imagenesUrl` (ver lib/inspections/imagenes.ts). Los
   // ítems exclusivos de CARRO guardan sus imágenes en `imagenesUrl`.
-  imagenesCarroUrl String[]             @default([])
+  imagenesCarroUrl String[]          @default([])
   // Único ítem del catálogo (hoy: "Rayones") que, cuando queda en FALLA,
   // pide al trabajador indicar por escrito dónde está lo que reporta, con
   // un selector de tipo acotado a daños de carrocería en vez de la pantalla
@@ -350,7 +385,7 @@ model ChecklistItem {
   // nueva porque reutiliza el campo `observacion` ya existente en
   // InspectionItemResponse; ver UI en
   // app/(worker)/inspecciones/[id]/checklist/[itemId]/page.tsx.
-  pideUbicacion Boolean                 @default(false)
+  pideUbicacion    Boolean           @default(false)
 
   // Fase soporte-moto-carro (Slice 2): mismo patrón de branching que
   // `Vehicle.tipoVehiculo`/`User.tipoVehiculo` (A1) — null significa "aplica
@@ -364,9 +399,9 @@ model ChecklistItem {
   // (BUENO/BAJO/MALO). `@default(BINARIO)` preserva el comportamiento
   // existente para todo ítem que no lo declare explícitamente. Validado en
   // `responderItem` vía `lib/inspections/respuesta.ts`.
-  tipoRespuesta TipoRespuestaItem      @default(BINARIO)
+  tipoRespuesta TipoRespuestaItem @default(BINARIO)
 
-  respuestas  InspectionItemResponse[]
+  respuestas InspectionItemResponse[]
 
   @@index([categoryId])
 }
@@ -376,17 +411,17 @@ model ChecklistItem {
 // una sola vez por inspección (se puede actualizar mientras la inspección
 // sigue EN_PROCESO, nunca después de enviada).
 model InspectionItemResponse {
-  id              String              @id @default(cuid())
+  id              String             @id @default(cuid())
   inspectionId    String
-  inspection      Inspection          @relation(fields: [inspectionId], references: [id])
+  inspection      Inspection         @relation(fields: [inspectionId], references: [id])
   checklistItemId String
-  checklistItem   ChecklistItem       @relation(fields: [checklistItemId], references: [id])
+  checklistItem   ChecklistItem      @relation(fields: [checklistItemId], references: [id])
   valor           RespuestaChecklist
   observacion     String?
   // Generado por el servidor (`now()`), nunca recibido del cliente.
-  createdAt       DateTime            @default(now())
+  createdAt       DateTime           @default(now())
 
-  novedad         Novedad?
+  novedad Novedad?
 
   @@unique([inspectionId, checklistItemId])
   @@index([inspectionId])
@@ -400,22 +435,22 @@ model InspectionItemResponse {
 // (ligada a ítem) desde `responderItem`; el caso general queda modelado para
 // una fase futura. Ver duda de modelado documentada en el reporte de Fase 2.
 model Novedad {
-  id                        String                   @id @default(cuid())
-  inspectionId              String
-  inspection                Inspection               @relation(fields: [inspectionId], references: [id])
-  inspectionItemResponseId  String?                  @unique
-  inspectionItemResponse    InspectionItemResponse?  @relation(fields: [inspectionItemResponseId], references: [id])
-  descripcion               String
-  tipo                      TipoNovedad
+  id                       String                  @id @default(cuid())
+  inspectionId             String
+  inspection               Inspection              @relation(fields: [inspectionId], references: [id])
+  inspectionItemResponseId String?                 @unique
+  inspectionItemResponse   InspectionItemResponse? @relation(fields: [inspectionItemResponseId], references: [id])
+  descripcion              String
+  tipo                     TipoNovedad
   // Campo "¿Dónde?" del formato oficial FO-SVS-23: descripción de la
   // ubicación física del daño, separada de `descripcion` (texto libre que
   // explica QUÉ pasó). Para el ítem "Rayones" (`ChecklistItem.pideUbicacion`)
   // el valor ya capturado en esa pantalla especial termina acá, sin pedirlo
   // dos veces — ver lib/inspections/actions.ts (`responderItem`).
-  ubicacion                 String?
-  createdAt                 DateTime                 @default(now())
+  ubicacion                String?
+  createdAt                DateTime                @default(now())
 
-  photos                    Photo[]
+  photos Photo[]
 
   @@index([inspectionId])
 }
@@ -426,11 +461,11 @@ model Novedad {
 // necesite mostrar la foto (ej: futura pantalla de aprobación del
 // supervisor).
 model Photo {
-  id         String   @id @default(cuid())
-  novedadId  String
-  novedad    Novedad  @relation(fields: [novedadId], references: [id])
-  s3Key      String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  novedadId String
+  novedad   Novedad  @relation(fields: [novedadId], references: [id])
+  s3Key     String
+  createdAt DateTime @default(now())
 
   @@index([novedadId])
 }

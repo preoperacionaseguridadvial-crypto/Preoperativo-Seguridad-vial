@@ -28,15 +28,15 @@ export function TablaTrabajadores({
   return (
     <Tarjeta>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-ink">Cumplimiento por trabajador</h2>
+        <h2 className="text-sm font-semibold text-ink">Cumplimiento por recorredor</h2>
         <form method="GET" className="flex gap-2">
           {otrosParams.map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
           <input
             type="text"
             name="qTrabajador"
             defaultValue={q}
-            placeholder="Buscar trabajador…"
-            aria-label="Buscar trabajador"
+            placeholder="Buscar recorredor…"
+            aria-label="Buscar recorredor"
             className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs focus:border-brand focus:outline-none"
           />
           <button type="submit" className="rounded-lg bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand/90">
@@ -46,14 +46,14 @@ export function TablaTrabajadores({
       </div>
 
       {filas.length === 0 ? (
-        <p className="text-sm text-ink-muted">No hay trabajadores con inspecciones en el período seleccionado.</p>
+        <p className="text-sm text-ink-muted">No hay recorredores con inspecciones en el período seleccionado.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-ink-muted">
                 <Th>
-                  <SortableHeader label="Trabajador" columnKey="nombre" currentSort={sort} currentDir={dir} sortParam="sortTrabajador" dirParam="dirTrabajador" searchParams={searchParams} />
+                  <SortableHeader label="Recorredor" columnKey="nombre" currentSort={sort} currentDir={dir} sortParam="sortTrabajador" dirParam="dirTrabajador" searchParams={searchParams} />
                 </Th>
                 <Th align="right">
                   <SortableHeader label="Inspecciones" columnKey="total" currentSort={sort} currentDir={dir} sortParam="sortTrabajador" dirParam="dirTrabajador" searchParams={searchParams} />

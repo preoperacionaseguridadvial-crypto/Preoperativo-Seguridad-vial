@@ -7,9 +7,8 @@ import { crearUsuarioDesdeFormulario } from "@/lib/admin/user-actions";
 // el cliente de Prisma (pg) al bundle del navegador.
 import { Role } from "@/generated/prisma/enums";
 import { CamposVehiculo } from "../../_components/CamposVehiculo";
+import { SelectorRolYSede } from "../../_components/SelectorRolYSede";
 import { UsuarioCreadoPantalla } from "./UsuarioCreadoPantalla";
-
-const ROLES: Role[] = [Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR, Role.SST, Role.ADMINISTRADOR];
 
 const CLASE_INPUT =
   "w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none";
@@ -114,35 +113,19 @@ function FormularioAlta({ onCrearOtro }: { onCrearOtro: () => void }) {
           />
         </div>
 
-        <div>
-          <label htmlFor="role" className={CLASE_LABEL}>
-            Rol
-          </label>
-          <select
-            id="role"
-            name="role"
-            required
-            value={rol || valor("role")}
-            onChange={(e) => setRol(e.target.value)}
-            className={CLASE_INPUT}
-          >
-            <option value="" disabled>
-              Selecciona un rol
-            </option>
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </div>
+        <SelectorRolYSede
+          rolInicial={rol || valor("role")}
+          sedeInicial={valor("sede")}
+          conPlaceholder
+          onRolChange={setRol}
+        />
 
         <div>
           <label htmlFor="cedula" className={CLASE_LABEL}>
             Cédula
           </label>
           <input id="cedula" name="cedula" type="text" defaultValue={valor("cedula")} className={CLASE_INPUT} />
-          <p className="mt-1 text-xs text-gray-500">Obligatoria si el rol es Trabajador.</p>
+          <p className="mt-1 text-xs text-gray-500">Obligatoria si el rol es Recorredor.</p>
         </div>
 
         {(rol || valor("role")) === Role.TRABAJADOR && (

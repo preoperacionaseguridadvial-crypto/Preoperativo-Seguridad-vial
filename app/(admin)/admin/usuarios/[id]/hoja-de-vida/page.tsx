@@ -5,6 +5,7 @@ import { getUsuarioPorId } from "@/lib/admin/queries";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { estadoVencimiento, type EstadoVencimiento } from "@/lib/admin/vencimientos";
 import { Role } from "@/generated/prisma/client";
+import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
 
 const ETIQUETA_ESTADO: Record<EstadoVencimiento, { texto: string; clase: string }> = {
   VIGENTE: { texto: "Vigente", clase: "bg-green-100 text-green-800" },
@@ -59,7 +60,7 @@ export default async function HojaDeVidaPage({ params }: { params: Promise<{ id:
         </Link>
         <h1 className="mt-2 text-xl font-semibold text-[#0B3B60]">Hoja de vida</h1>
         <p className="text-sm text-gray-600">
-          {usuario.name} · <span className="font-mono text-xs">{usuario.role}</span>
+          {usuario.name} · <span className="text-xs">{etiquetaUsuario(usuario.role, usuario.sede)}</span>
         </p>
         <p className="text-sm text-gray-500">{usuario.email}</p>
         <Link

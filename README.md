@@ -99,16 +99,37 @@ npm run prisma:migrate
 npm run prisma:seed
 ```
 
-El seed crea 4 usuarios de prueba (uno por rol), todos con la misma
-password de desarrollo `Cambiar123!` (sobreescribible con la variable de
-entorno `SEED_USER_PASSWORD` antes de correr el seed):
+El seed crea usuarios de prueba con los cargos reales de ESS, todos con la
+misma password de desarrollo `Cambiar123!` (sobreescribible con la variable de
+entorno `SEED_USER_PASSWORD` antes de correr el seed). Los códigos de rol
+internos (columna "Rol interno") no cambian; lo que se muestra en pantalla es
+la columna "Cargo":
 
-| Email                  | Rol         |
-| ----------------------- | ----------- |
-| trabajador@ess.local    | TRABAJADOR  |
-| supervisor@ess.local    | SUPERVISOR  |
-| director@ess.local      | DIRECTOR    |
-| sst@ess.local            | SST         |
+| Email                           | Cargo                    | Rol interno          | Sede     |
+| ------------------------------- | ------------------------ | -------------------- | -------- |
+| recorredor.bogota@ess.local     | Recorredor Bogotá        | TRABAJADOR           | Bogotá   |
+| trabajador.carro@ess.local      | Recorredor Bogotá (carro)| TRABAJADOR           | Bogotá   |
+| recorredor.olariari@ess.local   | Recorredor Olariari      | TRABAJADOR           | Olariari |
+| supervisor.olariari@ess.local   | Supervisor Olariari      | SUPERVISOR_OLARIARI  | —        |
+| director.operaciones@ess.local  | Director de Operaciones  | SUPERVISOR           | —        |
+| director@ess.local              | Director                 | DIRECTOR             | —        |
+| admin.sst@ess.local             | Administrador SST        | SST                  | —        |
+| admin@ess.local                 | Administrador            | ADMINISTRADOR        | —        |
+
+Flujo de aprobación: la inspección de un Recorredor de Bogotá la aprueba
+directamente el Director de Operaciones; la de un Recorredor de Olariari pasa
+primero por el Supervisor Olariari y, si este la aprueba, por el Director de
+Operaciones (si la rechaza, queda cerrada).
+
+Si tu base de desarrollo ya tenía los usuarios anteriores (`trabajador@`,
+`supervisor@`, `sst@`), corré antes del seed el script que los renombra en
+sitio —conserva ids, inspecciones y firmas— y crea los usuarios nuevos de
+Olariari. Solo funciona contra una base local que no sea la de test, y se puede
+correr más de una vez:
+
+```bash
+npx tsx --env-file=.env --conditions=react-server scripts/alinear-usuarios-ess.ts
+```
 
 ### 5. Correr en desarrollo
 
@@ -120,7 +141,7 @@ Abrir http://localhost:3000 — redirige a `/login` si no hay sesión.
 
 ### 6. Probar el flujo de inspección (Fase 2)
 
-1. Iniciar sesión con `trabajador@ess.local` / `Cambiar123!`.
+1. Iniciar sesión con `recorredor.bogota@ess.local` / `Cambiar123!`.
 2. Desde `/` (home), tocar "Ir a inspecciones" (o entrar directo a
    `/inspecciones`).
 3. Elegir el vehículo demo "ABC123" (creado por el seed) para iniciar una

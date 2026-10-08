@@ -9,6 +9,8 @@ import {
   TipoNovedad,
   TipoFotoInspeccion,
   InspectionStatus,
+  Sede,
+  TipoFirma,
 } from "@/generated/prisma/client";
 import { getInspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { InspeccionPdfDocument } from "@/lib/pdf/InspeccionPdfDocument";
@@ -263,6 +265,73 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
       expect(ramaTexto).toBeGreaterThan(ramaFirmas);
       // …y la rama de las firmas ocupa todo el ancho (sin un porcentaje fijo).
       expect(estiloDe(ramas[ramaFirmas]).width).toBeUndefined();
+    });
+
+    // roles-olariari: Olariari lleva 3 firmas (conductor, Supervisor Olariari,
+    // Director de Operaciones); Bogotá 2, con el aprobador rotulado con su cargo.
+    async function titulosDeFirma(sede: Sede, conEtapa1: boolean) {
+      const worker = await crearUsuario(Role.TRABAJADOR, { sede });
+      const supOlariari = await crearUsuario(Role.SUPERVISOR_OLARIARI);
+      const director = await crearUsuario(Role.SUPERVISOR);
+      const vehicle = await crearVehiculo();
+      const ahora = new Date();
+      const inspection = await prisma.inspection.create({
+        data: {
+          workerId: worker.id,
+          conductorId: worker.id,
+          vehicleId: vehicle.id,
+          status: InspectionStatus.APROBADA,
+          completedAt: ahora,
+          reviewedAt: ahora,
+          supervisorId: director.id,
+          sede,
+          ...(conEtapa1 && {
+            revisadaSupervisorOlariariAt: ahora,
+            supervisorOlariariId: supOlariari.id,
+            observacionesSupervisorOlariari: "Visto en sitio.",
+          }),
+        },
+      });
+      await prisma.firma.create({
+        data: { inspectionId: inspection.id, userId: director.id, tipo: TipoFirma.SUPERVISOR, s3Key: "firmas/x/SUPERVISOR.png" },
+      });
+      if (conEtapa1) {
+        await prisma.firma.create({
+          data: {
+            inspectionId: inspection.id,
+            userId: supOlariari.id,
+            tipo: TipoFirma.SUPERVISOR_OLARIARI,
+            s3Key: "firmas/x/SUPERVISOR_OLARIARI.png",
+          },
+        });
+      }
+      const data = await getInspeccionParaPdf(inspection.id);
+      if (!data) throw new Error("getInspeccionParaPdf devolvió null para una inspección recién creada.");
+      const titulos = recorrer(InspeccionPdfDocument({ data }))
+        .map((v) => v.elemento.props?.titulo)
+        .filter((t): t is string => typeof t === "string" && t.startsWith("NOMBRE Y FIRMA"));
+      // Y el PDF real sigue renderizando sin lanzar con esa cantidad de cajas.
+      esperarPdfValido(await renderToBuffer(InspeccionPdfDocument({ data })));
+      return { titulos, data };
+    }
+
+    it("una inspección de Olariari dibuja 3 cajas de firma", async () => {
+      const { titulos, data } = await titulosDeFirma(Sede.OLARIARI, true);
+      expect(titulos).toEqual([
+        "NOMBRE Y FIRMA DEL CONDUCTOR",
+        "NOMBRE Y FIRMA DEL SUPERVISOR OLARIARI",
+        "NOMBRE Y FIRMA DEL DIRECTOR DE OPERACIONES",
+      ]);
+      expect(data.firmas.supervisorOlariari).not.toBeNull();
+      expect(data.supervisorOlariari?.name).toBeTruthy();
+    });
+
+    it("una inspección de Bogotá conserva 2 cajas, con el aprobador como Director de Operaciones", async () => {
+      const { titulos } = await titulosDeFirma(Sede.BOGOTA, false);
+      expect(titulos).toEqual([
+        "NOMBRE Y FIRMA DEL CONDUCTOR",
+        "NOMBRE Y FIRMA DEL DIRECTOR DE OPERACIONES",
+      ]);
     });
   });
 });

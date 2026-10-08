@@ -26,15 +26,16 @@ export function PanelTrabajador({ datos, ahora }: { datos: Datos; ahora: Date })
   if (!vehiculo) {
     return (
       <p className="rounded-xl bg-status-warn-soft px-4 py-3 text-sm text-status-warn-ink">
-        Pendiente de asignación de vehículo: solicita a SST o al Administrador que complete tu hoja de vida.
+        Pendiente de asignación de vehículo: solicita al Administrador SST o al Administrador que complete tu hoja de vida.
       </p>
     );
   }
 
   const accion = accionPrincipalTrabajador(inspecciones[0] ?? null, ahora);
   const alertas = alertasDocumentosVehiculo(vehiculo, ahora);
-  // Un vehículo inactivo no puede iniciar inspecciones (iniciarInspeccion lo rechaza).
-  const puedeIniciar = vehiculo.activo || accion.estado !== "INICIAR";
+  // Un vehículo inactivo no puede iniciar inspecciones (iniciarInspeccion lo
+  // rechaza): solo se ofrece continuar una que ya está en proceso.
+  const puedeIniciar = vehiculo.activo || accion.estado === "CONTINUAR";
 
   return (
     <div className="flex flex-col gap-5">
@@ -51,7 +52,7 @@ export function PanelTrabajador({ datos, ahora }: { datos: Datos; ahora: Date })
 
       {!vehiculo.activo && (
         <p className="rounded-xl bg-status-warn-soft px-4 py-3 text-sm text-status-warn-ink">
-          Tu vehículo {vehiculo.placa} está inactivo. Solicita a SST o al Administrador que lo reactive.
+          Tu vehículo {vehiculo.placa} está inactivo. Solicita al Administrador SST o al Administrador que lo reactive.
         </p>
       )}
 

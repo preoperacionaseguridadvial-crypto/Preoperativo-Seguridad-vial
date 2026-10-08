@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getInspeccionDetalleOrNotFound } from "@/lib/inspections/supervisor-queries";
@@ -7,8 +7,18 @@ import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
 import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
+import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirmacion-aprobacion";
+import { AprobarInspeccionForm } from "@/app/_components/AprobarInspeccionForm";
+import { Role, Sede, TipoFirma } from "@/generated/prisma/enums";
+import { etiquetaRol, etiquetaSede } from "@/lib/auth/etiquetas-rol";
+import {
+  esRolAprobador,
+  esperandoA,
+  etapaParaRol,
+  tipoFirmaPendiente,
+} from "@/lib/inspections/cola-aprobacion";
 
-// Pantalla de detalle de la revisión del Supervisor (Fase 3): toda la
+// Pantalla de detalle de la revisión de los aprobadores (Fase 3): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
 // categoría igual que lo vivió, novedades con fotos, resultado final) y,
 // al final, el formulario de decisión (Aprobar/Rechazar) — la firma del
@@ -17,7 +27,13 @@ import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conduc
 // esta misma página lo redirige ahí si todavía no firmó. También es la
 // única pantalla del proyecto que muestra el detalle de una inspección ya
 // decidida (no existía otra) — en ese caso queda en modo lectura, con la
-// decisión tomada y la evidencia de ambas firmas.
+// decisión tomada y la evidencia de las firmas.
+//
+// Dos etapas (roles-olariari): el formulario de decisión solo aparece cuando
+// LE TOCA al rol de la sesión (el Supervisor Olariari en la primera etapa de
+// Olariari; el Director de Operaciones en el resto); las server actions
+// vuelven a validarlo. El Director ve, en una inspección de Olariari, la
+// decisión y la firma de la primera etapa.
 export default async function AprobacionDetallePage({
   params,
   searchParams,
@@ -32,17 +48,47 @@ export default async function AprobacionDetallePage({
     redirect("/login");
   }
 
+  const rol = session.user.role;
+  if (!esRolAprobador(rol)) {
+    redirect("/");
+  }
+
   const inspection = await getInspeccionDetalleOrNotFound(id);
+  // El Supervisor Olariari solo ve las inspecciones de su sede.
+  if (rol === Role.SUPERVISOR_OLARIARI && inspection.sede !== Sede.OLARIARI) {
+    notFound();
+  }
   const decidida = inspection.reviewedAt !== null;
-  const { conductor: firmaConductor, supervisor: firmaSupervisor } = await getFirmasInspeccion(id);
+  const firmas = await getFirmasInspeccion(id);
+  const {
+    conductor: firmaConductor,
+    supervisor: firmaSupervisor,
+    supervisorOlariari: firmaSupervisorOlariari,
+  } = firmas;
 
   // Ya decidió pero todavía no firmó: lo mandamos a completar la firma antes
-  // de mostrarle este detalle. Si es OTRO supervisor mirando una decisión
+  // de mostrarle este detalle. Si es OTRO aprobador mirando una decisión
   // ajena sin firmar, no lo redirigimos — se queda viendo el detalle de
-  // solo lectura con la caja de firma del supervisor vacía.
-  if (decidida && !firmaSupervisor && inspection.supervisorId === session.user.id) {
+  // solo lectura con la caja de firma vacía.
+  const tiposFirmados: TipoFirma[] = [
+    ...(firmaConductor ? [TipoFirma.CONDUCTOR] : []),
+    ...(firmaSupervisor ? [TipoFirma.SUPERVISOR] : []),
+    ...(firmaSupervisorOlariari ? [TipoFirma.SUPERVISOR_OLARIARI] : []),
+  ];
+  if (tipoFirmaPendiente(rol, session.user.id, inspection, tiposFirmados)) {
     redirect(`/aprobaciones/${id}/firma`);
   }
+
+  // Solo decide quien tiene el turno (etapa); el resto ve el detalle en lectura.
+  const puedeDecidir = etapaParaRol(rol, inspection) !== null;
+  const esperaA = esperandoA(inspection);
+  const olariari = inspection.sede === Sede.OLARIARI;
+  const primeraEtapaHecha = olariari && inspection.revisadaSupervisorOlariariAt !== null;
+  // Rechazada en la primera etapa: cerrada, el Director nunca la decidió.
+  const cerradaEnPrimeraEtapa = decidida && primeraEtapaHecha && inspection.supervisorId === null;
+  const observacionDecision = cerradaEnPrimeraEtapa
+    ? inspection.observacionesSupervisorOlariari
+    : inspection.observacionesSupervisor;
 
   const categorias = new Map<
     string,
@@ -66,6 +112,11 @@ export default async function AprobacionDetallePage({
   // solo decide si esta pantalla muestra la advertencia.
   const alertaEstadoConductor = requiereAtencionEstadoConductor(inspection);
 
+  // Qué hay reportado que obliga a confirmar la aprobación (lista vacía = se
+  // aprueba como siempre). La server action lo recalcula; esto solo alimenta
+  // el diálogo.
+  const motivosConfirmacion = motivosConfirmacionAprobacion(inspection);
+
   const ahora = new Date();
   const tecnicomecanicaVencida = Boolean(
     inspection.vehicle.fechaVencimientoTecnicomecanica &&
@@ -75,8 +126,9 @@ export default async function AprobacionDetallePage({
   async function aprobarAction(formData: FormData) {
     "use server";
     const observacion = formData.get("observacion")?.toString();
+    const confirmado = formData.get("confirmado")?.toString() === "true";
     try {
-      await aprobarInspeccion(id, observacion);
+      await aprobarInspeccion(id, observacion, confirmado);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo aprobar la inspección.";
       redirect(`/aprobaciones/${id}?error=${encodeURIComponent(message)}`);
@@ -124,9 +176,15 @@ export default async function AprobacionDetallePage({
       <section className="rounded-md border border-gray-200 p-4 text-sm">
         <dl className="flex flex-col gap-2">
           <div className="flex justify-between">
-            <dt className="text-gray-500">Trabajador</dt>
+            <dt className="text-gray-500">Recorredor</dt>
             <dd className="font-medium">{inspection.worker.name}</dd>
           </div>
+          {inspection.sede && (
+            <div className="flex justify-between">
+              <dt className="text-gray-500">Sede</dt>
+              <dd className="font-medium">{etiquetaSede(inspection.sede)}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt className="text-gray-500">Conductor</dt>
             <dd className="font-medium">{inspection.conductor.name}</dd>
@@ -260,6 +318,31 @@ export default async function AprobacionDetallePage({
         </section>
       )}
 
+      {primeraEtapaHecha && !cerradaEnPrimeraEtapa && (
+        <section className="flex flex-col gap-3 border-t border-gray-200 pt-6">
+          <h2 className="text-sm font-medium text-gray-500">
+            Primera etapa — {etiquetaRol(Role.SUPERVISOR_OLARIARI)}
+          </h2>
+          <div className="rounded-md bg-green-50 p-3 text-sm text-green-900">
+            <p className="font-semibold">
+              ✓ Aprobada por {inspection.supervisorOlariari?.name ?? etiquetaRol(Role.SUPERVISOR_OLARIARI)} el{" "}
+              {formatFechaHora(inspection.revisadaSupervisorOlariariAt)}
+            </p>
+            {inspection.observacionesSupervisorOlariari && (
+              <p className="mt-1">{inspection.observacionesSupervisorOlariari}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FirmaEvidencia
+              etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
+              firma={firmaSupervisorOlariari}
+              nombre={inspection.supervisorOlariari?.name ?? null}
+              cedula={inspection.supervisorOlariari?.cedula ?? null}
+            />
+          </div>
+        </section>
+      )}
+
       {decidida ? (
         <section className="flex flex-col gap-4 border-t border-gray-200 pt-6">
           <h2 className="text-sm font-medium text-gray-500">Decisión</h2>
@@ -269,10 +352,11 @@ export default async function AprobacionDetallePage({
             }`}
           >
             <p className="font-semibold">
-              {inspection.status === "APROBADA" ? "✓ Aprobada" : "✕ Rechazada"} el{" "}
+              {inspection.status === "APROBADA" ? "✓ Aprobada" : "✕ Rechazada"}
+              {cerradaEnPrimeraEtapa ? ` por ${etiquetaRol(Role.SUPERVISOR_OLARIARI)}` : ""} el{" "}
               {formatFechaHora(inspection.reviewedAt)}
             </p>
-            {inspection.observacionesSupervisor && <p className="mt-1">{inspection.observacionesSupervisor}</p>}
+            {observacionDecision && <p className="mt-1">{observacionDecision}</p>}
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -282,13 +366,31 @@ export default async function AprobacionDetallePage({
               nombre={inspection.conductor.name}
               cedula={inspection.conductor.cedula}
             />
-            <FirmaEvidencia
-              etiqueta="Supervisor"
-              firma={firmaSupervisor}
-              nombre={inspection.supervisor?.name ?? null}
-              cedula={inspection.supervisor?.cedula ?? null}
-            />
+            {cerradaEnPrimeraEtapa ? (
+              <FirmaEvidencia
+                etiqueta={etiquetaRol(Role.SUPERVISOR_OLARIARI)}
+                firma={firmaSupervisorOlariari}
+                nombre={inspection.supervisorOlariari?.name ?? null}
+                cedula={inspection.supervisorOlariari?.cedula ?? null}
+              />
+            ) : (
+              <FirmaEvidencia
+                etiqueta={etiquetaRol(Role.SUPERVISOR)}
+                firma={firmaSupervisor}
+                nombre={inspection.supervisor?.name ?? null}
+                cedula={inspection.supervisor?.cedula ?? null}
+              />
+            )}
           </div>
+        </section>
+      ) : !puedeDecidir ? (
+        <section className="flex flex-col gap-3 border-t border-gray-200 pt-6">
+          <h2 className="text-sm font-medium text-gray-500">Decisión</h2>
+          <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-900">
+            {esperaA
+              ? `Esperando la decisión del ${etiquetaRol(esperaA)}.`
+              : "Esta inspección no está pendiente de decisión."}
+          </p>
         </section>
       ) : (
         <section className="flex flex-col gap-3 border-t border-gray-200 pt-6">
@@ -298,26 +400,7 @@ export default async function AprobacionDetallePage({
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
 
-          <form action={aprobarAction} className="flex flex-col gap-3">
-            <div>
-              <label htmlFor="observacion-aprobar" className="mb-1 block text-sm font-medium text-gray-700">
-                Observaciones (opcional)
-              </label>
-              <textarea
-                id="observacion-aprobar"
-                name="observacion"
-                rows={3}
-                placeholder="Comentarios adicionales para el trabajador."
-                className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#2E9BD6] focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full rounded-md bg-green-600 px-4 py-4 text-base font-semibold text-white hover:bg-green-700"
-            >
-              ✓ Aprobar
-            </button>
-          </form>
+          <AprobarInspeccionForm action={aprobarAction} motivos={motivosConfirmacion} />
 
           <form action={rechazarAction} className="flex flex-col gap-3">
             <div>

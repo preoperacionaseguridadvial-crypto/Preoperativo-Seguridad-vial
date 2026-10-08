@@ -12,7 +12,7 @@ import { getSignedReadUrl } from "@/lib/storage/s3";
  * si no hay foto o la firma falla, devuelve null y la UI cae al ícono.
  */
 export async function getDatosInicioTrabajador(workerId: string) {
-  const [vehiculo, inspecciones] = await Promise.all([
+  const [vehiculo, inspecciones, usuario] = await Promise.all([
     getVehiculoDelTrabajador(workerId),
     prisma.inspection.findMany({
       where: { workerId, status: { not: InspectionStatus.CANCELADA } },
@@ -25,9 +25,14 @@ export async function getDatosInicioTrabajador(workerId: string) {
         completedAt: true,
         reviewedAt: true,
         observacionesSupervisor: true,
+        observacionesSupervisorOlariari: true,
+        sede: true,
+        revisadaSupervisorOlariariAt: true,
         fotos: { where: { tipo: "LATERAL" }, take: 1, select: { s3Key: true } },
       },
     }),
+    // Sede: se muestra junto al rol ("Recorredor Olariari") en el saludo.
+    prisma.user.findUnique({ where: { id: workerId }, select: { sede: true } }),
   ]);
 
   const s3Key = inspecciones[0]?.fotos[0]?.s3Key ?? vehiculo?.fotoS3Key ?? null;
@@ -35,13 +40,17 @@ export async function getDatosInicioTrabajador(workerId: string) {
 
   return {
     vehiculo,
+    sede: usuario?.sede ?? null,
     inspecciones: inspecciones.map((inspeccion) => ({
       id: inspeccion.id,
       status: inspeccion.status,
       startedAt: inspeccion.startedAt,
       completedAt: inspeccion.completedAt,
       reviewedAt: inspeccion.reviewedAt,
-      observacionesSupervisor: inspeccion.observacionesSupervisor,
+      // Una rechazada en la primera etapa lleva la observación del Supervisor Olariari.
+      observacionesSupervisor: inspeccion.observacionesSupervisor ?? inspeccion.observacionesSupervisorOlariari,
+      sede: inspeccion.sede,
+      revisadaSupervisorOlariariAt: inspeccion.revisadaSupervisorOlariariAt,
     })),
     fotoVehiculoUrl,
   };

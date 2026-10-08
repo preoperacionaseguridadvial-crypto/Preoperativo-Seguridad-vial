@@ -9,7 +9,9 @@ import { AppHeader } from "@/app/_components/AppHeader";
 // y Gestión — mismo componente, mismo aspecto en los tres roles.
 export default function InspeccionesLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-1 flex-col">
+    // `relative`: ancla del "← Atrás" que cada paso dibuja en la barra del
+    // encabezado (ver _components/BotonAtras.tsx).
+    <div className="relative flex flex-1 flex-col">
       <AppHeader />
       {children}
     </div>

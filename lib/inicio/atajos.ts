@@ -5,18 +5,6 @@ import type { Role } from "@/generated/prisma/client";
 // rutas del proxy (lib/auth/route-roles.ts) para que ningún rol vea un link
 // que luego lo rebote al inicio.
 
-const ETIQUETA_ROL: Record<Role, string> = {
-  TRABAJADOR: "Trabajador",
-  SUPERVISOR: "Supervisor",
-  DIRECTOR: "Director",
-  SST: "SST",
-  ADMINISTRADOR: "Administrador",
-};
-
-export function etiquetaRol(role: Role): string {
-  return ETIQUETA_ROL[role];
-}
-
 /** Primera palabra del nombre (para "Hola, Jorge"); vacío si no hay nombre. */
 export function primerNombre(nombre: string | null | undefined): string {
   return nombre?.trim().split(/\s+/)[0] ?? "";
@@ -71,7 +59,7 @@ const ATAJOS = {
   usuarios: {
     href: "/admin/usuarios",
     titulo: "Usuarios",
-    descripcion: "Trabajadores y vehículos",
+    descripcion: "Recorredores y vehículos",
     icono: "usuarios",
   },
   administracion: {
@@ -91,6 +79,7 @@ const ATAJOS = {
 const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
   TRABAJADOR: [ATAJOS.inspecciones],
   SUPERVISOR: [ATAJOS.aprobaciones, ATAJOS.consulta],
+  SUPERVISOR_OLARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
   DIRECTOR: [ATAJOS.dashboard, ATAJOS.consulta],
   SST: [ATAJOS.dashboard, ATAJOS.consulta, ATAJOS.administracion],
   ADMINISTRADOR: [ATAJOS.usuarios, ATAJOS.configuracion, ATAJOS.dashboard, ATAJOS.consulta],

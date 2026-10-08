@@ -33,13 +33,13 @@ export function TablaInspecciones({
           <tr className="border-b border-border text-xs text-ink-muted">
             <th className="py-2 pr-3 font-medium">Fecha</th>
             <th className="py-2 pr-3 font-medium">Hora</th>
-            <th className="py-2 pr-3 font-medium">Trabajador</th>
+            <th className="py-2 pr-3 font-medium">Recorredor</th>
             <th className="py-2 pr-3 font-medium">Placa</th>
             <th className="py-2 pr-3 text-right font-medium">Km</th>
             <th className="py-2 pr-3 font-medium">Estado</th>
             <th className="py-2 pr-3 font-medium">Resultado</th>
             <th className="py-2 pr-3 text-right font-medium">Novedades</th>
-            <th className="py-2 pr-3 font-medium">Supervisor</th>
+            <th className="py-2 pr-3 font-medium">Director de Operaciones</th>
             <th className="py-2 pr-3 font-medium">Aprobación</th>
             <th className="py-2 font-medium">Acciones</th>
           </tr>
