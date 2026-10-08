@@ -22,6 +22,7 @@ import { prisma } from "@/lib/prisma";
 import {
   Prisma,
   Role,
+  Sede,
   InspectionStatus,
   RespuestaChecklist,
   TipoFirma,
@@ -724,6 +725,51 @@ describe("iniciarInspeccion — el vehículo debe ser el asignado al trabajador"
     loginComo(worker);
 
     await expect(iniciarInspeccion(vehicle.id)).rejects.toThrow(/no corresponde/i);
+  });
+});
+
+describe("iniciarInspeccion — snapshot de la sede del trabajador", () => {
+  it.each([Sede.BOGOTA, Sede.OLARIARI])("guarda la sede %s del trabajador en la inspección", async (sede) => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+      sede,
+    });
+    loginComo(worker);
+
+    const inspection = await iniciarInspeccion(vehicle.id);
+
+    expect(inspection.sede).toBe(sede);
+  });
+
+  it("un cambio posterior de sede del trabajador no altera la inspección ya creada", async () => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+      sede: Sede.OLARIARI,
+    });
+    loginComo(worker);
+    const inspection = await iniciarInspeccion(vehicle.id);
+
+    await prisma.user.update({ where: { id: worker.id }, data: { sede: Sede.BOGOTA } });
+
+    const guardada = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(guardada.sede).toBe(Sede.OLARIARI);
+  });
+
+  it("un trabajador legacy sin sede deja la sede de la inspección en null", async () => {
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.MOTO });
+    const worker = await crearUsuario(Role.TRABAJADOR, {
+      tipoVehiculo: TipoVehiculo.MOTO,
+      vehicleId: vehicle.id,
+    });
+    loginComo(worker);
+
+    const inspection = await iniciarInspeccion(vehicle.id);
+
+    expect(inspection.sede).toBeNull();
   });
 });
 

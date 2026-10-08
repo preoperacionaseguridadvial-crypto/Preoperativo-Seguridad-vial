@@ -11,6 +11,7 @@ const ETIQUETA_ROL: Record<Role, string> = {
   DIRECTOR: "Director",
   SST: "SST",
   ADMINISTRADOR: "Administrador",
+  SUPERVISOR_OLARIARI: "Supervisor Olariari",
 };
 
 export function etiquetaRol(role: Role): string {
@@ -91,6 +92,7 @@ const ATAJOS = {
 const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
   TRABAJADOR: [ATAJOS.inspecciones],
   SUPERVISOR: [ATAJOS.aprobaciones, ATAJOS.consulta],
+  SUPERVISOR_OLARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
   DIRECTOR: [ATAJOS.dashboard, ATAJOS.consulta],
   SST: [ATAJOS.dashboard, ATAJOS.consulta, ATAJOS.administracion],
   ADMINISTRADOR: [ATAJOS.usuarios, ATAJOS.configuracion, ATAJOS.dashboard, ATAJOS.consulta],
