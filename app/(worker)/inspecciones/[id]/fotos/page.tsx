@@ -9,6 +9,7 @@ import {
 } from "@/lib/inspections/queries";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
+import { GuiaFoto } from "@/app/(worker)/inspecciones/_components/GuiaFoto";
 import { SubirFotoInspeccion } from "@/app/(worker)/inspecciones/_components/SubirFotoInspeccion";
 
 // Fotos diarias obligatorias (Fase soporte-moto-carro, Slice 3, A7):
@@ -47,6 +48,9 @@ export default async function FotosInspeccionPage({
     [lateral, placa].map((foto) => (foto ? getSignedReadUrl(foto.s3Key).catch(() => null) : null)),
   );
 
+  // Vehículo legacy sin tipo se trata como MOTO (lo resuelve guiaDeFoto).
+  const tipoVehiculo = inspection.vehicle.tipoVehiculo;
+
   const ambasCompletas = Boolean(lateral && placa);
 
   return (
@@ -61,16 +65,18 @@ export default async function FotosInspeccionPage({
       <SubirFotoInspeccion
         inspectionId={id}
         tipo="lateral"
-        titulo="Foto lateral del vehículo"
+        titulo="1. Foto lateral del vehículo"
         existe={Boolean(lateral)}
+        guia={<GuiaFoto tipo="lateral" tipoVehiculo={tipoVehiculo} compacta={Boolean(lateral)} />}
         urlMiniatura={urlLateral}
       />
 
       <SubirFotoInspeccion
         inspectionId={id}
         tipo="placa"
-        titulo="Foto de la placa"
+        titulo="2. Foto de la placa"
         existe={Boolean(placa)}
+        guia={<GuiaFoto tipo="placa" tipoVehiculo={tipoVehiculo} compacta={Boolean(placa)} />}
         urlMiniatura={urlPlaca}
       />
 

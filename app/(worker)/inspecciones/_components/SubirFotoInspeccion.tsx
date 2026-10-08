@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useReducer, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { comprimirFotoEnNavegador } from "@/lib/imagenes/adaptador-navegador";
 import {
@@ -20,6 +20,8 @@ type Props = {
   existe: boolean;
   /** URL firmada de lectura de la foto guardada (o `null` si no se pudo firmar). */
   urlMiniatura: string | null;
+  /** Guía visual opcional (ver GuiaFoto), se muestra bajo el título. */
+  guia?: ReactNode;
 };
 
 /**
@@ -36,7 +38,7 @@ type Props = {
  * respaldo con server action: la app (Next.js + PWA) ya exige JS en todo el
  * flujo, y un envío sin comprimir fallaría contra el tope de 8 MB.
  */
-export function SubirFotoInspeccion({ inspectionId, tipo, titulo, existe, urlMiniatura }: Props) {
+export function SubirFotoInspeccion({ inspectionId, tipo, titulo, existe, urlMiniatura, guia }: Props) {
   const router = useRouter();
   const [estado, despachar] = useReducer(reducirSubida, ESTADO_INICIAL_SUBIDA);
   const [vistaPrevia, setVistaPrevia] = useState<string | null>(null);
@@ -135,6 +137,8 @@ export function SubirFotoInspeccion({ inspectionId, tipo, titulo, existe, urlMin
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium text-ink">{titulo}</h2>
+
+      {guia}
 
       {imagen && (
         // eslint-disable-next-line @next/next/no-img-element -- Vista previa local (blob:) o URL firmada temporal, no candidata a next/image remoto.
