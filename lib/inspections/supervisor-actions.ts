@@ -3,9 +3,15 @@
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/requireRole";
-import { Role, InspectionStatus } from "@/generated/prisma/client";
+import { Role, InspectionStatus, TipoFirma } from "@/generated/prisma/client";
 import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirmacion-aprobacion";
-import { etapaParaRol, type EtapaAprobacion, type RolAprobador } from "@/lib/inspections/cola-aprobacion";
+import {
+  etapaParaRol,
+  etapaPendiente,
+  type DatosEtapa,
+  type EtapaAprobacion,
+  type RolAprobador,
+} from "@/lib/inspections/cola-aprobacion";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 
 // Server actions de la revisión de los aprobadores (Fase 3 + roles-oleariari).
@@ -47,10 +53,25 @@ async function getInspeccionRevisable(inspectionId: string, role: RolAprobador) 
     throw new Error("Esta inspección ya fue revisada: no se puede volver a decidir.");
   }
 
-  const etapa = etapaParaRol(role, inspection);
+  // La firma del Supervisor Oleariari habilita el paso al Director: se consulta
+  // siempre en la base, nunca se asume.
+  const datosEtapa: DatosEtapa = {
+    ...inspection,
+    firmaSupervisorOleariari:
+      (await prisma.firma.count({
+        where: { inspectionId, tipo: TipoFirma.SUPERVISOR_OLEARIARI },
+      })) > 0,
+  };
+
+  const etapa = etapaParaRol(role, datosEtapa);
   if (etapa === null) {
-    // Distinguimos el caso más común (el Director intentando adelantarse) para
-    // dar un mensaje útil; el resto es "no le corresponde".
+    // Distinguimos los casos más comunes (el Director intentando adelantarse)
+    // para dar un mensaje útil; el resto es "no le corresponde".
+    if (role === Role.SUPERVISOR && etapaPendiente(datosEtapa) === "FIRMA_OLEARIARI") {
+      throw new Error(
+        `Esta inspección todavía espera la firma del ${etiquetaRol(Role.SUPERVISOR_OLEARIARI)}: aún no le corresponde.`,
+      );
+    }
     if (role === Role.SUPERVISOR) {
       throw new Error(
         `Esta inspección todavía está pendiente del ${etiquetaRol(Role.SUPERVISOR_OLEARIARI)}: aún no le corresponde.`,

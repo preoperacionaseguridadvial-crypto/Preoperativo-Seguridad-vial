@@ -42,8 +42,9 @@ export default async function ConsultaInspeccionDetallePage({
   const oleariari = inspection.sede === Sede.OLEARIARI;
   const primeraEtapaHecha = oleariari && inspection.revisadaSupervisorOleariariAt !== null;
   const cerradaEnPrimeraEtapa = decidida && primeraEtapaHecha && inspection.supervisorId === null;
-  const etapaOleariari = estadoEtapaOleariari(inspection);
-  const esperaA = esperandoA(inspection);
+  const datosEtapa = { ...inspection, firmaSupervisorOleariari: firmaSupervisorOleariari !== null };
+  const etapaOleariari = estadoEtapaOleariari(datosEtapa);
+  const esperaA = esperandoA(datosEtapa);
   const observacionDecision = cerradaEnPrimeraEtapa
     ? inspection.observacionesSupervisorOleariari
     : inspection.observacionesSupervisor;

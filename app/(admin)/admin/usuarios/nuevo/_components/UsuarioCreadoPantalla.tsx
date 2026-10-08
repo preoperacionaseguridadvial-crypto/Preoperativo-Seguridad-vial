@@ -54,7 +54,7 @@ export function UsuarioCreadoPantalla({
   email: string;
   password: string;
   role: Role;
-  /** Placa del vehículo creado junto con el usuario (solo TRABAJADOR). */
+  /** Placa del vehículo creado junto con el usuario (solo Recorredor). */
   placa: string | null;
   onCrearOtro: () => void;
 }) {
@@ -87,7 +87,7 @@ export function UsuarioCreadoPantalla({
       />
 
       <div
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-700"
+        className="flex size-14 items-center justify-center rounded-full bg-status-ok-soft text-status-ok-ink"
         aria-hidden="true"
       >
         <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -96,19 +96,25 @@ export function UsuarioCreadoPantalla({
       </div>
 
       <div>
-        <h1 className="text-xl font-semibold text-[#0B3B60]">Usuario creado</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          {name} · <span className="text-xs">{etiquetaRol(role)}</span>
+        <h1 className="text-xl font-semibold text-ink">Usuario creado</h1>
+        <p className="mt-1 text-sm text-ink">
+          {name}{" "}
+          <span className="ml-1 rounded-full bg-status-info-soft px-2 py-0.5 text-xs font-semibold text-status-info-ink">
+            {etiquetaRol(role)}
+          </span>
         </p>
       </div>
 
-      <div className="flex w-full flex-col gap-4 rounded-md border border-[#D9E2EA] bg-white p-4 text-left">
+      <div className="flex w-full flex-col gap-4 rounded-xl border border-border bg-surface p-4 text-left shadow-sm">
         {placa && (
-          <p className="text-sm text-gray-600">
-            Vehículo asignado: <span className="font-mono font-semibold text-[#0B3B60]">{placa}</span>
+          <p className="text-sm text-ink-muted">
+            Vehículo asignado:{" "}
+            <span className="rounded-md border border-ink/20 bg-[#fde047] px-2 py-0.5 font-mono text-sm font-bold tracking-wider text-ink">
+              {placa}
+            </span>
           </p>
         )}
-        <h2 className="text-sm font-medium text-gray-500">Credenciales de acceso</h2>
+        <h2 className="text-sm font-semibold text-ink">Credenciales de acceso</h2>
         <FilaCredencial
           id="credencial-email"
           etiqueta="Email"
@@ -126,17 +132,17 @@ export function UsuarioCreadoPantalla({
         <button
           type="button"
           onClick={() => copiar("todo", `Email: ${email}\nContraseña: ${password}`)}
-          className="w-full rounded-md bg-[#0B3B60] px-4 py-3 text-sm font-semibold text-white hover:bg-[#0B3B60]/90"
+          className="min-h-12 w-full rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 active:opacity-90"
         >
           {copiado === "todo" ? "Copiado" : "Copiar credenciales"}
         </button>
       </div>
 
-      <p role="status" aria-live="polite" className="min-h-5 text-sm text-green-700">
+      <p role="status" aria-live="polite" className="min-h-5 text-sm text-status-ok-ink">
         {aviso}
       </p>
 
-      <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      <p className="rounded-xl bg-status-warn-soft px-3 py-2 text-sm text-status-warn-ink">
         Copia y entrega estas credenciales ahora: la contraseña no se volverá a mostrar. Si se
         pierde, hay que restablecerla desde la edición del usuario.
       </p>
@@ -145,11 +151,11 @@ export function UsuarioCreadoPantalla({
         <button
           type="button"
           onClick={onCrearOtro}
-          className="w-full rounded-md border border-[#0B3B60] px-4 py-3 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
+          className="min-h-12 w-full rounded-xl border border-brand px-4 text-sm font-semibold text-brand hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
         >
           Crear otro usuario
         </button>
-        <Link href="/admin/usuarios" className="text-sm text-[#005B96] hover:underline">
+        <Link href="/admin/usuarios" className="inline-flex min-h-11 items-center justify-center text-sm font-medium text-brand hover:underline">
           Volver a usuarios
         </Link>
       </div>
@@ -172,7 +178,7 @@ function FilaCredencial({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium text-gray-700">
+      <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink">
         {etiqueta}
       </label>
       <div className="flex gap-2">
@@ -181,12 +187,12 @@ function FilaCredencial({
           readOnly
           value={valor}
           onFocus={(e) => e.currentTarget.select()}
-          className="min-w-0 flex-1 select-all rounded-md border border-gray-300 bg-gray-50 px-3 py-3 font-mono text-base text-[#0B3B60] focus:border-[#005B96] focus:outline-none"
+          className="min-h-12 min-w-0 flex-1 select-all rounded-lg border border-border bg-page px-3 font-mono text-base text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
         />
         <button
           type="button"
           onClick={onCopiar}
-          className="shrink-0 rounded-md border border-[#0B3B60] px-4 py-3 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
+          className="min-h-12 shrink-0 rounded-lg border border-brand px-4 text-sm font-semibold text-brand hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
         >
           {copiado ? "Copiado" : "Copiar"}
         </button>

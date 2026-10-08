@@ -1,7 +1,7 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, type Sede } from "@/generated/prisma/client";
+import { InspectionStatus, TipoFirma, type Sede } from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { whereColaPendientes, type RolAprobador } from "@/lib/inspections/cola-aprobacion";
 import { finDiaBogotaDeFecha, inicioDiaBogotaDeFecha } from "@/lib/fechas/formato";
@@ -246,7 +246,13 @@ export function getAllInspeccionesForOversight(filtros?: FiltrosInspecciones) {
       // tabla de detalle del dashboard ejecutivo y la exportación a Excel
       // (lib/inspections/reportes-queries.ts / app/api/reportes/excel), que
       // solo necesitan "cuántas", no el detalle de cada una.
-      _count: { select: { novedades: true } },
+      // `firmas` filtrado: solo si el Supervisor Oleariari ya firmó (cola del Director).
+      _count: {
+        select: {
+          novedades: true,
+          firmas: { where: { tipo: TipoFirma.SUPERVISOR_OLEARIARI } },
+        },
+      },
     },
     orderBy: { startedAt: "desc" },
   });

@@ -6,8 +6,9 @@ import { actualizarUsuario, restablecerPassword } from "@/lib/admin/user-actions
 import { leerVehiculoDeFormulario } from "@/lib/admin/hoja-de-vida";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { Role, Sede, TipoVehiculo } from "@/generated/prisma/client";
-import { CamposVehiculo } from "../_components/CamposVehiculo";
-import { SelectorRolYSede } from "../_components/SelectorRolYSede";
+import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
+import { EditarUsuarioForm } from "./_components/EditarUsuarioForm";
+import { CampoPassword, ResumenError } from "../_components/ui-formulario";
 
 function toDateInputValue(date: Date | null): string {
   if (!date) return "";
@@ -52,6 +53,16 @@ export default async function EditarUsuarioPage({
     fechaVencimientoSoat: toDateInputValue(vehiculo?.fechaVencimientoSoat ?? null),
     fechaVencimientoTecnicomecanica: toDateInputValue(vehiculo?.fechaVencimientoTecnicomecanica ?? null),
   };
+  const valores: Record<string, string> = {
+    ...valoresVehiculo,
+    name: usuario.name,
+    email: usuario.email,
+    sede: usuario.sede ?? "",
+    cedula: usuario.cedula ?? "",
+    telefono: usuario.telefono ?? "",
+    cargo: usuario.cargo ?? "",
+    puestoAsignado: usuario.puestoAsignado ?? "",
+  };
 
   async function actualizarAction(formData: FormData) {
     "use server";
@@ -91,187 +102,71 @@ export default async function EditarUsuarioPage({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 px-4 py-8">
       <div>
-        <Link href="/admin/usuarios" className="text-sm text-[#005B96] hover:underline">
+        <Link
+          href="/admin/usuarios"
+          className="inline-flex min-h-11 items-center text-sm font-medium text-brand hover:underline"
+        >
           ← Usuarios
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-[#0B3B60]">{usuario.name}</h1>
-        <p className="text-sm text-gray-500">{usuario.email}</p>
+        <h1 className="text-xl font-semibold text-ink">{usuario.name}</h1>
+        <p className="text-sm text-ink-muted">
+          {usuario.email} · {etiquetaUsuario(usuario.role, usuario.sede)}
+        </p>
         <Link
           href={`/admin/usuarios/${usuario.id}/hoja-de-vida`}
-          className="mt-2 inline-block text-sm text-[#005B96] hover:underline"
+          className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-brand hover:underline"
         >
           Ver hoja de vida
         </Link>
       </div>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <ResumenError mensaje={error} />}
 
-      <form
+      <EditarUsuarioForm
         action={actualizarAction}
-        encType="multipart/form-data"
-        className="flex flex-col gap-4 rounded-md border border-gray-200 bg-white p-4"
-      >
+        valores={valores}
+        rolInicial={usuario.role}
+        conductorActivo={usuario.conductorActivo}
+        usuarioActivo={usuario.activo}
+        fotoActualUrl={fotoActualUrl}
+        vehiculoActivo={vehiculo?.activo}
+        cedulaPendiente={!usuario.cedula && usuario.role === Role.TRABAJADOR}
+        vehiculoPendiente={usuario.role === Role.TRABAJADOR && !vehiculo}
+      />
+
+      <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm">
         <div>
-          <label htmlFor="name" className="mb-1 block text-sm font-medium text-gray-700">
-            Nombre completo
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            required
-            defaultValue={usuario.name}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            defaultValue={usuario.email}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
-        </div>
-
-        <SelectorRolYSede rolInicial={usuario.role} sedeInicial={usuario.sede ?? ""} />
-
-        <div>
-          <label htmlFor="cedula" className="mb-1 block text-sm font-medium text-gray-700">
-            Cédula
-          </label>
-          <input
-            id="cedula"
-            name="cedula"
-            type="text"
-            defaultValue={usuario.cedula ?? ""}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
-          {!usuario.cedula && usuario.role === Role.TRABAJADOR && (
-            <p className="mt-1 text-xs font-medium text-amber-600">Pendiente de asignación.</p>
-          )}
-        </div>
-
-        {/* Sección de vehículo (1:1). Siempre visible porque el rol puede
-            cambiar en este mismo envío; solo aplica a TRABAJADOR y un legacy sin
-            vehículo puede dejarla vacía (la validación real es la del servidor). */}
-        {usuario.role === Role.TRABAJADOR && !vehiculo && (
-          <p className="text-xs font-medium text-amber-600">
-            Pendiente de asignación de vehículo: completa la hoja de vida del vehículo abajo.
+          <h2 className="text-base font-semibold text-ink">Restablecer contraseña</h2>
+          <p className="text-sm text-ink-muted">
+            Esto no afecta el resto de los datos del usuario. Comunica la contraseña nueva por fuera del sistema.
           </p>
-        )}
-        <CamposVehiculo
-          valores={valoresVehiculo}
-          modo="edicion"
-          fotoActualUrl={fotoActualUrl}
-          activo={vehiculo?.activo}
-        />
-
-        <div>
-          <label htmlFor="puestoAsignado" className="mb-1 block text-sm font-medium text-gray-700">
-            Puesto asignado
-          </label>
-          <input
-            id="puestoAsignado"
-            name="puestoAsignado"
-            type="text"
-            defaultValue={usuario.puestoAsignado ?? ""}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
         </div>
 
-        <div>
-          <label htmlFor="telefono" className="mb-1 block text-sm font-medium text-gray-700">
-            Teléfono
-          </label>
-          <input
-            id="telefono"
-            name="telefono"
-            type="tel"
-            defaultValue={usuario.telefono ?? ""}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="cargo" className="mb-1 block text-sm font-medium text-gray-700">
-            Cargo
-          </label>
-          <input
-            id="cargo"
-            name="cargo"
-            type="text"
-            defaultValue={usuario.cargo ?? ""}
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
-        </div>
-
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            name="conductorActivo"
-            defaultChecked={usuario.conductorActivo}
-            className="h-5 w-5 rounded border-gray-300 text-[#005B96] focus:ring-[#005B96]"
-          />
-          Conductor activo
-        </label>
-
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            name="activo"
-            defaultChecked={usuario.activo}
-            className="h-5 w-5 rounded border-gray-300 text-[#005B96] focus:ring-[#005B96]"
-          />
-          Usuario activo
-        </label>
-
-        <button
-          type="submit"
-          className="w-full rounded-md bg-[#0B3B60] px-4 py-4 text-base font-semibold text-white hover:bg-[#0B3B60]/90"
-        >
-          Guardar cambios
-        </button>
-      </form>
-
-      <section className="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-medium text-gray-500">Restablecer contraseña</h2>
-        <p className="text-xs text-gray-500">
-          Esto no afecta el resto de los datos del usuario. Comunicá la contraseña nueva por fuera del sistema.
-        </p>
-
-        {passwordError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{passwordError}</p>}
+        {passwordError && <ResumenError mensaje={passwordError} />}
         {passwordOk && (
-          <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">Contraseña restablecida.</p>
+          <p role="status" className="rounded-xl bg-status-ok-soft px-3 py-2 text-sm font-medium text-status-ok-ink">
+            Contraseña restablecida.
+          </p>
         )}
 
         <form action={restablecerAction} className="flex flex-col gap-3">
-          <input
-            type="password"
-            name="newPassword"
-            required
-            minLength={8}
-            placeholder="Contraseña nueva (mínimo 8 caracteres)"
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
-          <input
-            type="password"
-            name="newPasswordConfirmacion"
-            required
-            minLength={8}
-            placeholder="Confirmar contraseña nueva"
-            className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none"
-          />
+          <div>
+            <label htmlFor="newPassword" className="mb-1 block text-sm font-medium text-ink">
+              Contraseña nueva
+            </label>
+            <CampoPassword id="newPassword" nombre="newPassword" placeholder="Mínimo 8 caracteres" />
+          </div>
+          <div>
+            <label htmlFor="newPasswordConfirmacion" className="mb-1 block text-sm font-medium text-ink">
+              Confirmar contraseña nueva
+            </label>
+            <CampoPassword id="newPasswordConfirmacion" nombre="newPasswordConfirmacion" />
+          </div>
           <button
             type="submit"
-            className="w-full rounded-md border border-[#0B3B60] px-4 py-3 text-sm font-semibold text-[#0B3B60] hover:bg-[#0B3B60]/10"
+            className="min-h-12 w-full rounded-xl border border-brand px-4 text-sm font-semibold text-brand hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
           >
             Restablecer contraseña
           </button>

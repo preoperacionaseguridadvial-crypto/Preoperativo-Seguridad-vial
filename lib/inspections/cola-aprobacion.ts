@@ -9,8 +9,10 @@ import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 //
 // - Bogotá (y una inspección legacy sin sede): una sola etapa, el Director de
 //   Operaciones (rol SUPERVISOR).
-// - Oleariari: primero el Supervisor Oleariari; si aprueba, pasa a la cola del
-//   Director sin cambiar el `status`; si rechaza, la inspección se cierra.
+// - Oleariari: primero el Supervisor Oleariari; si aprueba, debe FIRMAR su
+//   decisión y solo entonces pasa a la cola del Director (sin cambiar el
+//   `status`); si rechaza, la inspección se cierra. Entre su aprobación y su
+//   firma nadie puede decidir: se espera su firma.
 
 const ESTADOS_REVISABLES: InspectionStatus[] = [
   InspectionStatus.PENDIENTE_APROBACION,
@@ -19,6 +21,8 @@ const ESTADOS_REVISABLES: InspectionStatus[] = [
 
 export type RolAprobador = typeof Role.SUPERVISOR | typeof Role.SUPERVISOR_OLEARIARI;
 export type EtapaAprobacion = "OLEARIARI" | "DIRECTOR";
+/** Etapa pendiente: además de las decidibles, la espera de la firma del Supervisor Oleariari. */
+export type EtapaPendiente = EtapaAprobacion | "FIRMA_OLEARIARI";
 
 export function esRolAprobador(role: Role): role is RolAprobador {
   return role === Role.SUPERVISOR || role === Role.SUPERVISOR_OLEARIARI;
@@ -30,6 +34,8 @@ export type DatosEtapa = {
   sede: Sede | null;
   reviewedAt: Date | null;
   revisadaSupervisorOleariariAt: Date | null;
+  /** Existe una Firma de tipo SUPERVISOR_OLEARIARI en la inspección. Obligatorio: nunca se asume. */
+  firmaSupervisorOleariari: boolean;
   supervisorId?: string | null;
   supervisorOleariariId?: string | null;
 };
@@ -48,18 +54,25 @@ export function whereColaPendientes(role: RolAprobador): Prisma.InspectionWhereI
     OR: [
       { sede: Sede.BOGOTA },
       { sede: null },
-      { sede: Sede.OLEARIARI, revisadaSupervisorOleariariAt: { not: null } },
+      {
+        sede: Sede.OLEARIARI,
+        revisadaSupervisorOleariariAt: { not: null },
+        firmas: { some: { tipo: TipoFirma.SUPERVISOR_OLEARIARI } },
+      },
     ],
   };
 }
 
 /** Etapa que está esperando la inspección, o `null` si no es revisable (ya decidida, en proceso...). */
-export function etapaPendiente(inspection: DatosEtapa): EtapaAprobacion | null {
+export function etapaPendiente(inspection: DatosEtapa): EtapaPendiente | null {
   if (!ESTADOS_REVISABLES.includes(inspection.status) || inspection.reviewedAt !== null) {
     return null;
   }
   if (inspection.sede === Sede.OLEARIARI && inspection.revisadaSupervisorOleariariAt === null) {
     return "OLEARIARI";
+  }
+  if (inspection.sede === Sede.OLEARIARI && !inspection.firmaSupervisorOleariari) {
+    return "FIRMA_OLEARIARI";
   }
   return "DIRECTOR";
 }
@@ -76,13 +89,20 @@ export function etapaParaRol(role: Role, inspection: DatosEtapa): EtapaAprobacio
 export function esperandoA(inspection: DatosEtapa): RolAprobador | null {
   const etapa = etapaPendiente(inspection);
   if (etapa === null) return null;
-  return etapa === "OLEARIARI" ? Role.SUPERVISOR_OLEARIARI : Role.SUPERVISOR;
+  return etapa === "DIRECTOR" ? Role.SUPERVISOR : Role.SUPERVISOR_OLEARIARI;
 }
 
-/** "Esperando aprobación del Supervisor Oleariari" / "...del Director de Operaciones". */
+/**
+ * "Esperando aprobación del Supervisor Oleariari" / "...del Director de
+ * Operaciones" / "Esperando la firma del Supervisor Oleariari".
+ */
 export function textoEsperandoAprobacion(inspection: DatosEtapa): string | null {
   const rol = esperandoA(inspection);
-  return rol === null ? null : `Esperando aprobación del ${etiquetaRol(rol)}`;
+  if (rol === null) return null;
+  if (etapaPendiente(inspection) === "FIRMA_OLEARIARI") {
+    return `Esperando la firma del ${etiquetaRol(rol)}`;
+  }
+  return `Esperando aprobación del ${etiquetaRol(rol)}`;
 }
 
 /**
@@ -98,6 +118,9 @@ export function estadoEtapaOleariari(inspection: DatosEtapa): string | null {
     return ESTADOS_REVISABLES.includes(inspection.status) ? `Pendiente ${supOleariari}` : null;
   }
   if (inspection.reviewedAt === null) {
+    if (!inspection.firmaSupervisorOleariari) {
+      return `Aprobada por ${supOleariari} · pendiente de su firma`;
+    }
     return `Aprobada por ${supOleariari} · pendiente ${director}`;
   }
   // Decidida. Si el Director no intervino, la rechazó el Supervisor Oleariari.

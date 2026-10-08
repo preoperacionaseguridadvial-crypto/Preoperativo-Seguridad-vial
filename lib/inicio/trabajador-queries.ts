@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus } from "@/generated/prisma/client";
+import { InspectionStatus, TipoFirma } from "@/generated/prisma/client";
 import { getVehiculoDelTrabajador } from "@/lib/inspections/queries";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 
@@ -28,6 +28,7 @@ export async function getDatosInicioTrabajador(workerId: string) {
         observacionesSupervisorOleariari: true,
         sede: true,
         revisadaSupervisorOleariariAt: true,
+        _count: { select: { firmas: { where: { tipo: TipoFirma.SUPERVISOR_OLEARIARI } } } },
         fotos: { where: { tipo: "LATERAL" }, take: 1, select: { s3Key: true } },
       },
     }),
@@ -51,6 +52,7 @@ export async function getDatosInicioTrabajador(workerId: string) {
       observacionesSupervisor: inspeccion.observacionesSupervisor ?? inspeccion.observacionesSupervisorOleariari,
       sede: inspeccion.sede,
       revisadaSupervisorOleariariAt: inspeccion.revisadaSupervisorOleariariAt,
+      firmaSupervisorOleariari: inspeccion._count.firmas > 0,
     })),
     fotoVehiculoUrl,
   };

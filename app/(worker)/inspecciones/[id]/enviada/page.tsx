@@ -4,19 +4,28 @@ import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound, getFirmasInspeccion } from "@/lib/inspections/queries";
 import { Role } from "@/generated/prisma/enums";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
-import { esperandoA } from "@/lib/inspections/cola-aprobacion";
+import { esperandoA, etapaPendiente, type DatosEtapa } from "@/lib/inspections/cola-aprobacion";
 import { formatFechaHora } from "@/lib/fechas/formato";
 
 // Quién aprueba depende de la sede (roles-oleariari): en Oleariari pasa primero
 // por el Supervisor Oleariari y después por el Director de Operaciones.
-function mensajeEstado(inspection: Awaited<ReturnType<typeof getOwnInspectionOrNotFound>>): string {
+function mensajeEstado(
+  inspection: Awaited<ReturnType<typeof getOwnInspectionOrNotFound>>,
+  firmaSupervisorOleariari: boolean,
+): string {
   const director = etiquetaRol(Role.SUPERVISOR);
   const supOleariari = etiquetaRol(Role.SUPERVISOR_OLEARIARI);
-  const revisor = esperandoA(inspection);
+  const datosEtapa: DatosEtapa = { ...inspection, firmaSupervisorOleariari };
+  const revisor = esperandoA(datosEtapa);
+  const esperaFirma = etapaPendiente(datosEtapa) === "FIRMA_OLEARIARI";
   switch (inspection.status) {
     case "PENDIENTE_APROBACION":
+      if (esperaFirma) return `Tu inspección fue enviada. Esperando la firma del ${supOleariari}.`;
       return `Tu inspección fue enviada y quedó pendiente de aprobación del ${revisor ? etiquetaRol(revisor) : director}.`;
     case "NO_APTA_PARA_OPERAR":
+      if (esperaFirma) {
+        return `Tu inspección fue enviada. El vehículo quedó marcado como NO apto para operar; esperando la firma del ${supOleariari}.`;
+      }
       return `Tu inspección fue enviada. El vehículo quedó marcado como NO apto para operar; lo revisará el ${revisor ? etiquetaRol(revisor) : director}.`;
     case "APROBADA":
       return `Tu inspección fue aprobada por el ${director}.`;
@@ -63,7 +72,7 @@ export default async function InspeccionEnviadaPage({
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center gap-4 px-4 py-16 text-center">
       <h1 className="text-2xl font-semibold text-[#0B3B60]">Inspección enviada</h1>
       <p className="text-sm text-gray-600">
-        {mensajeEstado(inspection)}
+        {mensajeEstado(inspection, firmaSupervisorOleariari !== null)}
       </p>
 
       {(firmaConductor || firmaSupervisorOleariari || firmaSupervisor) && (
