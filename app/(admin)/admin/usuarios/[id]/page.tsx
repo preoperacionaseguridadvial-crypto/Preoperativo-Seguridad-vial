@@ -6,9 +6,10 @@ import { actualizarUsuario, restablecerPassword } from "@/lib/admin/user-actions
 import { leerVehiculoDeFormulario } from "@/lib/admin/hoja-de-vida";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { Role, TipoVehiculo } from "@/generated/prisma/client";
+import { ROLES_ASIGNABLES, etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { CamposVehiculo } from "../_components/CamposVehiculo";
 
-const ROLES: Role[] = [Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR, Role.SST, Role.ADMINISTRADOR];
+const ROLES = ROLES_ASIGNABLES;
 
 function toDateInputValue(date: Date | null): string {
   if (!date) return "";
@@ -154,7 +155,7 @@ export default async function EditarUsuarioPage({
           >
             {ROLES.map((rol) => (
               <option key={rol} value={rol}>
-                {rol}
+                {etiquetaRol(rol)}
               </option>
             ))}
           </select>

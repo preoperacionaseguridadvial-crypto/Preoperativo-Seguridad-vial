@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, Role } from "@/generated/prisma/client";
+import { InspectionStatus, Role, Sede } from "@/generated/prisma/client";
 import { getDatosInicioTrabajador } from "@/lib/inicio/trabajador-queries";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 
@@ -17,6 +17,14 @@ describe("getDatosInicioTrabajador", () => {
     expect(datos.vehiculo).toBeNull();
     expect(datos.inspecciones).toEqual([]);
     expect(datos.fotoVehiculoUrl).toBeNull();
+  });
+
+  it("devuelve la sede del trabajador (null si es legacy sin sede)", async () => {
+    const olariari = await crearUsuario(Role.TRABAJADOR, { sede: Sede.OLARIARI });
+    const legacy = await crearUsuario(Role.TRABAJADOR);
+
+    expect((await getDatosInicioTrabajador(olariari.id)).sede).toBe(Sede.OLARIARI);
+    expect((await getDatosInicioTrabajador(legacy.id)).sede).toBeNull();
   });
 
   it("trae su vehículo y sus últimas 3 inspecciones no canceladas, la más reciente primero", async () => {

@@ -3,8 +3,9 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getUsuarios } from "@/lib/admin/queries";
 import { Role } from "@/generated/prisma/client";
+import { ROLES_ASIGNABLES, etiquetaRol, etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
 
-const ROLES_FILTRO = Object.values(Role);
+const ROLES_FILTRO = ROLES_ASIGNABLES;
 
 type SearchParams = { q?: string; rol?: string; estado?: string };
 
@@ -79,7 +80,7 @@ export default async function AdminUsuariosPage({
             <option value="">Todos</option>
             {ROLES_FILTRO.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {etiquetaRol(r)}
               </option>
             ))}
           </select>
@@ -137,7 +138,7 @@ export default async function AdminUsuariosPage({
                   <tr key={usuario.id} className="border-b border-gray-100 last:border-0">
                     <td className="py-2 pr-2 font-medium text-[#0B3B60]">{usuario.name}</td>
                     <td className="py-2 pr-2">{usuario.email}</td>
-                    <td className="py-2 pr-2 font-mono text-xs">{usuario.role}</td>
+                    <td className="py-2 pr-2">{etiquetaUsuario(usuario.role, usuario.sede)}</td>
                     <td className="py-2 pr-2">{usuario.cedula ?? "—"}</td>
                     <td className="py-2 pr-2">
                       {usuario.vehicle ? (

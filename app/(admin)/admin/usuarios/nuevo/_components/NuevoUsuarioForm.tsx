@@ -6,10 +6,11 @@ import { crearUsuarioDesdeFormulario } from "@/lib/admin/user-actions";
 // `enums` y no `client`: este es un Client Component y `client` arrastraría
 // el cliente de Prisma (pg) al bundle del navegador.
 import { Role } from "@/generated/prisma/enums";
+import { ROLES_ASIGNABLES, etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { CamposVehiculo } from "../../_components/CamposVehiculo";
 import { UsuarioCreadoPantalla } from "./UsuarioCreadoPantalla";
 
-const ROLES: Role[] = [Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR, Role.SST, Role.ADMINISTRADOR];
+const ROLES = ROLES_ASIGNABLES;
 
 const CLASE_INPUT =
   "w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none";
@@ -131,7 +132,7 @@ function FormularioAlta({ onCrearOtro }: { onCrearOtro: () => void }) {
             </option>
             {ROLES.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {etiquetaRol(r)}
               </option>
             ))}
           </select>
@@ -142,7 +143,7 @@ function FormularioAlta({ onCrearOtro }: { onCrearOtro: () => void }) {
             Cédula
           </label>
           <input id="cedula" name="cedula" type="text" defaultValue={valor("cedula")} className={CLASE_INPUT} />
-          <p className="mt-1 text-xs text-gray-500">Obligatoria si el rol es Trabajador.</p>
+          <p className="mt-1 text-xs text-gray-500">Obligatoria si el rol es Recorredor.</p>
         </div>
 
         {(rol || valor("role")) === Role.TRABAJADOR && (

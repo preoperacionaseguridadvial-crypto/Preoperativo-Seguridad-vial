@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import type { Role } from "@/generated/prisma/enums";
+import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 
 type Copiable = "email" | "password" | "todo";
 
@@ -51,7 +53,7 @@ export function UsuarioCreadoPantalla({
   name: string;
   email: string;
   password: string;
-  role: string;
+  role: Role;
   /** Placa del vehículo creado junto con el usuario (solo TRABAJADOR). */
   placa: string | null;
   onCrearOtro: () => void;
@@ -96,7 +98,7 @@ export function UsuarioCreadoPantalla({
       <div>
         <h1 className="text-xl font-semibold text-[#0B3B60]">Usuario creado</h1>
         <p className="mt-1 text-sm text-gray-600">
-          {name} · <span className="font-mono text-xs">{role}</span>
+          {name} · <span className="text-xs">{etiquetaRol(role)}</span>
         </p>
       </div>
 

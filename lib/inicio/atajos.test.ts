@@ -1,17 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Role } from "@/generated/prisma/client";
 import { puedeAccederARuta } from "@/lib/auth/route-roles";
-import { atajosPorRol, etiquetaRol, fechaLegible, primerNombre } from "@/lib/inicio/atajos";
-
-describe("etiquetaRol", () => {
-  it("devuelve una etiqueta legible para cada rol", () => {
-    expect(etiquetaRol(Role.TRABAJADOR)).toBe("Trabajador");
-    expect(etiquetaRol(Role.SUPERVISOR)).toBe("Supervisor");
-    expect(etiquetaRol(Role.DIRECTOR)).toBe("Director");
-    expect(etiquetaRol(Role.SST)).toBe("SST");
-    expect(etiquetaRol(Role.ADMINISTRADOR)).toBe("Administrador");
-  });
-});
+import { atajosPorRol, fechaLegible, primerNombre } from "@/lib/inicio/atajos";
 
 describe("primerNombre", () => {
   it("toma la primera palabra del nombre", () => {

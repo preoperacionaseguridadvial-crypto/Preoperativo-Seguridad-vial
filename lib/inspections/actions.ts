@@ -135,7 +135,7 @@ export async function iniciarInspeccion(vehicleId: string) {
   });
   if (!trabajador?.vehicleId) {
     throw new Error(
-      "Pendiente de asignación de vehículo: solicita a SST o al Administrador que complete tu hoja de vida.",
+      "Pendiente de asignación de vehículo: solicita al Administrador SST o al Administrador que complete tu hoja de vida.",
     );
   }
   if (trabajador.vehicleId !== vehicleId) {
