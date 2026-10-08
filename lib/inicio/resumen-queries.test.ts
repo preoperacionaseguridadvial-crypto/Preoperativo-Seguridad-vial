@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { InspectionStatus, Role } from "@/generated/prisma/client";
 import {
   getResumenDelDia,
-  getResumenSupervisor,
   getVehiculosConDocumentosPorVencer,
 } from "@/lib/inicio/resumen-queries";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
@@ -24,28 +23,6 @@ async function crearInspeccion(
     data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id, status, ...extra },
   });
 }
-
-describe("getResumenSupervisor", () => {
-  beforeEach(async () => {
-    await limpiarBaseDeTest();
-  });
-
-  it("sin pendientes: ceros", async () => {
-    expect(await getResumenSupervisor()).toEqual({ pendientes: 0, requierenAtencion: 0 });
-  });
-
-  it("cuenta pendientes y las que requieren atención con la misma definición de aprobaciones", async () => {
-    await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
-    await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { consumioAlcohol: true });
-    await crearInspeccion(InspectionStatus.NO_APTA_PARA_OPERAR);
-    // No cuentan: ya revisada, aprobada, en proceso.
-    await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { reviewedAt: new Date() });
-    await crearInspeccion(InspectionStatus.APROBADA);
-    await crearInspeccion(InspectionStatus.EN_PROCESO);
-
-    expect(await getResumenSupervisor()).toEqual({ pendientes: 3, requierenAtencion: 2 });
-  });
-});
 
 describe("getResumenDelDia", () => {
   beforeEach(async () => {

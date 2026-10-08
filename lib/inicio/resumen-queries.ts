@@ -2,25 +2,12 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { InspectionStatus } from "@/generated/prisma/client";
 import { DIAS_POR_VENCER } from "@/lib/admin/vencimientos";
-import { requiereAtencionPendiente } from "@/lib/inspections/estado-conductor";
 import { WHERE_PENDIENTES } from "@/lib/inspections/supervisor-queries";
 import { rangoDiaBogota } from "@/lib/inicio/rango-dia";
 import { alertasDocumentosVehiculo } from "@/lib/inicio/vencimientos-vehiculo";
 
 // Resúmenes de la pantalla de inicio por rol (SUPERVISOR, DIRECTOR/SST,
 // ADMINISTRADOR/SST). Solo lectura, una consulta agregada por resumen.
-
-/** SUPERVISOR: cuántas inspecciones esperan su revisión y cuántas requieren atención (misma definición que /aprobaciones). */
-export async function getResumenSupervisor() {
-  const pendientes = await prisma.inspection.findMany({
-    where: WHERE_PENDIENTES,
-    select: { status: true, tomaMedicamentos: true, condicionesAptas: true, consumioAlcohol: true },
-  });
-  return {
-    pendientes: pendientes.length,
-    requierenAtencion: pendientes.filter(requiereAtencionPendiente).length,
-  };
-}
 
 /**
  * DIRECTOR/SST: KPIs de hoy (día calendario de Bogotá, por `startedAt` como

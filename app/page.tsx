@@ -2,11 +2,9 @@ import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { atajosPorRol } from "@/lib/inicio/atajos";
 import { getDatosInicioTrabajador } from "@/lib/inicio/trabajador-queries";
-import {
-  getResumenDelDia,
-  getResumenSupervisor,
-  getVehiculosConDocumentosPorVencer,
-} from "@/lib/inicio/resumen-queries";
+import { getResumenDelDia, getVehiculosConDocumentosPorVencer } from "@/lib/inicio/resumen-queries";
+import { getPendientesConFoto } from "@/lib/inspections/pendientes-con-foto";
+import { ordenarPendientesPorAtencion } from "@/lib/inspections/partir-pendientes";
 import { AppHeader } from "@/app/_components/AppHeader";
 import { SaludoInicio } from "@/app/_components/inicio/SaludoInicio";
 import { AtajosInicio } from "@/app/_components/inicio/AtajosInicio";
@@ -47,9 +45,9 @@ export default async function Home({
   const rol = user.role;
   // Aviso "aprobada/rechazada y firmada" al volver de firmar (solo Supervisor).
   const avisoDecision = rol === "SUPERVISOR" ? avisoDecisionFirmada(await searchParams) : null;
-  const [datosTrabajador, resumenSupervisor, resumenDia, vencimientos] = await Promise.all([
+  const [datosTrabajador, pendientes, resumenDia, vencimientos] = await Promise.all([
     rol === "TRABAJADOR" ? getDatosInicioTrabajador(user.id) : null,
-    rol === "SUPERVISOR" ? getResumenSupervisor() : null,
+    rol === "SUPERVISOR" ? getPendientesConFoto().then(ordenarPendientesPorAtencion) : null,
     rol === "DIRECTOR" || rol === "SST" ? getResumenDelDia(ahora) : null,
     rol === "ADMINISTRADOR" || rol === "SST" ? getVehiculosConDocumentosPorVencer(ahora) : null,
   ]);
@@ -64,7 +62,7 @@ export default async function Home({
           <PanelTrabajador datos={datosTrabajador} ahora={ahora} />
         ) : (
           <>
-            {resumenSupervisor && <ResumenSupervisor resumen={resumenSupervisor} />}
+            {pendientes && <ResumenSupervisor pendientes={pendientes} ahora={ahora} />}
             {resumenDia && <ResumenDelDia resumen={resumenDia} />}
             <AtajosInicio atajos={atajosPorRol(rol)} />
             {vencimientos && <VencimientosVehiculos vehiculos={vencimientos} />}
