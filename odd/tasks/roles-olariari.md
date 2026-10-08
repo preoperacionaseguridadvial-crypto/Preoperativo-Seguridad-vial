@@ -48,7 +48,7 @@ User (2026-10-07): the project will be presented to ESS, and the role names must
 ## Tasks
 - [x] T1 — Central role-label helper (one source of truth) + apply the new labels across the UI (route: delegated writer)
 - [x] T2 — Schema + migration (Role SUPERVISOR_OLARIARI, Sede, User.sede, Inspection.sede + Olariari stage fields, TipoFirma SUPERVISOR_OLARIARI, backfills) on both DBs + route-roles (route: delegated writer)
-- [ ] T3 — Admin user create/edit: sede required for Recorredor, new role selectable, label display (route: delegated writer)
+- [x] T3 — Admin user create/edit: sede required for Recorredor, new role selectable, label display (route: delegated writer)
 - [ ] T4 — Workflow: sede snapshot, role-filtered queues, Supervisor Olariari approve/reject/sign, Director stage 2, home/aprobaciones/consulta displays, worker waiting labels (route: delegated writer)
 - [ ] T5 — PDF with 3 signatures for Olariari (route: delegated writer)
 - [ ] T6 — Seed + in-place dev email alignment + credentials table (route: delegated writer)
@@ -66,6 +66,8 @@ TDD: strict / user global config / `npx vitest run`. RDD: off (global).
 ## Progress / evidence
 - T2 (done before T1, so T1's label map is exhaustive from the start): migration `20261008015228_roles_olariari_sede` (enum Sede, Role/TipoFirma SUPERVISOR_OLARIARI, User.sede, Inspection.sede + stage fields, backfill BOGOTA in the same migration). Applied to dev and test DBs. Dev backfill: 4 TRABAJADOR users and 15 inspections -> BOGOTA. RED: `iniciarInspeccion` sede tests failed (Sede undefined in the old client); GREEN after schema + `sede` snapshot in create/replace paths. Route: delegated writer.
 - T1: `lib/auth/etiquetas-rol.ts` (etiquetaRol, etiquetaSede, etiquetaUsuario, ROLES_ASIGNABLES, SEDES, NOMBRE_SEDE_OLARIARI); applied to greeting chip (sede via `getDatosInicioTrabajador`), admin list/detail/hoja-de-vida/new-user pages and role selects, created-user screen, copy "Administrador SST". RED: etiquetas-rol.test.ts failed on missing module; sede-in-inicio test failed before the query change. Generic noun copy ("Trabajador" column/field labels in dashboard, approval pages, Excel) left for T4/T5.
+- T3: `sedeParaRol` in lib/admin/user-actions.ts (create + update; sede required for TRABAJADOR, validated against the enum, null for other roles); new client component `SelectorRolYSede` (role select with new labels + conditional required Sede select) used by the new-user and edit-user forms; sede shown in list/detail via `etiquetaUsuario`. RED: 10 new tests failed against the old action; GREEN 63/63 in user-actions.test.ts. Existing TRABAJADOR payloads in that test file now pass `sede: Sede.BOGOTA`.
+- Commits: T2 4b79dcc, T1 faefc6a, T3 see git log (feat(admin): sede...).
 - Pre-step: the owner's finished work "confirmacion-aprobar-con-novedades" is committed separately as 5222d55, so this feature starts from a clean base.
 
 ## Next step

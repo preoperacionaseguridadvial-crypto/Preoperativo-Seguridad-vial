@@ -6,11 +6,9 @@ import { crearUsuarioDesdeFormulario } from "@/lib/admin/user-actions";
 // `enums` y no `client`: este es un Client Component y `client` arrastraría
 // el cliente de Prisma (pg) al bundle del navegador.
 import { Role } from "@/generated/prisma/enums";
-import { ROLES_ASIGNABLES, etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { CamposVehiculo } from "../../_components/CamposVehiculo";
+import { SelectorRolYSede } from "../../_components/SelectorRolYSede";
 import { UsuarioCreadoPantalla } from "./UsuarioCreadoPantalla";
-
-const ROLES = ROLES_ASIGNABLES;
 
 const CLASE_INPUT =
   "w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none";
@@ -115,28 +113,12 @@ function FormularioAlta({ onCrearOtro }: { onCrearOtro: () => void }) {
           />
         </div>
 
-        <div>
-          <label htmlFor="role" className={CLASE_LABEL}>
-            Rol
-          </label>
-          <select
-            id="role"
-            name="role"
-            required
-            value={rol || valor("role")}
-            onChange={(e) => setRol(e.target.value)}
-            className={CLASE_INPUT}
-          >
-            <option value="" disabled>
-              Selecciona un rol
-            </option>
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {etiquetaRol(r)}
-              </option>
-            ))}
-          </select>
-        </div>
+        <SelectorRolYSede
+          rolInicial={rol || valor("role")}
+          sedeInicial={valor("sede")}
+          conPlaceholder
+          onRolChange={setRol}
+        />
 
         <div>
           <label htmlFor="cedula" className={CLASE_LABEL}>

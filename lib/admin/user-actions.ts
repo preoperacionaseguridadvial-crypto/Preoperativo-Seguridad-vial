@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { ErrorDeUsuario, esErrorDeUsuario } from "@/lib/admin/error-de-usuario";
-import { Role, Prisma, TipoVehiculo, type Vehicle } from "@/generated/prisma/client";
+import { Role, Prisma, Sede, TipoVehiculo, type Vehicle } from "@/generated/prisma/client";
 import {
   TIPO_DESCRIPTIVO,
   borrarFotoHuerfana,
@@ -56,6 +56,20 @@ function errorDeDuplicado(err: unknown): Error | null {
 }
 
 /**
+ * Sede (Bogotá/Olariari) del usuario. Solo el TRABAJADOR (Recorredor) tiene
+ * sede y es obligatoria: define si su inspección pasa por el Supervisor
+ * Olariari. Se valida contra el enum acá porque el navegador no es de
+ * confianza. Los demás roles guardan siempre null.
+ */
+function sedeParaRol(role: Role, sede: Sede | null | undefined): Sede | null {
+  if (role !== Role.TRABAJADOR) return null;
+  if (!sede || !(Object.values(Sede) as string[]).includes(sede)) {
+    throw new ErrorDeUsuario("La sede es obligatoria para un recorredor (Bogotá u Olariari).");
+  }
+  return sede;
+}
+
+/**
  * Valida el vehículo de un TRABAJADOR que se crea (alta, o completar a un
  * legacy sin vehículo): placa, foto y hoja de vida completa. Todo se valida
  * ANTES de subir nada a S3 para no dejar objetos huérfanos por errores de
@@ -97,6 +111,8 @@ export async function crearUsuario(data: {
   password: string;
   passwordConfirmacion: string;
   role: Role;
+  // Obligatoria para TRABAJADOR; se ignora (null) para el resto de los roles.
+  sede?: Sede | null;
   cedula?: string;
   telefono?: string;
   cargo?: string;
@@ -126,6 +142,7 @@ export async function crearUsuario(data: {
   // legacy ya creados no se ven afectados — esta validación corre
   // únicamente en el alta, nunca retroactivamente (ver
   // spec: user-administration, "Creando un trabajador sin cédula").
+  const sede = sedeParaRol(data.role, data.sede);
   const cedulaLimpia = data.cedula?.trim() || null;
   let vehiculoValidado: { placa: string; foto: File } | null = null;
   if (data.role === Role.TRABAJADOR) {
@@ -165,6 +182,7 @@ export async function crearUsuario(data: {
           email: emailLimpio,
           passwordHash,
           role: data.role,
+          sede,
           cedula: cedulaLimpia,
           telefono: data.telefono?.trim() || null,
           cargo: data.cargo?.trim() || null,
@@ -190,7 +208,7 @@ export async function crearUsuario(data: {
     entityType: "User",
     entityId: usuario.id,
     // La placa no es sensible (a diferencia de la contraseña, que nunca va).
-    metadata: { role: data.role, email: usuario.email, ...(vehiculo && { placa: vehiculo.placa }) },
+    metadata: { role: data.role, sede, email: usuario.email, ...(vehiculo && { placa: vehiculo.placa }) },
   });
   if (vehiculo) {
     await logAudit({
@@ -212,6 +230,7 @@ const CAMPOS_REPOBLABLES = [
   "name",
   "email",
   "role",
+  "sede",
   "cedula",
   "tipoVehiculo",
   "puestoAsignado",
@@ -261,6 +280,7 @@ export async function crearUsuarioDesdeFormulario(
       password: texto("password"),
       passwordConfirmacion: texto("passwordConfirmacion"),
       role: formData.get("role") as Role,
+      sede: (texto("sede") || null) as Sede | null,
       cedula: texto("cedula"),
       telefono: texto("telefono"),
       cargo: texto("cargo"),
@@ -303,6 +323,8 @@ export async function actualizarUsuario(
     email: string;
     role: Role;
     activo: boolean;
+    // Obligatoria para TRABAJADOR; se ignora (null) para el resto de los roles.
+    sede?: Sede | null;
     cedula?: string;
     telefono?: string;
     cargo?: string;
@@ -324,6 +346,7 @@ export async function actualizarUsuario(
   // Igual que en `crearUsuario`: solo se exige para TRABAJADOR. Editar un
   // usuario legacy sin completar estos campos sigue permitido para
   // cualquier otro rol (spec: "pendiente de asignación" no bloquea).
+  const sede = sedeParaRol(data.role, data.sede);
   const cedulaLimpia = data.cedula?.trim() || null;
   if (data.role === Role.TRABAJADOR) {
     if (!cedulaLimpia) {
@@ -395,6 +418,7 @@ export async function actualizarUsuario(
           name: nombreLimpio,
           email: emailLimpio,
           role: data.role,
+          sede,
           activo: data.activo,
           cedula: cedulaLimpia,
           telefono: data.telefono?.trim() || null,
@@ -422,6 +446,7 @@ export async function actualizarUsuario(
     entityId: userId,
     metadata: {
       role: data.role,
+      sede,
       activo: data.activo,
       ...(vehiculo && plan && { placa: vehiculo.placa }),
     },
