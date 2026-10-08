@@ -98,8 +98,10 @@ export default async function InspeccionEnviadaPage({
         </a>
       )}
 
+      {/* Al Inicio del trabajador (estado de la inspección enviada + historial),
+          no a /inspecciones: así coincide con el texto del botón. */}
       <Link
-        href="/inspecciones"
+        href="/"
         className="mt-2 rounded-md bg-[#0B3B60] px-4 py-2 text-sm font-medium text-white hover:bg-[#0B3B60]/90"
       >
         Volver al inicio
