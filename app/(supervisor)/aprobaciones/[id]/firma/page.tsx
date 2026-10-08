@@ -4,7 +4,7 @@ import { getInspeccionDetalleOrNotFound } from "@/lib/inspections/supervisor-que
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { guardarFirmaSupervisor } from "@/lib/inspections/firma-actions";
 import { FirmaCanvas } from "@/app/_components/FirmaCanvas";
-import { urlListaTrasFirma } from "@/lib/inspections/aviso-decision";
+import { urlInicioTrasFirma } from "@/lib/inspections/aviso-decision";
 
 // Paso posterior a la decisión del Supervisor (Aprobar/Rechazar en
 // app/(supervisor)/aprobaciones/[id]/page.tsx, que redirige acá si la
@@ -48,9 +48,9 @@ export default async function AprobacionFirmaPage({
       redirect(`/aprobaciones/${id}/firma?error=${encodeURIComponent(message)}`);
     }
     // Firmada la decisión, el trabajo con esta inspección terminó: se vuelve
-    // a la lista de pendientes (con un aviso de confirmación) para seguir con
+    // al Inicio del Supervisor (con un aviso de confirmación) para seguir con
     // la próxima, en vez de dejar al Supervisor en el detalle.
-    redirect(urlListaTrasFirma(inspection.status, inspection.vehicle.placa));
+    redirect(urlInicioTrasFirma(inspection.status, inspection.vehicle.placa));
   }
 
   const aprobada = inspection.status === "APROBADA";

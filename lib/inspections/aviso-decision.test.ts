@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { avisoDecisionFirmada, urlListaTrasFirma } from "@/lib/inspections/aviso-decision";
+import { avisoDecisionFirmada, urlInicioTrasFirma } from "@/lib/inspections/aviso-decision";
 
-describe("urlListaTrasFirma", () => {
-  it("vuelve a la lista con la decisión y la placa", () => {
-    expect(urlListaTrasFirma("APROBADA", "PLS546S")).toBe("/aprobaciones?decision=aprobada&placa=PLS546S");
-    expect(urlListaTrasFirma("RECHAZADA", "KSR25F")).toBe("/aprobaciones?decision=rechazada&placa=KSR25F");
+describe("urlInicioTrasFirma", () => {
+  it("vuelve al inicio con la decisión y la placa", () => {
+    expect(urlInicioTrasFirma("APROBADA", "PLS546S")).toBe("/?decision=aprobada&placa=PLS546S");
+    expect(urlInicioTrasFirma("RECHAZADA", "KSR25F")).toBe("/?decision=rechazada&placa=KSR25F");
   });
 
-  it("vuelve a la lista sin aviso si el estado no es una decisión", () => {
-    expect(urlListaTrasFirma("PENDIENTE_APROBACION", "PLS546S")).toBe("/aprobaciones");
+  it("vuelve al inicio sin aviso si el estado no es una decisión", () => {
+    expect(urlInicioTrasFirma("PENDIENTE_APROBACION", "PLS546S")).toBe("/");
   });
 });
 
