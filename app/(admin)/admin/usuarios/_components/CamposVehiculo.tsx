@@ -6,17 +6,19 @@ import { useEffect, useState } from "react";
 import { TipoVehiculo } from "@/generated/prisma/enums";
 import { MAX_FOTO_BYTES, TIPOS_FOTO_ACEPTADOS } from "@/lib/admin/foto-vehiculo";
 import { comprimirFotoEnNavegador } from "@/lib/imagenes/adaptador-navegador";
+import { CLASE_INPUT, Campo, Interruptor, Segmentado } from "./ui-formulario";
 
-const TIPOS_VEHICULO: TipoVehiculo[] = [TipoVehiculo.MOTO, TipoVehiculo.CARRO];
-
-const CLASE_INPUT =
-  "w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#005B96] focus:outline-none";
-const CLASE_LABEL = "mb-1 block text-sm font-medium text-gray-700";
+const OPCIONES_TIPO_ALTA = [
+  { value: TipoVehiculo.MOTO, label: "Moto" },
+  { value: TipoVehiculo.CARRO, label: "Carro" },
+];
+// En edición un legacy puede quedar sin tipo: se conserva la opción "Sin asignar".
+const OPCIONES_TIPO_EDICION = [{ value: "", label: "Sin asignar" }, ...OPCIONES_TIPO_ALTA];
 
 /**
- * Sección "Vehículo" del formulario de usuario (alta y edición): el
- * trabajador tiene UN vehículo (1:1) que se captura junto con él. Hay un solo
- * select de tipo de vehículo: alimenta `User.tipoVehiculo` y
+ * Contenido de la sección "Vehículo del recorredor" (alta y edición): el
+ * recorredor tiene UN vehículo (1:1) que se captura junto con él. Hay un solo
+ * campo de tipo de vehículo: alimenta `User.tipoVehiculo` y
  * `Vehicle.tipoVehiculo`. En el alta todo es obligatorio salvo las fechas;
  * en la edición nada lleva `required` en el navegador porque un legacy sin
  * vehículo puede quedar sin cargar (la validación real es la del servidor).
@@ -89,73 +91,64 @@ export function CamposVehiculo({
 
   const valor = (campo: string) => valores[campo] ?? "";
   const requerido = modo === "alta";
+  const imagen = vistaPrevia ?? fotoActualUrl ?? null;
 
   return (
-    <fieldset className="flex flex-col gap-4 rounded-md border border-gray-200 p-4">
-      <legend className="px-1 text-sm font-medium text-gray-700">Vehículo del trabajador</legend>
+    <div className="flex flex-col gap-4">
+      <Segmentado
+        nombre="tipoVehiculo"
+        legenda="Tipo de vehículo"
+        requerido={requerido}
+        valorInicial={valor("tipoVehiculo")}
+        opciones={requerido ? OPCIONES_TIPO_ALTA : OPCIONES_TIPO_EDICION}
+      />
 
-      <div>
-        <label htmlFor="tipoVehiculo" className={CLASE_LABEL}>
-          Tipo de vehículo
-        </label>
-        <select
-          id="tipoVehiculo"
-          name="tipoVehiculo"
-          required={requerido}
-          defaultValue={valor("tipoVehiculo")}
-          className={CLASE_INPUT}
-        >
-          <option value="" disabled={requerido}>
-            {requerido ? "Selecciona un tipo" : "Sin asignar"}
-          </option>
-          {TIPOS_VEHICULO.map((tipo) => (
-            <option key={tipo} value={tipo}>
-              {tipo}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label htmlFor="placa" className={CLASE_LABEL}>
-          Placa
-        </label>
+      <Campo id="placa" etiqueta="Placa">
         <input
           id="placa"
           name="placa"
           type="text"
           required={requerido}
           autoCapitalize="characters"
+          autoComplete="off"
           defaultValue={valor("placa")}
-          className={`${CLASE_INPUT} uppercase`}
+          className={`${CLASE_INPUT} font-mono uppercase tracking-wider`}
         />
-      </div>
+      </Campo>
 
       <div>
-        <label htmlFor="foto" className={CLASE_LABEL}>
-          Foto del vehículo
-        </label>
-        {fotoActualUrl && (
-          <div className="mb-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal, no candidata a next/image remoto. */}
+        <span className="mb-1 block text-sm font-medium text-ink">Foto del vehículo</span>
+        <label
+          htmlFor="foto"
+          className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-border bg-page p-3 text-center text-ink-muted transition-colors hover:border-brand has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40"
+        >
+          {imagen ? (
+            // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal o miniatura local (blob:), no candidatas a next/image.
             <img
-              src={fotoActualUrl}
-              alt="Foto actual del vehículo"
-              className="h-40 w-full rounded-md border border-gray-200 bg-gray-50 object-contain"
+              src={imagen}
+              alt={vistaPrevia ? "Vista previa de la foto elegida" : "Foto actual del vehículo"}
+              className="h-40 w-full rounded-lg bg-surface object-contain"
             />
-            <p className="mt-1 text-xs text-gray-500">Foto actual.</p>
-          </div>
-        )}
-        <input
-          id="foto"
-          name="foto"
-          type="file"
-          accept={TIPOS_FOTO_ACEPTADOS.join(",")}
-          required={requerido}
-          onChange={alElegirFoto}
-          className={CLASE_INPUT}
-        />
-        <p className="mt-1 text-xs text-gray-500">
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-9" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden>
+              <path d="M4 8h3l1.5-2h7L17 8h3v11H4z" strokeLinejoin="round" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
+          )}
+          <span className="text-sm font-semibold text-brand">
+            {imagen ? "Cambiar foto" : "Tomar o elegir foto"}
+          </span>
+          <input
+            id="foto"
+            name="foto"
+            type="file"
+            accept={TIPOS_FOTO_ACEPTADOS.join(",")}
+            required={requerido}
+            onChange={alElegirFoto}
+            className="sr-only"
+          />
+        </label>
+        <p className="mt-1 text-xs text-ink-muted">
           {requerido
             ? "Obligatoria. JPG, PNG o WEBP, máximo 8 MB. Si el alta falla, hay que volver a elegir la foto."
             : "Sube una nueva solo para reemplazar la actual. JPG, PNG o WEBP, máximo 8 MB."}
@@ -166,83 +159,59 @@ export function CamposVehiculo({
           </p>
         )}
         {errorFoto && (
-          <p role="alert" className="mt-1 text-xs font-medium text-red-700">
+          <p role="alert" className="mt-1 text-xs font-medium text-status-crit-ink">
             {errorFoto}
           </p>
         )}
-        {vistaPrevia && (
-          <div className="mt-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- Miniatura local (blob:), no aplica next/image. */}
-            <img
-              src={vistaPrevia}
-              alt="Vista previa de la foto elegida"
-              className="h-40 w-full rounded-md border border-gray-200 bg-gray-50 object-contain"
-            />
-          </div>
-        )}
       </div>
 
-      {(
-        [
-          ["marca", "Marca"],
-          ["modelo", "Modelo"],
-          ["color", "Color"],
-        ] as const
-      ).map(([campo, etiqueta]) => (
-        <div key={campo}>
-          <label htmlFor={campo} className={CLASE_LABEL}>
-            {etiqueta}
-          </label>
-          <input
-            id={campo}
-            name={campo}
-            type="text"
-            required={requerido}
-            defaultValue={valor(campo)}
-            className={CLASE_INPUT}
-          />
-        </div>
-      ))}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {(
+          [
+            ["marca", "Marca"],
+            ["modelo", "Modelo"],
+            ["color", "Color"],
+          ] as const
+        ).map(([campo, etiqueta]) => (
+          <Campo key={campo} id={campo} etiqueta={etiqueta}>
+            <input
+              id={campo}
+              name={campo}
+              type="text"
+              required={requerido}
+              defaultValue={valor(campo)}
+              className={CLASE_INPUT}
+            />
+          </Campo>
+        ))}
+      </div>
 
-      {(
-        [
-          ["fechaVencimientoSoat", "Vencimiento SOAT (opcional)"],
-          ["fechaVencimientoTecnicomecanica", "Vencimiento tecnicomecánica (opcional)"],
-        ] as const
-      ).map(([campo, etiqueta]) => (
-        <div key={campo}>
-          <label htmlFor={campo} className={CLASE_LABEL}>
-            {etiqueta}
-          </label>
-          <input
-            id={campo}
-            name={campo}
-            type="date"
-            defaultValue={valor(campo)}
-            className={CLASE_INPUT}
-          />
-        </div>
-      ))}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(
+          [
+            ["fechaVencimientoSoat", "Vencimiento SOAT"],
+            ["fechaVencimientoTecnicomecanica", "Vencimiento tecnicomecánica"],
+          ] as const
+        ).map(([campo, etiqueta]) => (
+          <Campo key={campo} id={campo} etiqueta={etiqueta} opcional>
+            <input id={campo} name={campo} type="date" defaultValue={valor(campo)} className={CLASE_INPUT} />
+          </Campo>
+        ))}
+      </div>
 
       {modo === "edicion" && activo !== undefined && (
         <div>
           {/* Un checkbox desmarcado no viaja en el formulario: este campo avisa
               que la casilla estaba presente (ver leerVehiculoDeFormulario). */}
           <input type="hidden" name="vehiculoActivoEnForm" value="1" />
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              name="vehiculoActivo"
-              defaultChecked={activo}
-              className="h-5 w-5 rounded border-gray-300 text-[#005B96] focus:ring-[#005B96]"
-            />
-            Vehículo activo
-          </label>
-          <p className="mt-1 text-xs text-gray-500">
-            Con el vehículo inactivo el trabajador no puede iniciar inspecciones.
-          </p>
+          <Interruptor
+            nombre="vehiculoActivo"
+            titulo="Vehículo activo"
+            ayuda="Con el vehículo inactivo el recorredor no puede iniciar inspecciones."
+            defaultChecked={activo}
+          />
         </div>
       )}
-    </fieldset>
+    </div>
   );
 }
