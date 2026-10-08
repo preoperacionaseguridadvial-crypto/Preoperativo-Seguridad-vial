@@ -6,13 +6,16 @@ import type { InspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import {
+  cajasFirmaPdf,
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
   fotoPorTipo,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
   formatSiNoPdf,
+  observacionesAprobacionPdf,
 } from "@/lib/pdf/pdf-helpers";
+import { TipoFirma } from "@/generated/prisma/enums";
 import { registrarFuentesPdf, FONT_FAMILY_REGULAR, FONT_FAMILY_BOLD } from "@/lib/pdf/fonts";
 
 // Componente de presentación puro: recibe los datos ya resueltos por
@@ -46,7 +49,7 @@ registrarFuentesPdf();
 // constantes CARROS_PCT/MOTOS_PCT (heredadas del layout original de un solo
 // tipo) se eliminan: el único lugar que todavía usaba esos porcentajes es la
 // franja de resultado + firmas de abajo, que es un split fijo NO relacionado
-// con tipo de vehículo (ver FIRMA_CONDUCTOR_PCT/FIRMA_SUPERVISOR_PCT).
+// con tipo de vehículo (ver cajasFirmaPdf en lib/pdf/pdf-helpers.ts).
 
 // La zona de resultado + firmas (filas 71-74 del Excel) NO está dividida
 // por tipo de vehículo: es un único bloque compartido. El texto instructivo
@@ -54,9 +57,9 @@ registrarFuentesPdf();
 // ancho (pedido del dueño de producto, 2026-09-18): a la derecha, como en el
 // Excel original, le quitaba espacio a las firmas. Conductor y supervisor
 // conservan la proporción del Excel (A:C = 32.10 y D:F = 37.89), ahora sobre
-// el ancho completo.
-const FIRMA_CONDUCTOR_PCT = 46; // 32.10 / 69.99
-const FIRMA_SUPERVISOR_PCT = 54; // 37.89 / 69.99
+// el ancho completo. Una inspección de Olariari suma la caja del Supervisor
+// Olariari (3 firmas, roles-olariari): cuántas cajas y qué anchos lleva cada
+// una lo decide `cajasFirmaPdf`.
 
 // Textos literales del formato oficial (tal cual figuran en el Excel,
 // incluida su ortografía real — el objetivo es digitalizar el documento,
@@ -76,8 +79,6 @@ const TXT = {
   textoInstructivo:
     "LA UNIDAD DEBE SER REVISADA DE MANERA EFECTIVA, EL CONDUCTOR ESTA CAPACITADO PARA DETERMINAR CUANDO UNA UNIDAD ES RIESGOSA PARA SALIR A OPERAR, SI EL CONDUCTOR DETERMINA QUE LA UNIDAD NO DEBE SALIR LO DEBE SUTENTAR BREVEMENTE",
   declaracion: "El conductor declara que la unidad esta en condiciones de salir a operar.",
-  firmaConductor: "NOMBRE Y FIRMA DEL CONDUCTOR",
-  firmaSupervisor: "NOMBRE Y FIRMA DEL SUPERVISOR",
   evidenciaFotografica: "EVIDENCIA FOTOGRÁFICA",
   novedadesTitulo: "NOVEDADES",
   fotosDiariasTitulo: "FOTOS DIARIAS DEL VEHÍCULO",
@@ -273,14 +274,8 @@ const styles = StyleSheet.create({
     borderColor: "#111111",
   },
   firmasRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: "#111111" },
-  firmaCajaConductor: {
-    width: `${FIRMA_CONDUCTOR_PCT}%`,
-    borderRightWidth: 1,
-    borderColor: "#111111",
-    padding: 4,
-    minHeight: 70,
-  },
-  firmaCajaSupervisor: { width: `${FIRMA_SUPERVISOR_PCT}%`, padding: 4, minHeight: 70 },
+  // El ancho y el borde derecho (todas menos la última) los pone el componente.
+  firmaCaja: { padding: 4, minHeight: 70 },
   firmaImagen: { width: "100%", height: 36, objectFit: "contain", marginVertical: 2 },
   firmaLabel: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, textAlign: "center" },
   firmaNombre: { fontSize: 11, textAlign: "center", marginTop: 2 },
@@ -384,6 +379,27 @@ function FirmaCaja({
   );
 }
 
+/** Nombre, cédula y firma de quien firma cada caja (conductor, Supervisor Olariari o Director). */
+function firmanteDeCaja(data: InspeccionParaPdf, tipo: TipoFirma) {
+  switch (tipo) {
+    case TipoFirma.CONDUCTOR:
+      return { nombre: data.conductor.name, cedula: data.conductor.cedula, firma: data.firmas.conductor };
+    case TipoFirma.SUPERVISOR_OLARIARI:
+      return {
+        nombre: data.supervisorOlariari?.name ?? null,
+        cedula: data.supervisorOlariari?.cedula,
+        firma: data.firmas.supervisorOlariari,
+      };
+    case TipoFirma.SUPERVISOR:
+    default:
+      return {
+        nombre: data.supervisor?.name ?? null,
+        cedula: data.supervisor?.cedula,
+        firma: data.firmas.supervisor,
+      };
+  }
+}
+
 function FotoDiariaBloque({ label, foto }: { label: string; foto: { url?: string } | null }) {
   // `foto.url` puede venir `undefined` (no solo el bloque `foto` venir
   // `null`) desde que `getInspectionForSupervisor`
@@ -452,6 +468,8 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
   // cambia ninguna lógica de aprobación (eso ya vive del lado del servidor,
   // ver lib/inspections/estado-conductor.ts).
   const alertaEstadoConductor = requiereAtencionEstadoConductor(data);
+
+  const cajasFirma = cajasFirmaPdf(data.sede);
 
   const estadoAprobacionLabel = ESTADO_APROBACION_LABELS[data.status] ?? data.status;
   const decidida = data.reviewedAt !== null;
@@ -555,12 +573,16 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
           {!data.puedeOperar && data.justificacionNoOperar && (
             <Text style={styles.aprobacionObservacion}>Justificación del conductor: {data.justificacionNoOperar}</Text>
           )}
-          {data.status === "RECHAZADA" && data.observacionesSupervisor && (
-            <Text style={styles.aprobacionObservacion}>Observación del supervisor: {data.observacionesSupervisor}</Text>
+          {data.sede === "OLARIARI" && data.revisadaSupervisorOlariariAt && (
+            <Text style={styles.novedadCampo}>
+              Revisada por el Supervisor Olariari el {formatFechaHora(data.revisadaSupervisorOlariariAt)}
+            </Text>
           )}
-          {data.status === "APROBADA" && data.observacionesSupervisor && (
-            <Text style={styles.aprobacionObservacion}>Observación del supervisor: {data.observacionesSupervisor}</Text>
-          )}
+          {observacionesAprobacionPdf(data).map((linea) => (
+            <Text key={linea} style={styles.aprobacionObservacion}>
+              {linea}
+            </Text>
+          ))}
         </View>
 
         {/* BANNER ANCHO COMPLETO (fila 28 del Excel, no exclusivo de carros) */}
@@ -666,20 +688,23 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
             {TXT.declaracion} {data.puedeOperar === null ? "" : data.puedeOperar ? "(Declaró: SÍ)" : "(Declaró: NO)"}
           </Text>
           <View style={styles.firmasRow}>
-            <FirmaCaja
-              titulo={TXT.firmaConductor}
-              nombre={data.conductor.name}
-              cedula={data.conductor.cedula}
-              firma={data.firmas.conductor}
-              estilo={styles.firmaCajaConductor}
-            />
-            <FirmaCaja
-              titulo={TXT.firmaSupervisor}
-              nombre={data.supervisor?.name ?? null}
-              cedula={data.supervisor?.cedula}
-              firma={data.firmas.supervisor}
-              estilo={styles.firmaCajaSupervisor}
-            />
+            {cajasFirma.map((caja, i) => {
+              const firmante = firmanteDeCaja(data, caja.tipo);
+              return (
+                <FirmaCaja
+                  key={caja.tipo}
+                  titulo={caja.titulo}
+                  nombre={firmante.nombre}
+                  cedula={firmante.cedula}
+                  firma={firmante.firma}
+                  estilo={{
+                    ...styles.firmaCaja,
+                    width: `${caja.anchoPct}%`,
+                    ...(i < cajasFirma.length - 1 && { borderRightWidth: 1, borderColor: "#111111" }),
+                  }}
+                />
+              );
+            })}
           </View>
           <View style={styles.resultadoInstructivo}>
             <Text style={styles.textoInstructivo}>{TXT.textoInstructivo}</Text>
