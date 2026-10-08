@@ -33,8 +33,9 @@ export function PanelTrabajador({ datos, ahora }: { datos: Datos; ahora: Date })
 
   const accion = accionPrincipalTrabajador(inspecciones[0] ?? null, ahora);
   const alertas = alertasDocumentosVehiculo(vehiculo, ahora);
-  // Un vehículo inactivo no puede iniciar inspecciones (iniciarInspeccion lo rechaza).
-  const puedeIniciar = vehiculo.activo || accion.estado !== "INICIAR";
+  // Un vehículo inactivo no puede iniciar inspecciones (iniciarInspeccion lo
+  // rechaza): solo se ofrece continuar una que ya está en proceso.
+  const puedeIniciar = vehiculo.activo || accion.estado === "CONTINUAR";
 
   return (
     <div className="flex flex-col gap-5">

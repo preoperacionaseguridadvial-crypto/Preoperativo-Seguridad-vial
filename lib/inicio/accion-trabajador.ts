@@ -7,6 +7,12 @@ import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 // hace el flujo (app/(worker)/inspecciones, `iniciarInspeccion`): una
 // EN_PROCESO se reutiliza solo dentro de VENTANA_REUSO_INSPECCION_HORAS; más
 // vieja se descarta y se abre una nueva, así que ahí no se promete "continuar".
+//
+// Regla de negocio (confirmada por el usuario, 2026-10-07): una vez ENVIADA,
+// el trabajador puede iniciar una inspección nueva, sin importar si el
+// Supervisor ya la aprobó, la rechazó o todavía no la revisó — la ventana de
+// reuso aplica SOLO a una EN_PROCESO. Por eso todo estado ya enviado ofrece
+// "Hacer una nueva inspección" (iniciarInspeccion nunca bloqueó esto).
 
 export type InspeccionResumen = {
   id: string;
@@ -28,6 +34,7 @@ export type AccionTrabajador = {
 };
 
 const BOTON_INICIAR = { texto: "Iniciar inspección", href: "/inspecciones" };
+const BOTON_NUEVA = { texto: "Hacer una nueva inspección", href: "/inspecciones" };
 
 const ACCION_INICIAR: AccionTrabajador = {
   estado: "INICIAR",
@@ -61,7 +68,7 @@ export function accionPrincipalTrabajador(
         estado: "ESPERANDO",
         titulo: "Enviada · esperando aprobación",
         detalle: espera ? `Enviada ${espera}` : null,
-        boton: null,
+        boton: BOTON_NUEVA,
         tono: "warn",
       };
     }
@@ -70,7 +77,7 @@ export function accionPrincipalTrabajador(
         estado: "APROBADA",
         titulo: "Aprobada",
         detalle: tiempoTranscurrido(ultima.reviewedAt ?? ultima.completedAt ?? ultima.startedAt, ahora),
-        boton: null,
+        boton: BOTON_NUEVA,
         tono: "ok",
       };
     case "RECHAZADA":
@@ -78,7 +85,7 @@ export function accionPrincipalTrabajador(
         estado: "RECHAZADA",
         titulo: "Rechazada",
         detalle: ultima.observacionesSupervisor?.trim() || "El supervisor no dejó observaciones.",
-        boton: { texto: "Hacer una nueva inspección", href: "/inspecciones" },
+        boton: BOTON_NUEVA,
         tono: "crit",
       };
     case "NO_APTA_PARA_OPERAR":
@@ -86,7 +93,7 @@ export function accionPrincipalTrabajador(
         estado: "NO_APTA",
         titulo: "No apta para operar",
         detalle: "Tu vehículo no debe operar hasta que el supervisor lo revise.",
-        boton: null,
+        boton: BOTON_NUEVA,
         tono: "crit",
       };
     default:

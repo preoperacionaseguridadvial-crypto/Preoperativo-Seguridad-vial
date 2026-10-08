@@ -53,7 +53,7 @@ describe("accionPrincipalTrabajador", () => {
   });
 
   it.each([InspectionStatus.ENVIADA, InspectionStatus.PENDIENTE_APROBACION])(
-    "%s: enviada, esperando aprobación, sin botón",
+    "%s: enviada, esperando aprobación, y permite iniciar una nueva",
     (status) => {
       const accion = accionPrincipalTrabajador(
         inspeccion(status, { completedAt: new Date(ahora.getTime() - 35 * 60_000) }),
@@ -62,11 +62,11 @@ describe("accionPrincipalTrabajador", () => {
       expect(accion.estado).toBe("ESPERANDO");
       expect(accion.titulo).toBe("Enviada · esperando aprobación");
       expect(accion.detalle).toBe("Enviada hace 35 min");
-      expect(accion.boton).toBeNull();
+      expect(accion.boton).toEqual({ texto: "Hacer una nueva inspección", href: "/inspecciones" });
     },
   );
 
-  it("APROBADA reciente: muestra aprobada con el tiempo transcurrido", () => {
+  it("APROBADA reciente: muestra aprobada y permite iniciar una nueva", () => {
     const accion = accionPrincipalTrabajador(
       inspeccion(InspectionStatus.APROBADA, { reviewedAt: hace(3) }),
       ahora,
@@ -74,7 +74,7 @@ describe("accionPrincipalTrabajador", () => {
     expect(accion.estado).toBe("APROBADA");
     expect(accion.titulo).toBe("Aprobada");
     expect(accion.detalle).toBe("hace 3 h");
-    expect(accion.boton).toBeNull();
+    expect(accion.boton).toEqual({ texto: "Hacer una nueva inspección", href: "/inspecciones" });
   });
 
   it("RECHAZADA reciente: muestra la observación del supervisor y permite repetir", () => {
@@ -96,11 +96,11 @@ describe("accionPrincipalTrabajador", () => {
     expect(accion.detalle).toBe("El supervisor no dejó observaciones.");
   });
 
-  it("NO_APTA_PARA_OPERAR: avisa que no está apta, sin botón", () => {
+  it("NO_APTA_PARA_OPERAR: avisa que no está apta y permite iniciar una nueva", () => {
     const accion = accionPrincipalTrabajador(inspeccion(InspectionStatus.NO_APTA_PARA_OPERAR), ahora);
     expect(accion.estado).toBe("NO_APTA");
     expect(accion.titulo).toBe("No apta para operar");
-    expect(accion.boton).toBeNull();
+    expect(accion.boton).toEqual({ texto: "Hacer una nueva inspección", href: "/inspecciones" });
   });
 
   it.each([
