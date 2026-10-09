@@ -200,6 +200,7 @@ model User {
   auditLogs                       AuditLog[]
   firmas                          Firma[]
   configuracionesActualizadas     AppSetting[]
+  autorizacionDatos               AutorizacionDatos?
 
   @@index([role])
 }
@@ -478,6 +479,23 @@ model Photo {
 // sobrescribe (ver `guardarFirmaConductor`/`guardarFirmaSupervisor` en
 // lib/inspections/firma-actions.ts, que rechazan explícitamente el intento
 // de reemplazo antes de tocar la base de datos).
+// Autorización del titular para el tratamiento de sus datos personales (Ley
+// 1581 de 2012): se pide una única vez, en el primer ingreso de cada usuario
+// (app/autorizacion), con firma manuscrita, y se muestra en su hoja de vida.
+// `userId @unique` garantiza el "una única vez"; el registro es inmutable (no
+// hay server action que lo edite ni lo borre). `versionPolitica` guarda qué
+// texto aceptó (ver lib/legal/politica-datos.ts), para poder volver a pedirla
+// si la política cambia de forma sustancial.
+model AutorizacionDatos {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  versionPolitica String
+  firmaS3Key      String
+  // Generado por el servidor (`now()`), nunca recibido del cliente.
+  createdAt       DateTime @default(now())
+}
+
 model Firma {
   id           String     @id @default(cuid())
   inspectionId String

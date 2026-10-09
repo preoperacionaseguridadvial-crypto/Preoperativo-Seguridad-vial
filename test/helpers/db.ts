@@ -13,6 +13,7 @@ export async function limpiarBaseDeTest() {
   await prisma.novedad.deleteMany({});
   await prisma.inspectionItemResponse.deleteMany({});
   await prisma.firma.deleteMany({});
+  await prisma.autorizacionDatos.deleteMany({});
   await prisma.fotoInspeccion.deleteMany({});
   await prisma.auditLog.deleteMany({});
   // Fase soporte-moto-carro (Slice 4): AppSetting tiene un FK opcional a
