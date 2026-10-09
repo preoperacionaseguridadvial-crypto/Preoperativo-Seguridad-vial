@@ -19,17 +19,16 @@ export const authConfig: NextAuthConfig = {
   },
   providers: [],
   callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = (user as { role: Role }).role;
-      }
+    // Proxy solo decodifica el token; quien lo escribe (inicio de sesión y
+    // actualización) es el `jwt` de lib/auth/config.ts, que reemplaza a este.
+    jwt({ token }) {
       return token;
     },
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
+        session.user.autorizoDatos = token.autorizoDatos === true;
       }
       return session;
     },

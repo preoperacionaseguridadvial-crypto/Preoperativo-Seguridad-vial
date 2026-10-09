@@ -24,10 +24,10 @@ User (2026-10-08): the app now publishes a data policy (`/privacidad`), but the 
 - The legal wording is a draft pending a lawyer's review.
 
 ## Tasks
-- [ ] T1 — Model `AutorizacionDatos` + migration (dev and test DBs) + server action `registrarAutorizacionDatos` + query, with integration tests (route: inline; one writer already holding the full context)
-- [ ] T2 — Session claim `autorizoDatos` (set at sign-in, refreshed from the DB on update) + proxy gate, with unit tests for the gate decision (route: inline)
-- [ ] T3 — `/autorizacion` page and form (checkbox + signature) (route: inline)
-- [ ] T4 — Hoja de vida: authorization section with date, version and signature (route: inline)
+- [x] T1 — Model `AutorizacionDatos` + migration (dev and test DBs) + server action `registrarAutorizacionDatos` + query, with integration tests (route: inline; one writer already holding the full context)
+- [x] T2 — Session claim `autorizoDatos` (set at sign-in, refreshed from the DB on update) + proxy gate, with unit tests for the gate decision (route: inline)
+- [x] T3 — `/autorizacion` page and form (checkbox + signature) (route: inline)
+- [x] T4 — Hoja de vida: authorization section with date, version and signature (route: inline)
 
 ## Acceptance criteria
 - A user without a record is sent to `/autorizacion` from any page and cannot use the app until signing.
@@ -40,4 +40,12 @@ User (2026-10-08): the app now publishes a data policy (`/privacidad`), but the 
 TDD: strict / user global config / `npx vitest run`. RDD: off (global). Delivery strategy: ask-on-risk; forecast ~450 authored lines.
 
 ## Progress / evidence
-See the commits on `feat/autorizacion-datos`. Engram mirror: pending (the Engram MCP server failed to connect in this session).
+- T1 (commit f7eb12e). RED: test file failed to import the missing module. GREEN: 13 tests. Migration `20261009014815_autorizacion_datos` applied to dev and test DBs. Note: Prisma 7 does not regenerate the client on `migrate dev`; `npx prisma generate` was needed.
+- T2. `lib/auth/gate-autorizacion.ts` (pure decision), `lib/auth/jwt-autorizacion.ts` (claim; on session update it re-reads the DB and ignores the client payload), `proxy.ts` gate before the role check. RED: both test files failed to import. GREEN: 9 new unit tests; `proxy.test.ts` updated (existing RBAC cases now run as an authorized user) plus 9 gate cases.
+- T3. `app/autorizacion/page.tsx` + `_components/FormularioAutorizacion.tsx` (checkbox, then `FirmaCanvas`). After signing, `unstable_update` refreshes the token and the user lands on `/`.
+- T4. `getUsuarioPorId` includes the record; hoja de vida shows date, version and signature, or "Pendiente".
+- Checks: tsc and eslint clean; `npm test` 59 files / 813 tests passed.
+- Live (headless Chrome, 360 px, two temporary users, deleted afterwards): a new TRABAJADOR is held on the authorization screen from `/` and `/inspecciones`; `/privacidad` opens; no canvas until the checkbox is ticked; after signing lands on home, `/autorizacion` redirects to `/`, `/inspecciones` opens; sign-out and sign-in again goes straight to home. A new ADMINISTRADOR is gated too; after signing, the hoja de vida of the signed user shows date, version and the signature image, and an unsigned user shows "Pendiente". No console errors.
+- Known cosmetic detail: right after sign-in the address bar shows `/` while the authorization screen is rendered (the sign-in redirect target is redirected by Proxy). Signing from there works.
+- Pending outside the code: lawyer review of the wording; ESS LTDA contact details (NIT, address, e-mail, phone) for the policy.
+- Engram mirror: pending (the Engram MCP server failed to connect in this session).

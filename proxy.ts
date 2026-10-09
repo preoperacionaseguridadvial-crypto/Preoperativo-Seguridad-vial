@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/base-config";
 import { isPublicPath } from "@/lib/auth/public-paths";
+import { destinoPorAutorizacion } from "@/lib/auth/gate-autorizacion";
 import { getRequiredRoles } from "@/lib/auth/route-roles";
 
 // Aunque Proxy (Next.js 16+, antes "middleware") corre en Node.js runtime
@@ -24,6 +25,13 @@ export default auth((req) => {
     const loginUrl = new URL("/login", req.nextUrl.origin);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Sin la autorización de tratamiento de datos firmada no se abre nada más
+  // (ni páginas ni route handlers): va antes que el chequeo de rol.
+  const destino = destinoPorAutorizacion(pathname, session.user.autorizoDatos);
+  if (destino) {
+    return NextResponse.redirect(new URL(destino, req.nextUrl.origin));
   }
 
   const requiredRoles = getRequiredRoles(pathname);
