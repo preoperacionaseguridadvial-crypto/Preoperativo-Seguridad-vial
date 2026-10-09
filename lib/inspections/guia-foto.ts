@@ -6,11 +6,15 @@ const INSTRUCCION: Record<TipoFotoGuia, string> = {
   placa: "Acércate a la placa trasera. Que se lean todas las letras y números.",
 };
 
+// La guía de moto es una foto real (WebP); la de carro sigue siendo una
+// ilustración (SVG) hasta tener sus fotos.
+const EXTENSION = { moto: "webp", carro: "svg" } as const;
+
 /**
- * Ilustración e instrucción de la guía de cada foto diaria. Un vehículo legacy
+ * Imagen e instrucción de la guía de cada foto diaria. Un vehículo legacy
  * sin tipo se trata como MOTO, igual que el resto de la app.
  */
 export function guiaDeFoto(tipo: TipoFotoGuia, tipoVehiculo: TipoVehiculoGuia | null | undefined) {
   const variante = tipoVehiculo === "CARRO" ? "carro" : "moto";
-  return { src: `/fotos-guia/${tipo}-${variante}.svg`, instruccion: INSTRUCCION[tipo] };
+  return { src: `/fotos-guia/${tipo}-${variante}.${EXTENSION[variante]}`, instruccion: INSTRUCCION[tipo] };
 }

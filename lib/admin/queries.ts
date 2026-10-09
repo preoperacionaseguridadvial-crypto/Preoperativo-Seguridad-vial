@@ -42,5 +42,8 @@ export function getUsuarios(filtros?: FiltrosUsuarios) {
 
 /** Usuario con su vehículo (1:1) — base de la edición y de la hoja de vida. */
 export function getUsuarioPorId(id: string) {
-  return prisma.user.findUnique({ where: { id }, include: { vehicle: true } });
+  return prisma.user.findUnique({
+    where: { id },
+    include: { vehicle: true, autorizacionDatos: true },
+  });
 }

@@ -14,7 +14,7 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 
-const CARPETAS = ["public/checklist", "public/estado-conductor"];
+const CARPETAS = ["public/checklist", "public/estado-conductor", "public/fotos-guia"];
 const MAX_KB = 400; // mismo límite que test/public-images.test.ts
 const LADO_MAXIMO = 1200;
 

@@ -12,12 +12,18 @@ vi.mock("next-auth", () => ({
 
 import type { Role } from "@/generated/prisma/client";
 
-type Handler = (req: { nextUrl: URL; auth: { user: { role: Role } } | null }) => Response;
+type Handler = (req: {
+  nextUrl: URL;
+  auth: { user: { role: Role; autorizoDatos?: boolean } } | null;
+}) => Response;
 
-function crearRequest(pathname: string, role: Role | null) {
+// Por defecto el usuario ya firmó la autorización de tratamiento de datos,
+// para que estos tests ejerciten el RBAC; la barrera de la autorización se
+// prueba aparte, más abajo.
+function crearRequest(pathname: string, role: Role | null, autorizoDatos = true) {
   return {
     nextUrl: new URL(`http://localhost${pathname}`),
-    auth: role ? { user: { role } } : null,
+    auth: role ? { user: { role, autorizoDatos } } : null,
   };
 }
 
@@ -146,5 +152,47 @@ describe("proxy.ts (RBAC por rol)", () => {
     const middleware = await importMiddleware();
     const res = middleware(crearRequest("/", "TRABAJADOR") as Parameters<Handler>[0]);
     expect(res.headers.get("location")).toBeNull();
+  });
+});
+
+describe("proxy.ts (autorización de tratamiento de datos)", () => {
+  it.each([
+    ["TRABAJADOR", "/"],
+    ["TRABAJADOR", "/inspecciones"],
+    ["SUPERVISOR", "/aprobaciones"],
+    ["ADMINISTRADOR", "/admin/usuarios"],
+    ["DIRECTOR", "/dashboard"],
+  ] as const)("sin autorización, %s en %s va a /autorizacion", async (role, pathname) => {
+    const middleware = await importMiddleware();
+    const res = middleware(crearRequest(pathname, role, false) as Parameters<Handler>[0]);
+    expect(res.headers.get("location")).toBe("http://localhost/autorizacion");
+  });
+
+  it("una sesión anterior a esta función (sin el dato) también va a /autorizacion", async () => {
+    const middleware = await importMiddleware();
+    // `undefined` explícito dispararía el default del helper: se arma a mano.
+    const req = { nextUrl: new URL("http://localhost/inspecciones"), auth: { user: { role: "TRABAJADOR" as const } } };
+    const res = middleware(req);
+    expect(res.headers.get("location")).toBe("http://localhost/autorizacion");
+  });
+
+  it("sin autorización se puede abrir /autorizacion y los textos legales", async () => {
+    const middleware = await importMiddleware();
+    for (const pathname of ["/autorizacion", "/privacidad", "/terminos"]) {
+      const res = middleware(crearRequest(pathname, "TRABAJADOR", false) as Parameters<Handler>[0]);
+      expect(res.headers.get("location")).toBeNull();
+    }
+  });
+
+  it("con autorización, /autorizacion manda al inicio (no se vuelve a pedir)", async () => {
+    const middleware = await importMiddleware();
+    const res = middleware(crearRequest("/autorizacion", "TRABAJADOR", true) as Parameters<Handler>[0]);
+    expect(res.headers.get("location")).toBe("http://localhost/");
+  });
+
+  it("sin sesión, /autorizacion pide iniciar sesión", async () => {
+    const middleware = await importMiddleware();
+    const res = middleware(crearRequest("/autorizacion", null) as Parameters<Handler>[0]);
+    expect(res.headers.get("location")).toBe("http://localhost/login?callbackUrl=%2Fautorizacion");
   });
 });

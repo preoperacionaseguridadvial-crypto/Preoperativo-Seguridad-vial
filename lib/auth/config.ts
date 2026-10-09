@@ -4,13 +4,23 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { authConfig } from "@/lib/auth/base-config";
+import { jwtConAutorizacion } from "@/lib/auth/jwt-autorizacion";
+import { tieneAutorizacionDatos } from "@/lib/legal/autorizacion-datos";
 
 // Config completa de NextAuth (Node.js runtime): extiende authConfig con el
 // Credentials provider, que depende de bcrypt y Prisma Client — por eso NO
 // se usa directamente en middleware.ts (Edge Runtime). Ver
 // lib/auth/base-config.ts para el detalle de por qué está separado así.
-export const { handlers, auth, signIn, signOut } = NextAuth({
+//
+// `unstable_update` refresca el token desde el servidor: lo usa
+// app/autorizacion después de registrar la firma, para que Proxy deje pasar
+// al usuario sin obligarlo a iniciar sesión de nuevo.
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    jwt: (params) => jwtConAutorizacion(params, tieneAutorizacionDatos),
+  },
   providers: [
     Credentials({
       credentials: {
@@ -33,6 +43,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           email: user.email,
           role: user.role,
+          autorizoDatos: await tieneAutorizacionDatos(user.id),
         };
       },
     }),

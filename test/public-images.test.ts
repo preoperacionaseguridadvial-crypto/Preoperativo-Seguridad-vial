@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 // cual (<img> nativo, sin next/image) y se abren en el celular del trabajador,
 // muchas veces con datos móviles: pesar MB por imagen hace lenta cada pantalla
 // del recorrido. Para optimizar una imagen nueva: `npm run imagenes:optimizar`.
-const CARPETAS = ["public/checklist", "public/estado-conductor"];
+const CARPETAS = ["public/checklist", "public/estado-conductor", "public/fotos-guia"];
 const MAX_KB = 400;
 
 const imagenes = CARPETAS.flatMap((carpeta) =>

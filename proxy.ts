@@ -1,6 +1,8 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/base-config";
+import { isPublicPath } from "@/lib/auth/public-paths";
+import { destinoPorAutorizacion } from "@/lib/auth/gate-autorizacion";
 import { getRequiredRoles } from "@/lib/auth/route-roles";
 
 // Aunque Proxy (Next.js 16+, antes "middleware") corre en Node.js runtime
@@ -9,15 +11,6 @@ import { getRequiredRoles } from "@/lib/auth/route-roles";
 // request que pasa por acá — solo se necesita decodificar el JWT. Ver el
 // comentario en base-config.ts.
 const { auth } = NextAuth(authConfig);
-
-// Rutas públicas: no requieren sesión. "/api/auth" incluye signin/signout/
-// callback/session/csrf de NextAuth, que deben ser accesibles sin sesión
-// (si no, nadie podría iniciar sesión).
-const PUBLIC_PATHS = ["/login", "/api/auth"];
-
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-}
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -32,6 +25,13 @@ export default auth((req) => {
     const loginUrl = new URL("/login", req.nextUrl.origin);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Sin la autorización de tratamiento de datos firmada no se abre nada más
+  // (ni páginas ni route handlers): va antes que el chequeo de rol.
+  const destino = destinoPorAutorizacion(pathname, session.user.autorizoDatos);
+  if (destino) {
+    return NextResponse.redirect(new URL(destino, req.nextUrl.origin));
   }
 
   const requiredRoles = getRequiredRoles(pathname);

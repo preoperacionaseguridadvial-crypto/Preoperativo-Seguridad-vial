@@ -6,7 +6,7 @@ import { getSignedReadUrl } from "@/lib/storage/s3";
 import { estadoVencimiento, type EstadoVencimiento } from "@/lib/admin/vencimientos";
 import { Role } from "@/generated/prisma/client";
 import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
-import { formatFechaSoloDia } from "@/lib/fechas/formato";
+import { formatFechaHora, formatFechaSoloDia } from "@/lib/fechas/formato";
 
 const ETIQUETA_ESTADO: Record<EstadoVencimiento, { texto: string; clase: string }> = {
   VIGENTE: { texto: "Vigente", clase: "bg-green-100 text-green-800" },
@@ -38,6 +38,10 @@ export default async function HojaDeVidaPage({ params }: { params: Promise<{ id:
   // URL prefirmada de corta vida; si falla la firma la página sigue sin la foto.
   const fotoUrl = vehiculo?.fotoS3Key
     ? await getSignedReadUrl(vehiculo.fotoS3Key).catch(() => null)
+    : null;
+  const autorizacion = usuario.autorizacionDatos;
+  const firmaAutorizacionUrl = autorizacion
+    ? await getSignedReadUrl(autorizacion.firmaS3Key).catch(() => null)
     : null;
   const ahora = new Date();
 
@@ -124,6 +128,34 @@ export default async function HojaDeVidaPage({ params }: { params: Promise<{ id:
             </div>
           );
         })}
+      </section>
+
+      {/* Autorización de tratamiento de datos (Ley 1581 de 2012): la firma el
+          usuario una única vez en su primer ingreso, ver app/autorizacion. */}
+      <section className="flex flex-col gap-2 rounded-md border border-gray-200 bg-white p-4">
+        <h2 className="text-sm font-medium text-gray-500">Autorización de tratamiento de datos</h2>
+        {autorizacion ? (
+          <>
+            <p className="text-sm text-green-700">
+              ✓ Autorizado el {formatFechaHora(autorizacion.createdAt)}
+            </p>
+            <p className="text-xs text-gray-500">
+              Política de datos versión {autorizacion.versionPolitica}
+            </p>
+            {firmaAutorizacionUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal, no candidata a next/image remoto.
+              <img
+                src={firmaAutorizacionUrl}
+                alt={`Firma de ${usuario.name}`}
+                className="h-28 w-full max-w-xs rounded-md border border-gray-200 bg-white object-contain"
+              />
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-amber-700">
+            Pendiente: el usuario todavía no ha firmado la autorización.
+          </p>
+        )}
       </section>
     </main>
   );
