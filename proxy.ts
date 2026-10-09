@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/base-config";
+import { isPublicPath } from "@/lib/auth/public-paths";
 import { getRequiredRoles } from "@/lib/auth/route-roles";
 
 // Aunque Proxy (Next.js 16+, antes "middleware") corre en Node.js runtime
@@ -9,15 +10,6 @@ import { getRequiredRoles } from "@/lib/auth/route-roles";
 // request que pasa por acá — solo se necesita decodificar el JWT. Ver el
 // comentario en base-config.ts.
 const { auth } = NextAuth(authConfig);
-
-// Rutas públicas: no requieren sesión. "/api/auth" incluye signin/signout/
-// callback/session/csrf de NextAuth, que deben ser accesibles sin sesión
-// (si no, nadie podría iniciar sesión).
-const PUBLIC_PATHS = ["/login", "/api/auth"];
-
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-}
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

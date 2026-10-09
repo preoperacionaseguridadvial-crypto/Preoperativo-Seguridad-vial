@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SerwistProvider } from "@serwist/next/react";
+import { CreditoHistech } from "@/app/_components/CreditoHistech";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SerwistProvider swUrl="/sw.js" disable={process.env.NODE_ENV !== "production"}>
           {children}
         </SerwistProvider>
+        <CreditoHistech />
       </body>
     </html>
   );
