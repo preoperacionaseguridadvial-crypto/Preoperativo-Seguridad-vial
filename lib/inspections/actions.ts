@@ -484,6 +484,40 @@ export async function subirFotoNovedad(novedadId: string, formData: FormData) {
 }
 
 /**
+ * Pantalla única de novedad: guarda la respuesta + novedad (`responderItem`) y,
+ * si el trabajador tomó una foto, la adjunta (`subirFotoNovedad`). La foto es
+ * opcional: un input vacío (o sin campo `file`) no es error. Si la novedad ya
+ * tiene foto (corrección), no se sube otra — una sola foto por novedad — y no
+ * se falla. Toda la validación (auth, propiedad, archivo) vive en las dos
+ * funciones reutilizadas.
+ */
+export async function guardarNovedadConFoto(
+  inspectionId: string,
+  checklistItemId: string,
+  valor: RespuestaChecklist,
+  datos: { observacion?: string; tipo?: TipoNovedad; ubicacion?: string },
+  formData: FormData,
+) {
+  const resultado = await responderItem(
+    inspectionId,
+    checklistItemId,
+    valor,
+    datos.observacion,
+    datos.tipo,
+    datos.ubicacion,
+  );
+
+  const file = formData.get("file");
+  if (resultado.novedad && file instanceof File && file.size > 0) {
+    const fotos = await prisma.photo.count({ where: { novedadId: resultado.novedad.id } });
+    if (fotos === 0) {
+      await subirFotoNovedad(resultado.novedad.id, formData);
+    }
+  }
+  return resultado;
+}
+
+/**
  * Registra el resultado final: si el vehículo puede operar o no. Si no
  * puede, la justificación es obligatoria.
  */
