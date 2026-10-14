@@ -37,4 +37,6 @@ Compression check (user asked to validate it): the photo is already compressed i
   - GREEN: same command -> 80 passed.
   - Implemented: `guardarNovedadConFoto` (lib/inspections/actions.ts), `CampoFotoNovedad` + `BotonGuardarNovedad` (app/(worker)/inspecciones/_components/CampoFotoNovedad.tsx), novedad page uses them and shows "Foto adjuntada" when the novedad already has a photo.
   - Verification: `npx vitest run`: 59 files, 818 tests passed; `npx tsc --noEmit`: clean; `npx eslint` on changed files: clean.
-  - Pending: live check as trabajador (not done by the writer); commit hash to be recorded by parent.
+  - Commit: `80752ba`. RDD off; assess (committed-only, untracked excluded): medium, under_budget.
+  - Parent fix (`fix(novedades): limpiar la vista previa si se cancela la camara`): clear the preview when the camera is cancelled and the input is emptied. tsc + eslint clean.
+  - Pending: live check as trabajador on a real phone.

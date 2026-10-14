@@ -35,7 +35,12 @@ export function CampoFotoNovedad() {
     // `currentTarget` deja de existir tras el primer `await`: se captura antes.
     const input = event.currentTarget;
     const original = input.files?.[0];
-    if (!original) return;
+    if (!original) {
+      // Cámara cancelada: algunos navegadores vacían el input. Sin esto la
+      // vista previa seguiría mostrando una foto que ya no se va a enviar.
+      setVistaPrevia(null);
+      return;
+    }
 
     setProcesando(true);
     input.setCustomValidity("Esperá a que termine de procesarse la foto.");
