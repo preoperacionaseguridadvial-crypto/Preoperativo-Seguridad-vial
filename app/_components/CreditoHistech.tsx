@@ -3,16 +3,16 @@ import Link from "next/link";
 const URL_HISTECH = "https://histech.com.co/";
 
 /**
- * Pie de todas las páginas (se monta una sola vez en app/layout.tsx): crédito
- * del desarrollador, alcance de la licencia y enlaces a los textos legales
+ * Pie de todas las páginas (se monta una sola vez en app/layout.tsx): una sola
+ * línea discreta con el crédito del desarrollador, la licencia y los textos legales
  * (app/(legal)). "Histech" enlaza a su página oficial en una pestaña nueva,
  * para no sacar al usuario de una inspección a medio llenar.
  */
 export function CreditoHistech() {
   return (
-    <footer className="bg-page px-4 py-3 text-center text-xs text-ink-muted">
+    <footer className="bg-page px-4 py-2 text-center text-[11px] leading-tight text-ink-muted/80">
       <p>
-        Aplicación creada por{" "}
+        © {new Date().getFullYear()} Todos los derechos reservados{" "}
         <a
           href={URL_HISTECH}
           target="_blank"
@@ -24,15 +24,13 @@ export function CreditoHistech() {
         >
           Histech
         </a>{" "}
-        · Uso exclusivo de ESS LTDA
-      </p>
-      <p className="mt-1">
-        <Link href="/terminos" className="underline underline-offset-2 hover:text-ink">
-          Términos y licencia
+        - ESS LTDA ·{" "}
+        <Link href="/terminos" className="underline-offset-2 hover:text-ink hover:underline">
+          Términos
         </Link>
         {" · "}
-        <Link href="/privacidad" className="underline underline-offset-2 hover:text-ink">
-          Tratamiento de datos
+        <Link href="/privacidad" className="underline-offset-2 hover:text-ink hover:underline">
+          Privacidad
         </Link>
       </p>
     </footer>
