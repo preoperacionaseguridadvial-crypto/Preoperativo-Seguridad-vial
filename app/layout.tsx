@@ -20,8 +20,8 @@ export const metadata: Metadata = {
     "Inspecciones preoperacionales diarias de motocicletas para motorizados de seguridad vial de ESS LTDA.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icons/icon-192.svg",
-    apple: "/icons/icon-512.svg",
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
   },
 };
 
