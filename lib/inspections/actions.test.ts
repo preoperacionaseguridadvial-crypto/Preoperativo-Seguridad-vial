@@ -39,6 +39,7 @@ import {
   registrarResultado,
   responderItem,
   subirFotoNovedad,
+  guardarNovedadConFoto,
 } from "@/lib/inspections/actions";
 import {
   crearCatalogoMinimo,
@@ -1303,5 +1304,91 @@ describe("corregir kilometraje, declaración del conductor y resultado", () => {
 
     await registrarResultado(inspection.id, false, "Llanta sin presión y sin freno");
     expect(await firmas(inspection.id)).toBe(0);
+  });
+});
+
+// Novedad + foto en una sola pantalla: `guardarNovedadConFoto` orquesta
+// `responderItem` y, solo si llegó un archivo no vacío y la novedad aún no
+// tiene foto, `subirFotoNovedad`. La foto es opcional.
+describe("guardarNovedadConFoto", () => {
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+  const datos = { observacion: "Espejo roto", tipo: "FALLA" as const, ubicacion: "lado derecho" };
+
+  async function escenario() {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+    return { inspection, item };
+  }
+
+  function conArchivo(contenido: BlobPart, nombre = "foto.jpg", tipo = "image/jpeg"): FormData {
+    const fd = new FormData();
+    fd.set("file", new File([contenido], nombre, { type: tipo }));
+    return fd;
+  }
+
+  it("guarda la novedad y adjunta la foto", async () => {
+    const { inspection, item } = await escenario();
+
+    const { novedad } = await guardarNovedadConFoto(
+      inspection.id, item.id, RespuestaChecklist.FALLA, datos, conArchivo(JPEG),
+    );
+
+    expect(novedad).not.toBeNull();
+    expect(await prisma.photo.count({ where: { novedadId: novedad!.id } })).toBe(1);
+    expect(mockUploadObject).toHaveBeenCalledTimes(1);
+  });
+
+  it("sin foto (input vacío) guarda la novedad sin adjunto ni error", async () => {
+    const { inspection, item } = await escenario();
+
+    const { novedad } = await guardarNovedadConFoto(
+      inspection.id, item.id, RespuestaChecklist.FALLA, datos, conArchivo(new Uint8Array(0), ""),
+    );
+
+    expect(novedad).not.toBeNull();
+    expect(await prisma.photo.count({ where: { novedadId: novedad!.id } })).toBe(0);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("sin campo file en el FormData también guarda sin foto", async () => {
+    const { inspection, item } = await escenario();
+
+    const { novedad } = await guardarNovedadConFoto(
+      inspection.id, item.id, RespuestaChecklist.FALLA, datos, new FormData(),
+    );
+
+    expect(novedad).not.toBeNull();
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("corrección con novedad que ya tiene foto: actualiza la novedad y no agrega una segunda foto", async () => {
+    const { inspection, item } = await escenario();
+    const primera = await guardarNovedadConFoto(
+      inspection.id, item.id, RespuestaChecklist.FALLA, datos, conArchivo(JPEG),
+    );
+    mockUploadObject.mockClear();
+
+    const { novedad } = await guardarNovedadConFoto(
+      inspection.id, item.id, RespuestaChecklist.FALLA,
+      { ...datos, observacion: "Espejo roto y suelto" }, conArchivo(JPEG),
+    );
+
+    expect(novedad!.id).toBe(primera.novedad!.id);
+    expect(novedad!.descripcion).toBe("Espejo roto y suelto");
+    expect(await prisma.photo.count({ where: { novedadId: novedad!.id } })).toBe(1);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("un archivo inválido lanza el mismo error que subirFotoNovedad y no sube nada", async () => {
+    const { inspection, item } = await escenario();
+
+    await expect(
+      guardarNovedadConFoto(
+        inspection.id, item.id, RespuestaChecklist.FALLA, datos,
+        conArchivo("contenido-de-prueba", "foto.jpg", "image/jpeg"),
+      ),
+    ).rejects.toThrow(/no corresponde/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
   });
 });

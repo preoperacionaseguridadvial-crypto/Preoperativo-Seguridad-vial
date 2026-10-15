@@ -8,13 +8,19 @@ import {
   getChecklistItemById,
   CATEGORIA_SIN_PANTALLA_PROPIA,
 } from "@/lib/inspections/queries";
-import { responderItem } from "@/lib/inspections/actions";
+import { guardarNovedadConFoto } from "@/lib/inspections/actions";
 import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
+import {
+  BotonGuardarNovedad,
+  CampoFotoNovedad,
+} from "@/app/(worker)/inspecciones/_components/CampoFotoNovedad";
 import { getTiposNovedadParaItem, TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 
 // Pantalla de novedad (sección 11 del brief): textarea obligatoria. La foto
-// se toma en el siguiente paso, una vez que la Novedad ya existe en base de
-// datos (subirFotoNovedad necesita un novedadId).
+// (opcional) se toma en esta misma pantalla: queda comprimida y en vista
+// previa, y un único "Continuar" guarda la novedad y la adjunta
+// (guardarNovedadConFoto). Si la novedad ya tenía foto (corrección) solo se
+// muestra que está adjunta; una sola foto por novedad.
 //
 // Para la categoría "Documentación" (SOAT, licencia, etc.) esta pantalla se
 // adapta: el tipo se acota a TIPOS_NOVEDAD_DOCUMENTO (vencido/dañado/no lo
@@ -57,6 +63,7 @@ export default async function NovedadPage({
   // pantalla; acá `observacion` es la descripción.
   const respuestaPrevia = inspection.respuestas.find((r) => r.checklistItemId === itemId);
   const novedadPrevia = respuestaPrevia?.novedad ?? null;
+  const tieneFoto = (novedadPrevia?.photos.length ?? 0) > 0;
 
   // Los documentos se resuelven en la lista; el resto, en su pantalla de ítem.
   const hrefAtras = esDocumento
@@ -68,10 +75,13 @@ export default async function NovedadPage({
     const observacion = formData.get("observacion")?.toString() ?? "";
     const tipo = formData.get("tipo")?.toString() as TipoNovedad;
     const ubicacion = esDocumento ? "" : (formData.get("ubicacion")?.toString() ?? "");
-    const { novedad } = await responderItem(id, itemId, valorNovedad, observacion, tipo, ubicacion);
-    if (novedad) {
-      redirect(`/inspecciones/${id}/novedades/${novedad.id}/foto`);
-    }
+    await guardarNovedadConFoto(
+      id,
+      itemId,
+      valorNovedad,
+      { observacion, tipo, ubicacion },
+      formData,
+    );
     redirect(await getNextStepPath(id));
   }
 
@@ -133,12 +143,15 @@ export default async function NovedadPage({
           </div>
         )}
 
-        <button
-          type="submit"
-          className="w-full rounded-md bg-[#0B3B60] px-4 py-4 text-base font-semibold text-white hover:bg-[#0B3B60]/90"
-        >
-          Continuar
-        </button>
+        {tieneFoto ? (
+          <p className="rounded-md border border-green-200 bg-green-50 px-3 py-3 text-sm font-medium text-green-800">
+            ✓ Foto adjuntada
+          </p>
+        ) : (
+          <CampoFotoNovedad />
+        )}
+
+        <BotonGuardarNovedad />
       </form>
     </main>
   );
