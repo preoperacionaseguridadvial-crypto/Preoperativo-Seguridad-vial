@@ -13,7 +13,13 @@ import { createInterface } from "node:readline/promises";
 import bcrypt from "bcrypt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Role } from "../generated/prisma/client";
-import { describirBase, MIN_PASSWORD_ADMIN, validarDatosAdmin } from "./crear-admin-validacion";
+import {
+  describirBase,
+  diagnosticarUrl,
+  limpiarUrlPegada,
+  MIN_PASSWORD_ADMIN,
+  validarDatosAdmin,
+} from "./crear-admin-validacion";
 
 const COSTO_BCRYPT = 10;
 
@@ -73,9 +79,11 @@ async function main() {
   }
 
   console.log("Crear el primer usuario Administrador\n");
-  const url = (await preguntarOculto("URL de la base (DATABASE_PUBLIC_URL de Railway, oculta): ")).trim();
+  console.log("Pegá la URL con clic derecho (no se va a ver) y apretá Enter.");
+  const url = limpiarUrlPegada(await preguntarOculto("URL de la base (DATABASE_PUBLIC_URL de Railway, oculta): "));
   const base = describirBase(url);
-  if (!base) throw new Error("La URL no es de PostgreSQL (debe empezar con postgresql://).");
+  if (!base) throw new Error(diagnosticarUrl(url));
+  console.log(`URL recibida (${url.length} caracteres).`);
 
   const prisma = new PrismaClient({ adapter: new PrismaPg(url) });
   try {
