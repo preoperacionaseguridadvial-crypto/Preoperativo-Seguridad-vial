@@ -56,6 +56,10 @@ Es idempotente: se puede correr en cada despliegue.
 
 ## 5. Después del primer despliegue
 
-1. Crear el primer usuario Administrador real (pendiente: comando dedicado).
+1. Crear el primer usuario Administrador real desde un PC con el repositorio instalado, en PowerShell o CMD (en Git Bash anteponer `winpty`):
+   ```
+   npx tsx scripts/crear-admin.ts
+   ```
+   El script pide la `DATABASE_PUBLIC_URL` del servicio Postgres (Railway → Postgres → Variables) y la contraseña de forma oculta, muestra a qué base va a escribir y pide confirmación. Nunca modifica un usuario existente. Los demás usuarios se crean después desde el panel de Administrador.
 2. Probar el flujo completo desde un celular: inicio de sesión, inspección, fotos, firma, PDF y aprobación del supervisor.
 3. Revisar en Postgres → **Backups** que las copias automáticas estén activas.
