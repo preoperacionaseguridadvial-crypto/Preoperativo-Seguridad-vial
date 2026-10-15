@@ -9,4 +9,22 @@ import { serwist } from "@serwist/next/config";
 export default serwist({
   swSrc: "app/sw.ts",
   swDest: "public/sw.js",
+  // No precachear páginas prerenderizadas: casi todas exigen sesión (p. ej.
+  // /admin), y el service worker, instalado antes del login, guardaba la
+  // página de login en su lugar y la servía desde el caché.
+  precachePrerendered: false,
+  // No precachear las imágenes de guía, documentación ni archivos de trabajo
+  // de public/. Las imágenes se piden al usarlas (y el caché de imágenes en
+  // tiempo de ejecución las guarda). Precachearlas hacía que el service
+  // worker, instalado en la pantalla de login, guardara la página de login en
+  // lugar de cada imagen; además, sacarlas del precache hace que los
+  // celulares que ya tienen esa copia rota la descarten al actualizar.
+  globIgnores: [
+    "**/checklist/**",
+    "**/estado-conductor/**",
+    "**/fotos-guia/**",
+    "**/fonts/**",
+    "**/*.md",
+    "**/*.xlsx",
+  ],
 });
