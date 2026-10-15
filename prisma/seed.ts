@@ -3,6 +3,7 @@ import { PrismaClient, TipoVehiculo, TipoRespuestaItem } from "../generated/pris
 import { PrismaPg } from "@prisma/adapter-pg";
 import { CLAVE_FECHA_VIGENCIA, PLACEHOLDER_FECHA_VIGENCIA } from "../lib/settings/constants";
 import { SEED_FECHA_VENCIMIENTO_TECNICOMECANICA, SEED_USERS, SEED_VEHICULOS } from "./seed-usuarios";
+import { resolverModoSeed } from "./seed-modo";
 
 const adapter = new PrismaPg(process.env.DATABASE_URL ?? "");
 const prisma = new PrismaClient({ adapter });
@@ -180,6 +181,28 @@ async function limpiarDatosDePruebaObsoletos() {
 }
 
 async function main() {
+  // Producción: solo catálogo y configuración (ver prisma/seed-modo.ts).
+  const modo = resolverModoSeed(process.env);
+  console.log(
+    modo.produccion
+      ? "Seed: modo producción → solo catálogo y configuración (sin usuarios demo ni limpieza)."
+      : "Seed: modo desarrollo → catálogo + usuarios y vehículos demo.",
+  );
+
+  if (modo.datosDemo) {
+    await sembrarUsuariosDemo();
+  }
+  if (modo.limpiarDatosPrueba) {
+    await limpiarDatosDePruebaObsoletos();
+  }
+  await sembrarCatalogo();
+  if (modo.datosDemo) {
+    await sembrarVehiculosDemo();
+  }
+  await sembrarConfiguracion();
+}
+
+async function sembrarUsuariosDemo() {
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
 
   for (const { email, name, role, cedula, tipoVehiculo, sede } of SEED_USERS) {
@@ -210,9 +233,9 @@ async function main() {
   console.log(`Seed OK: ${SEED_USERS.length} usuarios creados/actualizados.`);
   console.log(`Password de desarrollo para todos: "${SEED_PASSWORD}"`);
   console.log("(sobreescribible con la variable de entorno SEED_USER_PASSWORD)");
+}
 
-  await limpiarDatosDePruebaObsoletos();
-
+async function sembrarCatalogo() {
   // "luces-altas" se subió como .png (el resto del catálogo usa .jpg) — ver public/checklist/README.md.
   const PNG_SLUGS = new Set(["luces-altas"]);
 
@@ -266,7 +289,9 @@ async function main() {
   console.log(
     `Seed OK: ${CHECKLIST.length} categorías y ${totalItems} ítems de checklist creados/actualizados.`,
   );
+}
 
+async function sembrarVehiculosDemo() {
   // Un vehículo demo por Recorredor (relación 1:1 `User.vehicleId`, decisión
   // del usuario, 2026-09-18): MOTO de Bogotá, CARRO y MOTO de Oleariari. Idempotente:
   // `vehicleId` es unique y cada par es fijo, así que correr el seed de nuevo
@@ -292,7 +317,9 @@ async function main() {
     await prisma.user.update({ where: { email: usuarioEmail }, data: { vehicleId: vehiculo.id } });
     console.log(`Seed OK: vehículo demo "${placa}" (${tipoVehiculo}) vinculado a ${usuarioEmail}.`);
   }
+}
 
+async function sembrarConfiguracion() {
   // Fase soporte-moto-carro (Slice 4, ADR A5): placeholder de
   // "Fecha vigencia" del PDF hasta que un Administrador defina la fecha
   // real desde /admin/configuracion (ver lib/settings/actions.ts). `create`
