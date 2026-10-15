@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SerwistProvider } from "@serwist/next/react";
+import { AvisoInstalacionPwa } from "@/app/_components/AvisoInstalacionPwa";
 import { CreditoHistech } from "@/app/_components/CreditoHistech";
 import "./globals.css";
 
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
         </SerwistProvider>
         <CreditoHistech />
+        <AvisoInstalacionPwa />
       </body>
     </html>
   );
