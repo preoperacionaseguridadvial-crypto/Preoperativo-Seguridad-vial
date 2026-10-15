@@ -6,9 +6,10 @@ import { CreditoHistech } from "@/app/_components/CreditoHistech";
 describe("CreditoHistech", () => {
   const html = renderToStaticMarkup(createElement(CreditoHistech));
 
-  it("informa que la aplicación fue creada por Histech", () => {
-    expect(html).toContain("Aplicación creada por");
+  it("muestra el crédito de Histech en una sola línea discreta", () => {
+    expect(html).toContain("Todos los derechos reservados");
     expect(html).toContain("Histech");
+    expect(html.match(/<p[ >]/g)).toHaveLength(1);
   });
 
   it("enlaza a la página oficial de Histech en una pestaña nueva", () => {
@@ -18,7 +19,7 @@ describe("CreditoHistech", () => {
   });
 
   it("aclara el uso exclusivo de ESS LTDA y enlaza los textos legales", () => {
-    expect(html).toContain("Uso exclusivo de ESS LTDA");
+    expect(html).toContain("ESS LTDA");
     expect(html).toContain('href="/terminos"');
     expect(html).toContain('href="/privacidad"');
   });
