@@ -47,7 +47,7 @@ export function limpiarUrlPegada(texto: string): string {
  */
 export function diagnosticarUrl(url: string): string {
   if (!url) {
-    return "No se recibió ningún texto. En PowerShell pegá con clic derecho (Ctrl+V no funciona en la entrada oculta).";
+    return "No se recibió ningún texto. Copiá el valor de DATABASE_PUBLIC_URL en Railway (⋮ → Copy value) antes de apretar Enter.";
   }
   if (url.includes("${{")) {
     return "Se pegó la plantilla de Railway (con ${{ }}), no el valor real. Copiá el valor con ⋮ → Copy value.";

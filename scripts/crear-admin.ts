@@ -1,6 +1,7 @@
 // Crea el primer usuario ADMINISTRADOR en una base sin usuarios (por ejemplo
 // producción en Railway, donde el seed no crea usuarios demo). Todo se pide de
-// forma interactiva: la URL de la base y la contraseña se escriben ocultas, así
+// forma interactiva: la URL de la base se toma del portapapeles (Windows) y la
+// contraseña se escribe oculta, así
 // no quedan en el historial de la terminal ni en argumentos del proceso.
 //
 //   npx tsx scripts/crear-admin.ts
@@ -9,6 +10,7 @@
 // (en Git Bash/mintty usar `winpty npx tsx scripts/crear-admin.ts`).
 //
 // Nunca modifica un usuario existente: si el email ya existe, se detiene.
+import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import bcrypt from "bcrypt";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -71,6 +73,25 @@ function preguntarOculto(texto: string): Promise<string> {
   });
 }
 
+/**
+ * En Windows la URL se toma del portapapeles (pegar en una entrada oculta no
+ * funciona en PowerShell/CMD) y después se vacía el portapapeles. En otros
+ * sistemas se pide oculta.
+ */
+async function leerUrl(): Promise<string> {
+  if (process.platform !== "win32") {
+    return preguntarOculto("URL de la base (DATABASE_PUBLIC_URL de Railway, oculta): ");
+  }
+  await preguntar(
+    "Copiá en Railway el valor de DATABASE_PUBLIC_URL (⋮ → Copy value) y apretá Enter acá (no hace falta pegar): ",
+  );
+  const powershell = (comando: string) =>
+    execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", comando], { encoding: "utf8" });
+  const url = powershell("Get-Clipboard -Raw");
+  powershell("Set-Clipboard -Value ' '");
+  return url;
+}
+
 async function main() {
   if (!process.stdin.isTTY) {
     throw new Error(
@@ -79,8 +100,7 @@ async function main() {
   }
 
   console.log("Crear el primer usuario Administrador\n");
-  console.log("Pegá la URL con clic derecho (no se va a ver) y apretá Enter.");
-  const url = limpiarUrlPegada(await preguntarOculto("URL de la base (DATABASE_PUBLIC_URL de Railway, oculta): "));
+  const url = limpiarUrlPegada(await leerUrl());
   const base = describirBase(url);
   if (!base) throw new Error(diagnosticarUrl(url));
   console.log(`URL recibida (${url.length} caracteres).`);
