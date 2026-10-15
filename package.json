@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && serwist build",
+    "build": "prisma generate && next build && serwist build",
     "start": "next start",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:test": "node -e \"require('child_process').execSync('prisma migrate deploy',{stdio:'inherit',env:{...process.env,DATABASE_URL:'postgresql://preop:preop@localhost:5433/preoperacional_test'}})\"",
     "prisma:seed": "prisma db seed",
+    "db:desplegar": "prisma migrate deploy && prisma db seed",
     "test": "vitest run",
     "imagenes:optimizar": "node scripts/optimizar-imagenes.mjs"
   },
@@ -22,6 +23,7 @@
     "@react-pdf/renderer": "^4.6.1",
     "@serwist/next": "^9.5.12",
     "bcrypt": "^6.0.0",
+    "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "next": "16.3.1",
     "next-auth": "^5.0.0-beta.32",
@@ -30,7 +32,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
-    "serwist": "^9.5.12"
+    "serwist": "^9.5.12",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@serwist/cli": "^9.5.12",
@@ -40,14 +43,15 @@
     "@types/pg": "^8.21.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "dotenv": "^17.4.2",
     "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "sharp": "^0.35.3",
     "tailwindcss": "^4",
-    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
