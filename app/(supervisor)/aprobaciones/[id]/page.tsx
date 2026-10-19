@@ -471,9 +471,9 @@ function FirmaEvidencia({
 // Corrección Slice 3: antes solo distinguía OK/Falla — los ítems de
 // fluidos con `tipoRespuesta = TRIESTADO` (Slice 2, BUENO/BAJO/MALO) caían
 // todos en "Falla" salvo OK, mostrando "Bueno" y "Bajo" como si fueran
-// fallas reales. "Bajo" es advertencia, no falla (no crea Novedad, ver
-// lib/inspections/respuesta.ts `esNovedad`) — color propio (ámbar) para no
-// confundirlo con "Malo".
+// fallas reales. Desde 2026-10-19 "Bajo" reemplaza a "Malo" en los fluidos
+// (crea Novedad, ver lib/inspections/respuesta.ts `esNovedad`) y se pinta en
+// rojo como falla.
 function badgeLabel(valor: string) {
   switch (valor) {
     case "OK":
@@ -492,8 +492,7 @@ function badgeLabel(valor: string) {
 function badgeClass(valor: string) {
   const base = "rounded-full px-2 py-0.5 text-xs font-semibold";
   if (valor === "OK" || valor === "BUENO") return `${base} bg-green-100 text-green-800`;
-  if (valor === "BAJO") return `${base} bg-amber-100 text-amber-800`;
-  return `${base} bg-red-100 text-red-800`; // FALLA, MALO
+  return `${base} bg-red-100 text-red-800`; // FALLA, BAJO, MALO
 }
 
 function siNoOTexto(valor: boolean | null) {

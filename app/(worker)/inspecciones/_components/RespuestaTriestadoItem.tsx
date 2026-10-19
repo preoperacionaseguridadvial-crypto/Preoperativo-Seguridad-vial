@@ -39,9 +39,9 @@ export function RespuestaTriestadoItem({
 
       <Link
         href={`/inspecciones/${idInspeccion}/checklist/${itemId}/novedad`}
-        className={`block w-full rounded-[10px] bg-[#D97706] px-4 py-5 text-center text-lg font-semibold text-white hover:bg-[#B45309]${valorActual === "BAJO" ? ANILLO_ACTUAL : ""}`}
+        className={`block w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-center text-lg font-semibold text-white hover:bg-[#B91C1C]${valorActual === "BAJO" ? ANILLO_ACTUAL : ""}`}
       >
-        ⚠ Bajo
+        ✕ Bajo
       </Link>
     </div>
   );
