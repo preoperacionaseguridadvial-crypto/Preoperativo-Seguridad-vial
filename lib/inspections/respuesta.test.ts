@@ -15,8 +15,10 @@ describe("esNovedad", () => {
     expect(esNovedad(RespuestaChecklist.MALO)).toBe(true);
   });
 
-  it("es false para BAJO — decisión confirmada: solo dato/observación, no novedad", () => {
-    expect(esNovedad(RespuestaChecklist.BAJO)).toBe(false);
+  // Pedido del dueño de producto (2026-10-19): BAJO reemplaza a MALO en los
+  // fluidos y hereda su función — crea Novedad como FALLA.
+  it("es true para BAJO (reemplaza a MALO en fluidos)", () => {
+    expect(esNovedad(RespuestaChecklist.BAJO)).toBe(true);
   });
 
   it("es false para OK y BUENO", () => {
@@ -52,7 +54,7 @@ describe("valoresPermitidos", () => {
 // justo antes de la firma. `filtrarNoConformes` es la única fuente de verdad
 // para ese filtro, reusando `esNovedad()`.
 describe("filtrarNoConformes", () => {
-  it("incluye respuestas en FALLA (binario) y en MALO (triestado)", () => {
+  it("incluye respuestas en FALLA (binario), BAJO y MALO histórico (triestado)", () => {
     const respuestas = [
       { id: "a", valor: RespuestaChecklist.OK },
       { id: "b", valor: RespuestaChecklist.FALLA },
@@ -63,14 +65,13 @@ describe("filtrarNoConformes", () => {
 
     const noConformes = filtrarNoConformes(respuestas);
 
-    expect(noConformes.map((r) => r.id)).toEqual(["b", "e"]);
+    expect(noConformes.map((r) => r.id)).toEqual(["b", "d", "e"]);
   });
 
-  it("devuelve vacío cuando no hay ninguna respuesta en FALLA o MALO", () => {
+  it("devuelve vacío cuando todas las respuestas son OK o BUENO", () => {
     const respuestas = [
       { id: "a", valor: RespuestaChecklist.OK },
       { id: "b", valor: RespuestaChecklist.BUENO },
-      { id: "c", valor: RespuestaChecklist.BAJO },
     ];
 
     expect(filtrarNoConformes(respuestas)).toEqual([]);

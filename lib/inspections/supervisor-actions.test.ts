@@ -191,14 +191,13 @@ describe("aprobarInspeccion", () => {
       expect(metadata.motivos[1]).toMatch(/alcohol/i);
     });
 
-    it("BAJO no exige confirmación", async () => {
+    it("BAJO exige confirmación (reemplaza a MALO en fluidos)", async () => {
       const supervisor = await crearUsuario(Role.SUPERVISOR);
       const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
       await agregarRespuesta(inspection.id, RespuestaChecklist.BAJO);
       loginComo(supervisor);
 
-      const resultado = await aprobarInspeccion(inspection.id);
-      expect(resultado.status).toBe(InspectionStatus.APROBADA);
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
     });
 
     it("una inspección NO_APTA_PARA_OPERAR (puedeOperar=false) exige confirmación", async () => {

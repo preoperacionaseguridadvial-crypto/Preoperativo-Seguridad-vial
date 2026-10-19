@@ -54,7 +54,7 @@ describe("getFallasPorItem", () => {
     expect(nombres).toContain("Nivel de aceite");
   });
 
-  it("no cuenta BAJO (triestado) — no es una falla, solo dato/advertencia", async () => {
+  it("cuenta BAJO (triestado) — reemplaza a MALO en fluidos", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -72,7 +72,7 @@ describe("getFallasPorItem", () => {
 
     const fallas = await getFallasPorItem({});
 
-    expect(fallas.map((f) => f.nombre)).not.toContain("Nivel refrigerante");
+    expect(fallas.map((f) => f.nombre)).toContain("Nivel refrigerante");
   });
 });
 

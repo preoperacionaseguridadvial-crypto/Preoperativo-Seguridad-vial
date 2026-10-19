@@ -48,15 +48,14 @@ export default async function NovedadPage({
     notFound();
   }
 
-  // Los fluidos (TRIESTADO) solo se marcan Bueno/Bajo desde el 2026-10-19 y
-  // nunca crean novedad: si se llega acá con uno (URL vieja), se vuelve al
-  // ítem en vez de mostrar un formulario que `responderItem` rechazaría.
-  if (item.tipoRespuesta === TipoRespuestaItem.TRIESTADO) {
-    redirect(`/inspecciones/${id}/checklist/${itemId}`);
-  }
-
   const esDocumento = item.category.nombre === CATEGORIA_SIN_PANTALLA_PROPIA;
   const tiposDisponibles = getTiposNovedadParaItem(item);
+  // Esta pantalla la comparten los ítems BINARIO (Falla) y TRIESTADO de
+  // fluidos — mismo flujo de descripción + tipo + foto, distinto valor final
+  // según el ítem. Desde 2026-10-19 (pedido del dueño de producto) "Bajo"
+  // reemplaza a "Malo" en los fluidos. Ver RespuestaTriestadoItem.
+  const esFluido = item.tipoRespuesta === TipoRespuestaItem.TRIESTADO;
+  const valorNovedad = esFluido ? RespuestaChecklist.BAJO : RespuestaChecklist.FALLA;
 
   // Corrección: si el ítem ya tenía una novedad, el formulario abre con sus
   // datos. En ítems con `pideUbicacion` el "¿Dónde?" vive en `observacion`
@@ -79,7 +78,7 @@ export default async function NovedadPage({
     await guardarNovedadConFoto(
       id,
       itemId,
-      RespuestaChecklist.FALLA,
+      valorNovedad,
       { observacion, tipo, ubicacion },
       formData,
     );
@@ -92,7 +91,7 @@ export default async function NovedadPage({
       <div>
         <p className="text-xs uppercase text-gray-400">{item.category.nombre}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">
-          {item.nombre} — Falla
+          {item.nombre} — {esFluido ? "Bajo" : "Falla"}
         </h1>
         <p className="mt-1 text-sm text-gray-500">Describí qué encontraste.</p>
       </div>

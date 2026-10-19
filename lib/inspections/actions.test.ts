@@ -595,7 +595,7 @@ describe("responderItem — valores según tipoRespuesta", () => {
 
   // Pedido del dueño de producto (2026-10-19): los fluidos solo admiten
   // Bueno/Bajo. MALO se rechaza aunque siga existiendo en el enum.
-  it("rechaza MALO en un ítem TRIESTADO; BAJO no crea Novedad", async () => {
+  it("rechaza MALO en un ítem TRIESTADO; BAJO crea una Novedad", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -612,8 +612,14 @@ describe("responderItem — valores según tipoRespuesta", () => {
       inspection.id,
       itemFluido.id,
       RespuestaChecklist.BAJO,
+      "Nivel por debajo del mínimo",
+      "FALLA",
     );
-    expect(novedadBajo).toBeNull();
+    expect(novedadBajo).not.toBeNull();
+    const enBase = await prisma.novedad.findFirst({
+      where: { inspectionItemResponse: { checklistItemId: itemFluido.id, inspectionId: inspection.id } },
+    });
+    expect(enBase).not.toBeNull();
 
     await expect(
       responderItem(
@@ -626,7 +632,7 @@ describe("responderItem — valores según tipoRespuesta", () => {
     ).rejects.toThrow(/no es un valor válido/i);
   });
 
-  it("BAJO no requiere observación ni tipo de novedad", async () => {
+  it("BAJO exige observación, igual que FALLA", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -641,7 +647,7 @@ describe("responderItem — valores según tipoRespuesta", () => {
 
     await expect(
       responderItem(inspection.id, itemFluido.id, RespuestaChecklist.BAJO),
-    ).resolves.not.toThrow();
+    ).rejects.toThrow();
   });
 });
 
