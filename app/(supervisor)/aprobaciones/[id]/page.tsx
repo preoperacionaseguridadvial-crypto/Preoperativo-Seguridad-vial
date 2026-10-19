@@ -109,7 +109,6 @@ export default async function AprobacionDetallePage({
     categoria.items.sort((a, b) => a.checklistItem.orden - b.checklistItem.orden);
   }
 
-  const noApta = inspection.status === "NO_APTA_PARA_OPERAR";
   // Slice 3 (A6/D8): dato derivado, nunca bloquea ni auto-transiciona —
   // solo decide si esta pantalla muestra la advertencia.
   const alertaEstadoConductor = requiereAtencionEstadoConductor(inspection);
@@ -227,20 +226,6 @@ export default async function AprobacionDetallePage({
             <dd className="font-medium">{inspection.kilometraje ?? "—"} km</dd>
           </div>
         </dl>
-      </section>
-
-      <section
-        className={`rounded-md p-4 text-sm ${
-          noApta ? "bg-red-50 text-red-900" : "bg-green-50 text-green-900"
-        }`}
-      >
-        <p className="text-xs uppercase tracking-wide opacity-70">Resultado reportado</p>
-        <p className="text-lg font-semibold">
-          {inspection.puedeOperar ? "✓ Puede operar" : "✕ No puede operar"}
-        </p>
-        {!inspection.puedeOperar && inspection.justificacionNoOperar && (
-          <p className="mt-1">{inspection.justificacionNoOperar}</p>
-        )}
       </section>
 
       <section
