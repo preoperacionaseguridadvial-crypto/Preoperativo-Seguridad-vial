@@ -6,7 +6,7 @@ import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervi
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
-import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
+import { PREGUNTAS_ESTADO_CONDUCTOR, requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirmacion-aprobacion";
 import { AprobarInspeccionForm } from "@/app/_components/AprobarInspeccionForm";
 import { Role, Sede, TipoFirma } from "@/generated/prisma/enums";
@@ -235,19 +235,15 @@ export default async function AprobacionDetallePage({
         {alertaEstadoConductor && (
           <p className="text-base font-semibold">⚠ Requiere atención</p>
         )}
-        <dl className="mt-2 flex flex-col gap-1">
-          <div className="flex justify-between">
-            <dt>¿Medicamento/sustancia/condición que afecte su capacidad?</dt>
-            <dd className="font-medium">{siNoOTexto(inspection.tomaMedicamentos)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt>¿Condiciones físicas y mentales adecuadas?</dt>
-            <dd className="font-medium">{siNoOTexto(inspection.condicionesAptas)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt>¿Consumió alcohol u otra sustancia?</dt>
-            <dd className="font-medium">{siNoOTexto(inspection.consumioAlcohol)}</dd>
-          </div>
+        {/* Texto textual del cliente (2026-10-19), misma fuente que la
+            pantalla del conductor — no abreviar. */}
+        <dl className="mt-2 flex flex-col gap-2">
+          {PREGUNTAS_ESTADO_CONDUCTOR.map((pregunta) => (
+            <div key={pregunta.campo} className="flex justify-between gap-4">
+              <dt>{pregunta.texto}</dt>
+              <dd className="shrink-0 font-medium">{siNoOTexto(inspection[pregunta.campo])}</dd>
+            </div>
+          ))}
         </dl>
       </section>
 
