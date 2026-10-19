@@ -90,22 +90,17 @@ function rolAprobadorDe(session: { user: { role: Role } }): RolAprobador {
 /**
  * Aprueba una inspección pendiente. La observación es opcional.
  *
- * Si la inspección tiene algo reportado (ver `motivosConfirmacionAprobacion`)
- * exige `confirmadoConNovedades = true` — el aprobador sigue decidiendo, pero
- * no puede aprobar "a ciegas". Los motivos se recalculan acá desde la base de
- * datos: el flag del cliente es solo un acuse de recibo, nunca la fuente de la
- * lista. Con confirmación, la auditoría guarda que se aprobó con novedades y
- * cuáles eran.
+ * Regla de producto (2026-10-19): solo se aprueba una inspección totalmente
+ * conforme. Si tiene algo reportado (ver `motivosConfirmacionAprobacion`) la
+ * aprobación se rechaza siempre y la única salida es `rechazarInspeccion` —
+ * en las dos etapas, Bogotá y fuera de Bogotá. Los motivos se recalculan acá
+ * desde la base de datos; la UI solo oculta el botón.
  *
  * Etapa 1 (Supervisor Oleariari): no cambia el `status` ni fija `reviewedAt`;
  * solo registra su revisión y la inspección pasa a la cola del Director.
  * Etapa 2 (Director de Operaciones): aprueba de forma definitiva.
  */
-export async function aprobarInspeccion(
-  inspectionId: string,
-  observacion?: string,
-  confirmadoConNovedades = false,
-) {
+export async function aprobarInspeccion(inspectionId: string, observacion?: string) {
   const session = await requireRole(ROLES_APROBADORES);
   const { etapa } = await getInspeccionRevisable(inspectionId, rolAprobadorDe(session));
 
@@ -116,10 +111,9 @@ export async function aprobarInspeccion(
       novedades: true,
     },
   });
-  const motivos = motivosConfirmacionAprobacion(paraConfirmar);
-  if (motivos.length > 0 && !confirmadoConNovedades) {
+  if (motivosConfirmacionAprobacion(paraConfirmar).length > 0) {
     throw new Error(
-      "Esta inspección tiene novedades reportadas. Debe confirmar la aprobación para continuar.",
+      "Esta inspección tiene novedades reportadas y no se puede aprobar: solo puede rechazarse.",
     );
   }
 
@@ -149,10 +143,7 @@ export async function aprobarInspeccion(
     action: accionAuditoria("APROBAR", etapa),
     entityType: "Inspection",
     entityId: inspectionId,
-    metadata:
-      motivos.length > 0
-        ? { observacion: observacionLimpia, aprobadaConNovedades: true, motivos }
-        : { observacion: observacionLimpia },
+    metadata: { observacion: observacionLimpia },
   });
 
   return updated;

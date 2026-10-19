@@ -33,9 +33,10 @@ const ETIQUETA_VALOR: Partial<Record<RespuestaChecklist, string>> = {
 };
 
 /**
- * Lista ordenada de motivos (texto legible) por los que aprobar esta
- * inspección exige confirmación explícita del supervisor. Vacía = nada
- * reportado, se aprueba como siempre. Regla de producto (2026-10-07): FALLA,
+ * Lista ordenada de motivos (texto legible) por los que esta inspección no
+ * está conforme. Vacía = nada reportado, se puede aprobar. Desde 2026-10-19
+ * cualquier motivo impide aprobar (solo se puede rechazar, ver
+ * `aprobarInspeccion`). Regla de producto (2026-10-07): FALLA,
  * BAJO o MALO histórico en el checklist (vía `esNovedad`, única fuente de esa
  * regla) y novedades generales; `puedeOperar === false`; y declaraciones del
  * conductor preocupantes (mismos criterios que

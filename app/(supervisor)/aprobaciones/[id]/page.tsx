@@ -113,10 +113,9 @@ export default async function AprobacionDetallePage({
   // solo decide si esta pantalla muestra la advertencia.
   const alertaEstadoConductor = requiereAtencionEstadoConductor(inspection);
 
-  // Qué hay reportado que obliga a confirmar la aprobación (lista vacía = se
-  // aprueba como siempre). La server action lo recalcula; esto solo alimenta
-  // el diálogo.
-  const motivosConfirmacion = motivosConfirmacionAprobacion(inspection);
+  // Qué hay reportado que impide aprobar (lista vacía = se puede aprobar).
+  // La server action lo recalcula; esto solo decide qué se muestra.
+  const motivosNoConformes = motivosConfirmacionAprobacion(inspection);
 
   const ahora = new Date();
   const tecnicomecanicaVencida = Boolean(
@@ -127,9 +126,8 @@ export default async function AprobacionDetallePage({
   async function aprobarAction(formData: FormData) {
     "use server";
     const observacion = formData.get("observacion")?.toString();
-    const confirmado = formData.get("confirmado")?.toString() === "true";
     try {
-      await aprobarInspeccion(id, observacion, confirmado);
+      await aprobarInspeccion(id, observacion);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo aprobar la inspección.";
       redirect(`/aprobaciones/${id}?error=${encodeURIComponent(message)}`);
@@ -387,7 +385,22 @@ export default async function AprobacionDetallePage({
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
 
-          <AprobarInspeccionForm action={aprobarAction} motivos={motivosConfirmacion} />
+          {motivosNoConformes.length > 0 ? (
+            // Regla 2026-10-19: con novedades no se puede aprobar, solo
+            // rechazar (el servidor lo vuelve a validar en aprobarInspeccion).
+            <div className="rounded-md border-l-4 border-status-crit bg-status-crit-soft p-4 text-sm text-status-crit-ink">
+              <p className="font-semibold">
+                Esta inspección tiene novedades reportadas: no se puede aprobar, solo rechazar.
+              </p>
+              <ul className="mt-2 list-disc pl-5">
+                {motivosNoConformes.map((motivo, indice) => (
+                  <li key={indice}>{motivo}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <AprobarInspeccionForm action={aprobarAction} />
+          )}
 
           <form action={rechazarAction} className="flex flex-col gap-3">
             <div>
