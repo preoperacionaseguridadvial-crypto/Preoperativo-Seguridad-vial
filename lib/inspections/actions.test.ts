@@ -544,7 +544,7 @@ describe("inmutabilidad: una inspección ENVIADA no puede volver a editarse con 
 // ítems de fluidos). `responderItem` valida `valor` contra ese discriminador
 // vía lib/inspections/respuesta.ts.
 describe("responderItem — valores según tipoRespuesta", () => {
-  it("acepta BUENO/BAJO/MALO en un ítem TRIESTADO", async () => {
+  it("acepta BUENO/BAJO en un ítem TRIESTADO", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -593,7 +593,9 @@ describe("responderItem — valores según tipoRespuesta", () => {
     ).rejects.toThrow(/no es un valor válido/i);
   });
 
-  it("MALO en un ítem TRIESTADO crea una Novedad; BAJO no crea nada", async () => {
+  // Pedido del dueño de producto (2026-10-19): los fluidos solo admiten
+  // Bueno/Bajo. MALO se rechaza aunque siga existiendo en el enum.
+  it("rechaza MALO en un ítem TRIESTADO; BAJO no crea Novedad", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -613,18 +615,15 @@ describe("responderItem — valores según tipoRespuesta", () => {
     );
     expect(novedadBajo).toBeNull();
 
-    const { novedad: novedadMalo } = await responderItem(
-      inspection.id,
-      itemFluido.id,
-      RespuestaChecklist.MALO,
-      "Nivel muy bajo, huele a quemado",
-      "FALLA",
-    );
-    expect(novedadMalo).not.toBeNull();
-    const enBase = await prisma.novedad.findFirst({
-      where: { inspectionItemResponse: { checklistItemId: itemFluido.id, inspectionId: inspection.id } },
-    });
-    expect(enBase).not.toBeNull();
+    await expect(
+      responderItem(
+        inspection.id,
+        itemFluido.id,
+        RespuestaChecklist.MALO,
+        "Nivel muy bajo, huele a quemado",
+        "FALLA",
+      ),
+    ).rejects.toThrow(/no es un valor válido/i);
   });
 
   it("BAJO no requiere observación ni tipo de novedad", async () => {

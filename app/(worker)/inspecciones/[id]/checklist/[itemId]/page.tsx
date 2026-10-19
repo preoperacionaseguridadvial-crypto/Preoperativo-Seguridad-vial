@@ -119,8 +119,8 @@ export default async function ChecklistItemPage({
    * Slice 2, A2). "Bueno" y "Bajo" se guardan directo, sin pedir nada — BAJO
    * no crea Novedad ni bloquea el envío (decisión confirmada: solo dato
    * queryable con badge de advertencia, ver lib/inspections/respuesta.ts).
-   * "Malo" usa el Link a la pantalla de novedad (RespuestaTriestadoItem),
-   * igual que "Falla" para ítems binarios.
+   * "Malo" se quitó el 2026-10-19 (pedido del dueño de producto): los
+   * fluidos solo se marcan Bueno o Bajo.
    */
   async function marcarBueno() {
     "use server";
@@ -159,8 +159,6 @@ export default async function ChecklistItemPage({
 
         {item.tipoRespuesta === TipoRespuestaItem.TRIESTADO ? (
           <RespuestaTriestadoItem
-            idInspeccion={id}
-            itemId={itemId}
             marcarBueno={marcarBueno}
             marcarBajo={marcarBajo}
             valorActual={respuestaActual?.valor}

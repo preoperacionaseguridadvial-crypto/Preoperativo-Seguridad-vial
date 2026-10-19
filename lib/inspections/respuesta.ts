@@ -18,12 +18,14 @@ export function esNovedad(valor: RespuestaChecklist): boolean {
 /**
  * Valores válidos para un ítem según su `tipoRespuesta`. BINARIO conserva el
  * formato oficial FO-SVS-23 de siempre (OK/FALLA, sin N/A); TRIESTADO es
- * exclusivo de los ítems de fluidos (BUENO/BAJO/MALO) — un ítem nunca acepta
- * valores de ambos conjuntos.
+ * exclusivo de los ítems de fluidos — un ítem nunca acepta valores de ambos
+ * conjuntos. Desde 2026-10-19 (pedido del dueño de producto) los fluidos solo
+ * admiten BUENO/BAJO: MALO sigue en el enum únicamente para que las
+ * inspecciones históricas que lo usaron se sigan leyendo y mostrando.
  */
 export function valoresPermitidos(tipoRespuesta: TipoRespuestaItem): RespuestaChecklist[] {
   return tipoRespuesta === TipoRespuestaItem.TRIESTADO
-    ? [RespuestaChecklist.BUENO, RespuestaChecklist.BAJO, RespuestaChecklist.MALO]
+    ? [RespuestaChecklist.BUENO, RespuestaChecklist.BAJO]
     : [RespuestaChecklist.OK, RespuestaChecklist.FALLA];
 }
 

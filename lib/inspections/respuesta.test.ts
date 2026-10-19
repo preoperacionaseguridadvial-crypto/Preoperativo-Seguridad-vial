@@ -33,11 +33,13 @@ describe("valoresPermitidos", () => {
     ]);
   });
 
-  it("TRIESTADO acepta solo BUENO/BAJO/MALO", () => {
+  // Pedido del dueño de producto (2026-10-19): los fluidos solo se marcan
+  // Bueno o Bajo; "Malo" ya no es una opción al inspeccionar. MALO sigue en
+  // el enum solo para leer inspecciones históricas.
+  it("TRIESTADO acepta solo BUENO/BAJO (MALO ya no se ofrece)", () => {
     expect(valoresPermitidos(TipoRespuestaItem.TRIESTADO)).toEqual([
       RespuestaChecklist.BUENO,
       RespuestaChecklist.BAJO,
-      RespuestaChecklist.MALO,
     ]);
   });
 });
