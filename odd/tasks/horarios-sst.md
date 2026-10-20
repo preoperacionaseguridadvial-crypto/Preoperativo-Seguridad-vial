@@ -67,7 +67,7 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 
 - [x] T1 — Pure window domain (`lib/horarios/`): current window, closing time,
   is-inside-window, tests with fixed Bogota times. Route: inline (1–2 files).
-- [ ] T2 — Schema: exception model (type WORKER | APPROVAL, beneficiary, from, to,
+- [x] T2 — Schema: exception model (type WORKER | APPROVAL, beneficiary, from, to,
   justification, grantedBy) + inspection out-of-hours flag; migration (dev + test).
 - [ ] T3 — Worker enforcement in start / save-progress / submit actions, honoring
   active exceptions; flag inspection when submitted under exception. Route:
@@ -93,9 +93,10 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 
 - Branch `feat/horarios-sst` created from `7a1808c`.
 - T1 done: commit `fa0eac7`. Checks: tsc OK, eslint OK, npm test 61 files / 834 tests green. RED observed (missing module) before GREEN.
+- T2 done: model HabilitacionHorario + Inspection.enviadaFueraDeHorario/habilitacionId, migration 20261020145546_horarios_sst (dev + test). Checks: tsc, eslint, npm test 834 green. No RED (schema-only; behavior tests in T3).
 - Delivery forecast: well above 400 authored lines; owner practice is direct
   merge of the branch, commits per task.
 
 ## Next step
 
-T2.
+T3.
