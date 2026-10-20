@@ -76,7 +76,7 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 - [x] T5 — 60-minute deadline domain per stage + enforcement in approve/reject,
   honoring active approval exceptions.
 - [x] T6 — Approver UI: expired message, out-of-hours alert in queue and detail.
-- [ ] T7 — SST module: grant worker / approver exceptions with justification,
+- [x] T7 — SST module: grant worker / approver exceptions with justification,
   list them, audit. Route via `/admin` + SST shortcut.
 - [ ] T8 — Metrics queries + dashboard + Excel.
 
@@ -99,9 +99,10 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 - T4 done (delegated writer): `cierreDelAviso` (lib/horarios/aviso-cierre.ts) + `[id]/layout.tsx` + client `AvisoCierreHorario` (server-computed ms remaining, setTimeout, hidden on /enviada). RED observed (missing module). Checks: tsc, eslint, npm test 871 green (parent spot check). NOT verified in a browser (none available). Known limit: if SST grants a habilitación while the banner is visible, it stays until reload.
 - T5 done (delegated writer): `lib/horarios/plazo-aprobacion.ts` (pure, 60 min, deadline instant counts as expired) + `exigirPlazoParaDecidir` in approve/reject, audit APROBACION_FUERA_DE_PLAZO_BLOQUEADA, metadata fueraDePlazo/habilitacionId when unlocked. RED observed for integration tests (9 failing); pure module tests written with implementation (no separate RED). Checks: tsc, eslint, npm test 891 green (parent spot check). Note: inspections already pending >60 min get blocked on deploy.
 - T6 done (delegated writer): `estadoPlazoParaAprobador` (pure) + queue card (deadline, expired chip, out-of-hours alert) + detail (alert, deadline, SST notice replacing forms, "Habilitado por SST hasta"). RED observed (missing module). Checks: tsc, eslint, npm test 900 green (parent spot check). NOT browser-verified.
+- T7 done (delegated writer): `otorgarHabilitacion` (SST only, justification >= 10 chars, hasta > desde, hasta > now, beneficiary active with matching role), audit OTORGAR_HABILITACION_HORARIO; page /admin/habilitaciones + SST shortcut. RED observed. Checks: tsc, eslint, npm test 931 green (parent spot check). NOT browser-verified. Pending owner decision: should ADMINISTRADOR also grant?
 - Delivery forecast: well above 400 authored lines; owner practice is direct
   merge of the branch, commits per task.
 
 ## Next step
 
-T7.
+T8.

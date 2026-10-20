@@ -46,7 +46,12 @@ describe("atajosPorRol", () => {
     expect(hrefs(Role.SUPERVISOR)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
     expect(hrefs(Role.SUPERVISOR_OLEARIARI)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
     expect(hrefs(Role.DIRECTOR)).toEqual(["/dashboard", "/consulta-inspecciones"]);
-    expect(hrefs(Role.SST)).toEqual(["/dashboard", "/consulta-inspecciones", "/admin/usuarios"]);
+    expect(hrefs(Role.SST)).toEqual([
+      "/dashboard",
+      "/consulta-inspecciones",
+      "/admin/usuarios",
+      "/admin/habilitaciones",
+    ]);
     expect(hrefs(Role.ADMINISTRADOR)).toEqual([
       "/admin/usuarios",
       "/admin/configuracion",

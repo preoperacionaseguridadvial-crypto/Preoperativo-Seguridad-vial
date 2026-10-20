@@ -67,6 +67,12 @@ const TRAZOS_ATAJO: Record<IconoAtajo, React.ReactNode> = {
       <circle cx="8" cy="17" r="2" />
     </>
   ),
+  reloj: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
 };
 
 export function IconoDeAtajo({ icono, className = "size-6" }: { icono: IconoAtajo; className?: string }) {
