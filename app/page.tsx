@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/config";
 import { atajosPorRol } from "@/lib/inicio/atajos";
 import { getDatosInicioTrabajador } from "@/lib/inicio/trabajador-queries";
 import { getResumenDelDia, getVehiculosConDocumentosPorVencer } from "@/lib/inicio/resumen-queries";
+import { habilitacionAprobacionHasta } from "@/lib/horarios/habilitaciones";
 import { getPendientesConFoto } from "@/lib/inspections/pendientes-con-foto";
 import { ordenarPendientesPorAtencion } from "@/lib/inspections/partir-pendientes";
 import { AppHeader } from "@/app/_components/AppHeader";
@@ -49,11 +50,12 @@ export default async function Home({
   const rolAprobador = esRolAprobador(rol) ? rol : null;
   // Aviso "aprobada/rechazada y firmada" al volver de firmar (solo aprobadores).
   const avisoDecision = rolAprobador ? avisoDecisionFirmada(await searchParams) : null;
-  const [datosTrabajador, pendientes, resumenDia, vencimientos] = await Promise.all([
+  const [datosTrabajador, pendientes, resumenDia, vencimientos, habilitacionHasta] = await Promise.all([
     rol === "TRABAJADOR" ? getDatosInicioTrabajador(user.id) : null,
     rolAprobador ? getPendientesConFoto(rolAprobador).then(ordenarPendientesPorAtencion) : null,
     rol === "DIRECTOR" || rol === "SST" ? getResumenDelDia(ahora) : null,
     rol === "ADMINISTRADOR" || rol === "SST" ? getVehiculosConDocumentosPorVencer(ahora) : null,
+    rolAprobador ? habilitacionAprobacionHasta(user.id, ahora) : null,
   ]);
 
   return (
@@ -66,7 +68,7 @@ export default async function Home({
           <PanelTrabajador datos={datosTrabajador} ahora={ahora} />
         ) : (
           <>
-            {pendientes && <ResumenSupervisor pendientes={pendientes} ahora={ahora} />}
+            {pendientes && <ResumenSupervisor pendientes={pendientes} ahora={ahora} habilitacionHasta={habilitacionHasta} />}
             {resumenDia && <ResumenDelDia resumen={resumenDia} />}
             <AtajosInicio atajos={atajosPorRol(rol)} />
             {vencimientos && <VencimientosVehiculos vehiculos={vencimientos} />}

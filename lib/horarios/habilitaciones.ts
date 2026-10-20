@@ -32,6 +32,12 @@ export function habilitacionVigente(usuarioId: string, tipo: TipoHabilitacion, a
   });
 }
 
+/** Fin de la habilitación APROBACION vigente del aprobador, o `null` si no tiene (una consulta por pantalla). */
+export async function habilitacionAprobacionHasta(aprobadorId: string, ahora: Date): Promise<Date | null> {
+  const habilitacion = await habilitacionVigente(aprobadorId, TipoHabilitacion.APROBACION, ahora);
+  return habilitacion?.hasta ?? null;
+}
+
 async function bloquear(params: {
   userId: string;
   entityType: "User" | "Inspection";
