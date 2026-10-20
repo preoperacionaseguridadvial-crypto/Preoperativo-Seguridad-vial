@@ -95,9 +95,10 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 - T1 done: commit `fa0eac7`. Checks: tsc OK, eslint OK, npm test 61 files / 834 tests green. RED observed (missing module) before GREEN.
 - T2 done: model HabilitacionHorario + Inspection.enviadaFueraDeHorario/habilitacionId, migration 20261020145546_horarios_sst (dev + test). Checks: tsc, eslint, npm test 834 green. No RED (schema-only; behavior tests in T3).
 - T3 done (delegated writer, trigger: 4+ files): guards in iniciarInspeccion, registrarKilometraje, responderItem, registrarResultado, registrarRespuestaEstadoConductor, subirFotoNovedad, guardarFirmaConductor, subirFotoInspeccion, enviarInspeccion; blocked attempts audited as INSPECCION_FUERA_DE_HORARIO_BLOQUEADA. cancelarInspeccion guarded too (owner 2026-10-20): any open window or habilitación. RED observed (8/9 new integration tests failing). Checks: tsc, eslint, npm test 63 files / 853 green (parent spot check reran all).
+- T3b (owner option B, 2026-10-20): pending EN_PROCESO resumed only within the same turn (`esReutilizable` = startedAt >= `inicioUltimaVentana`); 24h reuse rule removed; other-turn pending auto-cancelled and replaced. Delegated writer (trigger: 2+ non-trivial files). RED observed (15 failing). Checks: tsc, eslint, npm test 865 green (parent spot check).
 - Delivery forecast: well above 400 authored lines; owner practice is direct
   merge of the branch, commits per task.
 
 ## Next step
 
-T4. Open question: resume a pending inspection from an earlier window (currently blocked without habilitación)?
+T4.

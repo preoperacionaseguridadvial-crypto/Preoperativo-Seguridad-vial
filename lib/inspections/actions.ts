@@ -14,7 +14,7 @@ import {
   FOTOS_DIARIAS_REQUERIDAS,
 } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
-import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
+import { esReutilizable } from "@/lib/inspections/reuso-inspeccion";
 import { esNovedad, valoresPermitidos } from "@/lib/inspections/respuesta";
 import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
 import {
@@ -178,12 +178,12 @@ export async function iniciarInspeccion(vehicleId: string) {
 
   // Idempotencia ante doble envío (doble tap en el botón de iniciar): si el
   // trabajador ya tiene una inspección EN_PROCESO sobre este vehículo Y es
-  // reciente (dentro de VENTANA_REUSO_INSPECCION_HORAS), se devuelve esa misma
+  // del turno en curso (`esReutilizable`), se devuelve esa misma
   // — la pantalla de inicio ya la lista como "Continuar inspección" y la ✕
   // permite descartarla (`cancelarInspeccion`). Una inspección CANCELADA o ya
-  // enviada nunca bloquea una nueva. Una EN_PROCESO más vieja que la ventana
-  // se considera abandonada (el preoperacional es un chequeo diario): se
-  // cancela y se abre una nueva con `startedAt` fresco.
+  // enviada nunca bloquea una nueva. Una EN_PROCESO de un turno anterior
+  // se considera abandonada (la pendiente se retoma solo dentro del mismo
+  // turno): se cancela y se abre una nueva con `startedAt` fresco.
   //
   // Garantía real ante la carrera: el índice único parcial
   // `Inspection_workerId_vehicleId_en_proceso_key` (a lo sumo una EN_PROCESO
@@ -193,8 +193,7 @@ export async function iniciarInspeccion(vehicleId: string) {
   // camino rápido, ya no es lo que evita el duplicado.
   const trabajadorId = session.user.id;
   const enProceso = await buscarEnProceso(trabajadorId, vehicleId);
-  const limiteReuso = new Date(ahora.getTime() - VENTANA_REUSO_INSPECCION_HORAS * 60 * 60 * 1000);
-  if (enProceso && enProceso.startedAt >= limiteReuso) {
+  if (enProceso && esReutilizable(enProceso.startedAt, ahora)) {
     return enProceso;
   }
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { InspectionStatus, Sede } from "@/generated/prisma/client";
-import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
 import { accionPrincipalTrabajador, tonoEstadoInspeccion } from "@/lib/inicio/accion-trabajador";
 
 const ahora = new Date("2026-10-07T15:00:00Z");
@@ -49,9 +48,9 @@ describe("accionPrincipalTrabajador", () => {
 
   // iniciarInspeccion descarta una EN_PROCESO más vieja que la ventana de
   // reuso y abre una nueva: el CTA no puede prometer "continuar" ahí.
-  it("EN_PROCESO más vieja que la ventana de reuso: iniciar una nueva", () => {
+  it("EN_PROCESO de un turno anterior: iniciar una nueva", () => {
     const vieja = inspeccion(InspectionStatus.EN_PROCESO, {
-      startedAt: hace(VENTANA_REUSO_INSPECCION_HORAS + 1),
+      startedAt: hace(24),
     });
     const accion = accionPrincipalTrabajador(vieja, ahora);
     expect(accion.estado).toBe("INICIAR");
@@ -163,8 +162,8 @@ describe("accionPrincipalTrabajador", () => {
     InspectionStatus.NO_APTA_PARA_OPERAR,
     InspectionStatus.PENDIENTE_APROBACION,
     InspectionStatus.ENVIADA,
-  ])("%s de hace más de la ventana de reuso cuenta como vieja: iniciar una nueva", (status) => {
-    const vieja = inspeccion(status, { startedAt: hace(VENTANA_REUSO_INSPECCION_HORAS + 1) });
+  ])("%s de un turno anterior cuenta como vieja: iniciar una nueva", (status) => {
+    const vieja = inspeccion(status, { startedAt: hace(24) });
     const accion = accionPrincipalTrabajador(vieja, ahora);
     expect(accion.estado).toBe("INICIAR");
     expect(accion.boton).toEqual({ texto: "Iniciar inspección", href: "/inspecciones" });

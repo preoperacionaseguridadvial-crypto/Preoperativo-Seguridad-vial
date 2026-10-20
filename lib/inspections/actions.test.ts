@@ -49,7 +49,6 @@ import {
   limpiarBaseDeTest,
 } from "@/test/helpers/db";
 import { getChecklistCatalog } from "@/lib/inspections/queries";
-import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
 import { fijarHoraEnVentana, restaurarHora } from "@/test/helpers/horario";
 import { MAX_ADJUNTO_NOVEDAD_BYTES } from "@/lib/storage/validar-archivo";
 
@@ -865,8 +864,8 @@ describe("iniciarInspeccion — idempotente ante doble envío", () => {
   });
 });
 
-// Ventana de reuso: la inspección preoperacional es un chequeo diario, así que
-// una EN_PROCESO vieja no se devuelve — se cancela y se abre una nueva.
+// Ventana de reuso: una EN_PROCESO se retoma solo dentro del mismo turno, así que
+// una de un turno anterior no se devuelve — se cancela y se abre una nueva.
 describe("iniciarInspeccion — ventana de reuso de la inspección EN_PROCESO", () => {
   const HORA_MS = 60 * 60 * 1000;
 
@@ -887,14 +886,14 @@ describe("iniciarInspeccion — ventana de reuso de la inspección EN_PROCESO", 
     });
   }
 
-  it("la ventana de reuso es de 24 horas", () => {
-    expect(VENTANA_REUSO_INSPECCION_HORAS).toBe(24);
-  });
-
-  it("reutiliza una EN_PROCESO iniciada hace 23 horas, conservando su startedAt", async () => {
+  it("reutiliza una EN_PROCESO iniciada en la ventana actual, conservando su startedAt", async () => {
     const { vehicle, worker } = await trabajadorConVehiculo();
     const primera = await iniciarInspeccion(vehicle.id);
-    await envejecer(primera.id, 23);
+    // La hora simulada es 06:00 de Bogotá; la ventana abrió a las 05:45.
+    await prisma.inspection.update({
+      where: { id: primera.id },
+      data: { startedAt: new Date(Date.now() - 10 * 60 * 1000) },
+    });
     const startedAtOriginal = (
       await prisma.inspection.findUniqueOrThrow({ where: { id: primera.id } })
     ).startedAt;
@@ -907,7 +906,7 @@ describe("iniciarInspeccion — ventana de reuso de la inspección EN_PROCESO", 
     expect(await prisma.auditLog.count({ where: { userId: worker.id } })).toBe(1);
   });
 
-  it("cancela una EN_PROCESO iniciada hace 25 horas y abre una nueva, dejando una sola EN_PROCESO", async () => {
+  it("cancela una EN_PROCESO de un turno anterior (hace 25 horas) y abre una nueva, dejando una sola EN_PROCESO", async () => {
     const { vehicle, worker } = await trabajadorConVehiculo();
     const vieja = await iniciarInspeccion(vehicle.id);
     await envejecer(vieja.id, 25);

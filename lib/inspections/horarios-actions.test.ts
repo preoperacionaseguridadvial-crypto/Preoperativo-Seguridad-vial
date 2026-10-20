@@ -205,6 +205,46 @@ describe("iniciarInspeccion — horario", () => {
   });
 });
 
+describe("iniciarInspeccion — reuso por turno", () => {
+  it("devuelve la misma EN_PROCESO iniciada en el turno en curso", async () => {
+    const { worker, vehicle, inspection } = await crearInspeccion(new Date("2026-10-20T10:50:00Z"));
+    loginComo(worker);
+
+    const devuelta = await iniciarInspeccion(vehicle.id);
+
+    expect(devuelta.id).toBe(inspection.id);
+    expect(devuelta.status).toBe(InspectionStatus.EN_PROCESO);
+  });
+
+  it("al iniciar en el turno 2 cancela la pendiente del turno 1 y abre una nueva", async () => {
+    const { worker, vehicle, inspection } = await crearInspeccion(new Date("2026-10-20T11:00:00Z"));
+    loginComo(worker);
+    enHora(EN_VENTANA_TURNO_2);
+
+    const nueva = await iniciarInspeccion(vehicle.id);
+
+    expect(nueva.id).not.toBe(inspection.id);
+    expect(nueva.startedAt).toEqual(EN_VENTANA_TURNO_2);
+    const vieja = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(vieja.status).toBe(InspectionStatus.CANCELADA);
+    const cancelacion = await prisma.auditLog.findFirstOrThrow({
+      where: { action: "CANCELAR_INSPECCION", entityId: inspection.id },
+    });
+    expect(cancelacion.metadata).toEqual({ motivo: "abandonada", reemplazadaPor: nueva.id });
+  });
+
+  it("con habilitación, fuera de la ventana retoma la del turno que acaba de cerrar", async () => {
+    const { worker, vehicle, inspection } = await crearInspeccion(new Date("2026-10-20T11:20:00Z"));
+    loginComo(worker);
+    enHora(DESPUES_DE_CIERRE);
+    await habilitar(worker.id, new Date("2026-10-20T11:30:00Z"), new Date("2026-10-20T13:00:00Z"));
+
+    const devuelta = await iniciarInspeccion(vehicle.id);
+
+    expect(devuelta.id).toBe(inspection.id);
+  });
+});
+
 describe("continuar una inspección — horario", () => {
   it("permite guardar dentro de la misma ventana en que se inició", async () => {
     const { worker, inspection } = await crearInspeccion(new Date("2026-10-20T10:50:00Z"));

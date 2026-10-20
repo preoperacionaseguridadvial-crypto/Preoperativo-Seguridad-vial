@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estaEnVentana, ventanaActual } from "@/lib/horarios/ventanas";
+import { estaEnVentana, inicioUltimaVentana, ventanaActual } from "@/lib/horarios/ventanas";
 
 // Bogotá es UTC-5: las 05:45 locales son las 10:45 UTC.
 describe("ventanaActual", () => {
@@ -46,5 +46,29 @@ describe("estaEnVentana", () => {
   it("es true dentro de una ventana y false fuera", () => {
     expect(estaEnVentana(new Date("2026-10-20T11:00:00Z"))).toBe(true);
     expect(estaEnVentana(new Date("2026-10-20T12:00:00Z"))).toBe(false);
+  });
+});
+
+describe("inicioUltimaVentana", () => {
+  it("dentro del turno 1 es el inicio de ese turno", () => {
+    expect(inicioUltimaVentana(new Date("2026-10-20T11:00:00Z"))).toEqual(new Date("2026-10-20T10:45:00Z"));
+  });
+
+  it("entre los dos turnos es el inicio del turno 1 de hoy", () => {
+    expect(inicioUltimaVentana(new Date("2026-10-20T17:00:00Z"))).toEqual(new Date("2026-10-20T10:45:00Z"));
+  });
+
+  it("dentro del turno 2 y después de él es el inicio del turno 2 de hoy", () => {
+    expect(inicioUltimaVentana(new Date("2026-10-20T23:00:00Z"))).toEqual(new Date("2026-10-20T22:45:00Z"));
+    expect(inicioUltimaVentana(new Date("2026-10-21T02:00:00Z"))).toEqual(new Date("2026-10-20T22:45:00Z"));
+  });
+
+  it("antes de las 05:45 es el turno 2 de ayer", () => {
+    expect(inicioUltimaVentana(new Date("2026-10-20T10:44:59Z"))).toEqual(new Date("2026-10-19T22:45:00Z"));
+  });
+
+  it("en el instante exacto de apertura ya cuenta esa ventana", () => {
+    expect(inicioUltimaVentana(new Date("2026-10-20T10:45:00Z"))).toEqual(new Date("2026-10-20T10:45:00Z"));
+    expect(inicioUltimaVentana(new Date("2026-10-20T22:45:00Z"))).toEqual(new Date("2026-10-20T22:45:00Z"));
   });
 });
