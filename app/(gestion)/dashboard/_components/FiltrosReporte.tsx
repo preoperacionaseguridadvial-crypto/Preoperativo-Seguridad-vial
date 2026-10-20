@@ -111,6 +111,13 @@ export function FiltrosReporte({
           ))}
         </select>
       </Campo>
+      <Campo label="Sede">
+        <select name="sede" defaultValue={searchParams.sede ?? ""} className={CLASE_CONTROL}>
+          <option value="">Todas</option>
+          <option value="BOGOTA">Bogotá</option>
+          <option value="OLEARIARI">Oleariari</option>
+        </select>
+      </Campo>
       <Campo label="Placa">
         <input type="text" name="placa" defaultValue={searchParams.placa ?? ""} placeholder="Todas" className={CLASE_CONTROL} />
       </Campo>

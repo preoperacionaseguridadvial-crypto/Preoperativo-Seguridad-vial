@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, RespuestaChecklist, Role, type TipoNovedad } from "@/generated/prisma/client";
+import { InspectionStatus, RespuestaChecklist, Role, type Sede, type TipoNovedad } from "@/generated/prisma/client";
 import { esNovedad } from "@/lib/inspections/respuesta";
 import { claveDiaBogota, finDiaBogotaDeFecha, inicioDiaBogotaDeFecha } from "@/lib/fechas/formato";
 
@@ -32,6 +32,8 @@ export type FiltrosReporte = {
   status?: InspectionStatus;
   puedeOperar?: boolean;
   supervisorId?: string;
+  // Sede de la inspección (snapshot). Sin valor: todas las sedes.
+  sede?: Sede;
 };
 
 const TREINTA_DIAS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -58,6 +60,7 @@ function construirWhereReporte(filtros: FiltrosReporte, rango: { desde: Date; ha
   if (filtros.status) where.status = filtros.status;
   if (filtros.puedeOperar !== undefined) where.puedeOperar = filtros.puedeOperar;
   if (filtros.supervisorId) where.supervisorId = filtros.supervisorId;
+  if (filtros.sede) where.sede = filtros.sede;
   return where;
 }
 
@@ -384,6 +387,7 @@ export function parseFiltrosDesdeQuery(query: Record<string, string | undefined>
     status: estado,
     puedeOperar,
     supervisorId: query.supervisor || undefined,
+    sede: query.sede === "BOGOTA" || query.sede === "OLEARIARI" ? query.sede : undefined,
   };
 }
 
