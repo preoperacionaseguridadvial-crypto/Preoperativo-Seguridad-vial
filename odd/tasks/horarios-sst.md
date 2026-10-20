@@ -92,6 +92,7 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 ## Progress
 
 - Branch `feat/horarios-sst` created from `7a1808c`.
+- T1 done: commit `fa0eac7`. Checks: tsc OK, eslint OK, npm test 61 files / 834 tests green. RED observed (missing module) before GREEN.
 - Delivery forecast: well above 400 authored lines; owner practice is direct
   merge of the branch, commits per task.
 
