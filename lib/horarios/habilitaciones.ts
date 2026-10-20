@@ -60,6 +60,27 @@ export async function exigirHorarioParaIniciar(trabajadorId: string, accion: str
 }
 
 /**
+ * Exige ventana abierta (cualquiera) o habilitación vigente para descartar una
+ * inspección en proceso. A diferencia de continuar, no importa en qué ventana
+ * se inició: descartarla no agrega datos a la inspección.
+ */
+export async function exigirHorarioParaCancelar(
+  inspection: { id: string; workerId: string },
+  accion: string,
+  ahora: Date,
+) {
+  if (ventanaActual(ahora) !== null) return;
+  if (await habilitacionVigente(inspection.workerId, TipoHabilitacion.RECORREDOR, ahora)) return;
+  await bloquear({
+    userId: inspection.workerId,
+    entityType: "Inspection",
+    entityId: inspection.id,
+    accion,
+    mensaje: MENSAJE_INICIO_FUERA_DE_HORARIO,
+  });
+}
+
+/**
  * Exige que la inspección siga en horario (iniciada en la ventana abierta) o
  * que el trabajador tenga una habilitación vigente. Devuelve el id de la
  * habilitación solo cuando fue ella la que permitió la acción.

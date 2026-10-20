@@ -17,7 +17,11 @@ import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
 import { esNovedad, valoresPermitidos } from "@/lib/inspections/respuesta";
 import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
-import { exigirHorarioParaContinuar, exigirHorarioParaIniciar } from "@/lib/horarios/habilitaciones";
+import {
+  exigirHorarioParaCancelar,
+  exigirHorarioParaContinuar,
+  exigirHorarioParaIniciar,
+} from "@/lib/horarios/habilitaciones";
 
 // Server actions del flujo de inspección del TRABAJADOR (Fase 2). Todas
 // validan rol vía `requireRole` (nunca confían en el frontend) y, cuando
@@ -251,6 +255,7 @@ export async function cancelarInspeccion(inspectionId: string) {
   if (inspection.status !== InspectionStatus.EN_PROCESO) {
     throw new Error("Solo se puede cancelar una inspección que sigue en proceso.");
   }
+  await exigirHorarioParaCancelar(inspection, "cancelarInspeccion", new Date());
 
   const updated = await prisma.inspection.update({
     where: { id: inspectionId },

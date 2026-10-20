@@ -12,6 +12,7 @@ vi.mock("@/lib/storage/s3", () => ({
 
 import { prisma } from "@/lib/prisma";
 import {
+  InspectionStatus,
   Role,
   TipoFirma,
   TipoFotoInspeccion,
@@ -20,6 +21,7 @@ import {
   RespuestaChecklist,
 } from "@/generated/prisma/client";
 import {
+  cancelarInspeccion,
   enviarInspeccion,
   iniciarInspeccion,
   registrarKilometraje,
@@ -249,6 +251,47 @@ describe("continuar una inspección — horario", () => {
     const actualizada = await registrarKilometraje(inspection.id, { kilometraje: 1200 });
 
     expect(actualizada.kilometraje).toBe(1200);
+  });
+});
+
+describe("cancelarInspeccion — horario", () => {
+  it("bloquea cancelar fuera de las ventanas y deja auditoría sobre la inspección", async () => {
+    const { worker, inspection } = await crearInspeccion(new Date("2026-10-20T10:50:00Z"));
+    loginComo(worker);
+    enHora(FUERA_DE_VENTANA);
+
+    await expect(cancelarInspeccion(inspection.id)).rejects.toThrow(MSG_INICIO);
+
+    const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(despues.status).toBe(InspectionStatus.EN_PROCESO);
+    const auditorias = await auditoriasBloqueadas();
+    expect(auditorias).toHaveLength(1);
+    expect(auditorias[0]).toMatchObject({
+      entityType: "Inspection",
+      entityId: inspection.id,
+      metadata: { accion: "cancelarInspeccion" },
+    });
+  });
+
+  it("permite cancelar dentro de cualquier ventana, aunque la inspección sea de una anterior", async () => {
+    const { worker, inspection } = await crearInspeccion(new Date("2026-10-20T10:50:00Z"));
+    loginComo(worker);
+    enHora(EN_VENTANA_TURNO_2);
+
+    const cancelada = await cancelarInspeccion(inspection.id);
+
+    expect(cancelada.status).toBe(InspectionStatus.CANCELADA);
+  });
+
+  it("permite cancelar fuera de las ventanas con una habilitación RECORREDOR vigente", async () => {
+    const { worker, inspection } = await crearInspeccion(new Date("2026-10-20T10:50:00Z"));
+    loginComo(worker);
+    enHora(FUERA_DE_VENTANA);
+    await habilitar(worker.id, new Date("2026-10-20T13:00:00Z"), new Date("2026-10-20T15:00:00Z"));
+
+    const cancelada = await cancelarInspeccion(inspection.id);
+
+    expect(cancelada.status).toBe(InspectionStatus.CANCELADA);
   });
 });
 
