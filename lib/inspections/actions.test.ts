@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mockeamos la sesión de NextAuth (no la base de datos): `auth()` normalmente
 // lee una cookie firmada y no tiene sentido simularla acá — lo único que
@@ -50,6 +50,7 @@ import {
 } from "@/test/helpers/db";
 import { getChecklistCatalog } from "@/lib/inspections/queries";
 import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
+import { fijarHoraEnVentana, restaurarHora } from "@/test/helpers/horario";
 import { MAX_ADJUNTO_NOVEDAD_BYTES } from "@/lib/storage/validar-archivo";
 
 function loginComo(user: { id: string; role: Role }) {
@@ -112,12 +113,19 @@ async function completarFotosYDeclaracion(inspectionId: string) {
   });
 }
 
+// Las acciones del trabajador solo operan dentro de la ventana de inspección:
+// se congela `Date` a las 6:00 de Bogotá.
 beforeEach(async () => {
+  fijarHoraEnVentana();
   await limpiarBaseDeTest();
   await crearCatalogoMinimo();
   mockAuth.mockReset();
   mockUploadObject.mockReset();
   mockUploadObject.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  restaurarHora();
 });
 
 afterAll(async () => {

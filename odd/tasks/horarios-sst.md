@@ -69,7 +69,7 @@ metrics. Out of scope: push notifications, changing existing approval rules.
   is-inside-window, tests with fixed Bogota times. Route: inline (1–2 files).
 - [x] T2 — Schema: exception model (type WORKER | APPROVAL, beneficiary, from, to,
   justification, grantedBy) + inspection out-of-hours flag; migration (dev + test).
-- [ ] T3 — Worker enforcement in start / save-progress / submit actions, honoring
+- [x] T3 — Worker enforcement in start / save-progress / submit actions, honoring
   active exceptions; flag inspection when submitted under exception. Route:
   delegated (4+ files).
 - [ ] T4 — Auto banner in the worker inspection flow when the window closes.
@@ -94,9 +94,10 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 - Branch `feat/horarios-sst` created from `7a1808c`.
 - T1 done: commit `fa0eac7`. Checks: tsc OK, eslint OK, npm test 61 files / 834 tests green. RED observed (missing module) before GREEN.
 - T2 done: model HabilitacionHorario + Inspection.enviadaFueraDeHorario/habilitacionId, migration 20261020145546_horarios_sst (dev + test). Checks: tsc, eslint, npm test 834 green. No RED (schema-only; behavior tests in T3).
+- T3 done (delegated writer, trigger: 4+ files): guards in iniciarInspeccion, registrarKilometraje, responderItem, registrarResultado, registrarRespuestaEstadoConductor, subirFotoNovedad, guardarFirmaConductor, subirFotoInspeccion, enviarInspeccion; blocked attempts audited as INSPECCION_FUERA_DE_HORARIO_BLOQUEADA. cancelarInspeccion NOT guarded. RED observed (8/9 new integration tests failing). Checks: tsc, eslint, npm test 63 files / 853 green (parent spot check reran all).
 - Delivery forecast: well above 400 authored lines; owner practice is direct
   merge of the branch, commits per task.
 
 ## Next step
 
-T3.
+T4. Open question to owner: should cancelarInspeccion be blocked outside the window (currently allowed)?
