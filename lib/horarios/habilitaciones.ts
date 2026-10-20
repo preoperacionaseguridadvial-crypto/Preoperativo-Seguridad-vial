@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { TipoHabilitacion } from "@/generated/prisma/client";
 import { ventanaActual, type Ventana } from "@/lib/horarios/ventanas";
+import { plazoVencido, type DatosPlazo } from "@/lib/horarios/plazo-aprobacion";
 
 // Control de horario del recorredor en el servidor (regla de producto
 // 2026-10-20): iniciar exige ventana abierta; continuar y enviar exigen haber
@@ -11,6 +12,9 @@ import { ventanaActual, type Ventana } from "@/lib/horarios/ventanas";
 
 export const MENSAJE_INICIO_FUERA_DE_HORARIO =
   "Fuera del horario de inspección (5:45 a 6:30 a. m. y 5:45 a 6:30 p. m.). Comuníquese con la Administradora SST para que lo habilite.";
+
+export const MENSAJE_APROBACION_FUERA_DE_PLAZO =
+  "Comuníquese con la Administradora de SST para habilitar la aprobación ya que se superó el tiempo límite.";
 
 export const MENSAJE_CONTINUAR_FUERA_DE_HORARIO =
   "Superó el horario para realizar la inspección. Comuníquese con la Administradora SST para que la habilite y pueda enviarla fuera de horario.";
@@ -102,4 +106,31 @@ export async function exigirHorarioParaContinuar(
     accion,
     mensaje: MENSAJE_CONTINUAR_FUERA_DE_HORARIO,
   });
+}
+
+/**
+ * Exige que la etapa pendiente siga dentro de su plazo de 60 minutos o que el
+ * aprobador tenga una habilitación APROBACION vigente (aplica a todas sus
+ * inspecciones vencidas). Devuelve el id de la habilitación solo cuando fue
+ * ella la que permitió la decisión. Una inspección sin `completedAt` no tiene
+ * plazo y se deja pasar (no debería ser revisable sin envío).
+ */
+export async function exigirPlazoParaDecidir(
+  inspection: DatosPlazo & { id: string },
+  etapa: string,
+  aprobadorId: string,
+  accion: "APROBAR" | "RECHAZAR",
+  ahora: Date,
+): Promise<{ habilitacionId: string | null }> {
+  if (!plazoVencido(inspection, ahora)) return { habilitacionId: null };
+  const habilitacion = await habilitacionVigente(aprobadorId, TipoHabilitacion.APROBACION, ahora);
+  if (habilitacion) return { habilitacionId: habilitacion.id };
+  await logAudit({
+    userId: aprobadorId,
+    action: "APROBACION_FUERA_DE_PLAZO_BLOQUEADA",
+    entityType: "Inspection",
+    entityId: inspection.id,
+    metadata: { accion, etapa },
+  });
+  throw new Error(MENSAJE_APROBACION_FUERA_DE_PLAZO);
 }

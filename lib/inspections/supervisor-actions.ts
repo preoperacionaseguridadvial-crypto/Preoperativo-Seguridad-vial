@@ -13,6 +13,7 @@ import {
   type RolAprobador,
 } from "@/lib/inspections/cola-aprobacion";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
+import { exigirPlazoParaDecidir } from "@/lib/horarios/habilitaciones";
 
 // Server actions de la revisión de los aprobadores (Fase 3 + roles-oleariari).
 // Hay dos aprobadores: el Director de Operaciones (rol SUPERVISOR), que decide
@@ -102,7 +103,8 @@ function rolAprobadorDe(session: { user: { role: Role } }): RolAprobador {
  */
 export async function aprobarInspeccion(inspectionId: string, observacion?: string) {
   const session = await requireRole(ROLES_APROBADORES);
-  const { etapa } = await getInspeccionRevisable(inspectionId, rolAprobadorDe(session));
+  const { inspection, etapa } = await getInspeccionRevisable(inspectionId, rolAprobadorDe(session));
+  const plazo = await exigirPlazoParaDecidir(inspection, etapa, session.user.id, "APROBAR", new Date());
 
   const paraConfirmar = await prisma.inspection.findUniqueOrThrow({
     where: { id: inspectionId },
@@ -143,7 +145,7 @@ export async function aprobarInspeccion(inspectionId: string, observacion?: stri
     action: accionAuditoria("APROBAR", etapa),
     entityType: "Inspection",
     entityId: inspectionId,
-    metadata: { observacion: observacionLimpia },
+    metadata: { observacion: observacionLimpia, ...metadataFueraDePlazo(plazo) },
   });
 
   return updated;
@@ -156,12 +158,13 @@ export async function aprobarInspeccion(inspectionId: string, observacion?: stri
  */
 export async function rechazarInspeccion(inspectionId: string, observacion: string) {
   const session = await requireRole(ROLES_APROBADORES);
-  const { etapa } = await getInspeccionRevisable(inspectionId, rolAprobadorDe(session));
+  const { inspection, etapa } = await getInspeccionRevisable(inspectionId, rolAprobadorDe(session));
 
   const observacionLimpia = observacion?.trim() || "";
   if (!observacionLimpia) {
     throw new Error("La observación es obligatoria para rechazar una inspección.");
   }
+  const plazo = await exigirPlazoParaDecidir(inspection, etapa, session.user.id, "RECHAZAR", new Date());
 
   const now = new Date();
 
@@ -191,10 +194,15 @@ export async function rechazarInspeccion(inspectionId: string, observacion: stri
     action: accionAuditoria("RECHAZAR", etapa),
     entityType: "Inspection",
     entityId: inspectionId,
-    metadata: { observacion: observacionLimpia },
+    metadata: { observacion: observacionLimpia, ...metadataFueraDePlazo(plazo) },
   });
 
   return updated;
+}
+
+/** Decidida con una habilitación de SST porque el plazo de 60 minutos ya había vencido. */
+function metadataFueraDePlazo(plazo: { habilitacionId: string | null }) {
+  return plazo.habilitacionId ? { fueraDePlazo: true, habilitacionId: plazo.habilitacionId } : {};
 }
 
 /** La etapa del Director conserva los nombres históricos; la primera etapa lleva sufijo. */

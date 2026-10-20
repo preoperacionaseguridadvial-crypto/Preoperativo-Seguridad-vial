@@ -73,7 +73,7 @@ metrics. Out of scope: push notifications, changing existing approval rules.
   active exceptions; flag inspection when submitted under exception. Route:
   delegated (4+ files).
 - [x] T4 — Auto banner in the worker inspection flow when the window closes.
-- [ ] T5 — 60-minute deadline domain per stage + enforcement in approve/reject,
+- [x] T5 — 60-minute deadline domain per stage + enforcement in approve/reject,
   honoring active approval exceptions.
 - [ ] T6 — Approver UI: expired message, out-of-hours alert in queue and detail.
 - [ ] T7 — SST module: grant worker / approver exceptions with justification,
@@ -97,9 +97,10 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 - T3 done (delegated writer, trigger: 4+ files): guards in iniciarInspeccion, registrarKilometraje, responderItem, registrarResultado, registrarRespuestaEstadoConductor, subirFotoNovedad, guardarFirmaConductor, subirFotoInspeccion, enviarInspeccion; blocked attempts audited as INSPECCION_FUERA_DE_HORARIO_BLOQUEADA. cancelarInspeccion guarded too (owner 2026-10-20): any open window or habilitación. RED observed (8/9 new integration tests failing). Checks: tsc, eslint, npm test 63 files / 853 green (parent spot check reran all).
 - T3b (owner option B, 2026-10-20): pending EN_PROCESO resumed only within the same turn (`esReutilizable` = startedAt >= `inicioUltimaVentana`); 24h reuse rule removed; other-turn pending auto-cancelled and replaced. Delegated writer (trigger: 2+ non-trivial files). RED observed (15 failing). Checks: tsc, eslint, npm test 865 green (parent spot check).
 - T4 done (delegated writer): `cierreDelAviso` (lib/horarios/aviso-cierre.ts) + `[id]/layout.tsx` + client `AvisoCierreHorario` (server-computed ms remaining, setTimeout, hidden on /enviada). RED observed (missing module). Checks: tsc, eslint, npm test 871 green (parent spot check). NOT verified in a browser (none available). Known limit: if SST grants a habilitación while the banner is visible, it stays until reload.
+- T5 done (delegated writer): `lib/horarios/plazo-aprobacion.ts` (pure, 60 min, deadline instant counts as expired) + `exigirPlazoParaDecidir` in approve/reject, audit APROBACION_FUERA_DE_PLAZO_BLOQUEADA, metadata fueraDePlazo/habilitacionId when unlocked. RED observed for integration tests (9 failing); pure module tests written with implementation (no separate RED). Checks: tsc, eslint, npm test 891 green (parent spot check). Note: inspections already pending >60 min get blocked on deploy.
 - Delivery forecast: well above 400 authored lines; owner practice is direct
   merge of the branch, commits per task.
 
 ## Next step
 
-T5.
+T6.
