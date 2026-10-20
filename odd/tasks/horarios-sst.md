@@ -72,7 +72,7 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 - [x] T3 — Worker enforcement in start / save-progress / submit actions, honoring
   active exceptions; flag inspection when submitted under exception. Route:
   delegated (4+ files).
-- [ ] T4 — Auto banner in the worker inspection flow when the window closes.
+- [x] T4 — Auto banner in the worker inspection flow when the window closes.
 - [ ] T5 — 60-minute deadline domain per stage + enforcement in approve/reject,
   honoring active approval exceptions.
 - [ ] T6 — Approver UI: expired message, out-of-hours alert in queue and detail.
@@ -96,9 +96,10 @@ metrics. Out of scope: push notifications, changing existing approval rules.
 - T2 done: model HabilitacionHorario + Inspection.enviadaFueraDeHorario/habilitacionId, migration 20261020145546_horarios_sst (dev + test). Checks: tsc, eslint, npm test 834 green. No RED (schema-only; behavior tests in T3).
 - T3 done (delegated writer, trigger: 4+ files): guards in iniciarInspeccion, registrarKilometraje, responderItem, registrarResultado, registrarRespuestaEstadoConductor, subirFotoNovedad, guardarFirmaConductor, subirFotoInspeccion, enviarInspeccion; blocked attempts audited as INSPECCION_FUERA_DE_HORARIO_BLOQUEADA. cancelarInspeccion guarded too (owner 2026-10-20): any open window or habilitación. RED observed (8/9 new integration tests failing). Checks: tsc, eslint, npm test 63 files / 853 green (parent spot check reran all).
 - T3b (owner option B, 2026-10-20): pending EN_PROCESO resumed only within the same turn (`esReutilizable` = startedAt >= `inicioUltimaVentana`); 24h reuse rule removed; other-turn pending auto-cancelled and replaced. Delegated writer (trigger: 2+ non-trivial files). RED observed (15 failing). Checks: tsc, eslint, npm test 865 green (parent spot check).
+- T4 done (delegated writer): `cierreDelAviso` (lib/horarios/aviso-cierre.ts) + `[id]/layout.tsx` + client `AvisoCierreHorario` (server-computed ms remaining, setTimeout, hidden on /enviada). RED observed (missing module). Checks: tsc, eslint, npm test 871 green (parent spot check). NOT verified in a browser (none available). Known limit: if SST grants a habilitación while the banner is visible, it stays until reload.
 - Delivery forecast: well above 400 authored lines; owner practice is direct
   merge of the branch, commits per task.
 
 ## Next step
 
-T4.
+T5.
