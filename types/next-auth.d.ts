@@ -7,6 +7,8 @@ declare module "next-auth" {
     role: Role;
     // Autorización de tratamiento de datos ya firmada (lib/legal).
     autorizoDatos: boolean;
+    // Recordarme del login: false = la sesión termina al cerrar el navegador.
+    recordar?: boolean;
   }
 
   interface Session {
@@ -14,6 +16,7 @@ declare module "next-auth" {
       id: string;
       role: Role;
       autorizoDatos: boolean;
+      recordar?: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -23,5 +26,6 @@ declare module "next-auth/jwt" {
     id: string;
     role: Role;
     autorizoDatos: boolean;
+    recordar?: boolean;
   }
 }

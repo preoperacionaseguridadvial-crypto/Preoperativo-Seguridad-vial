@@ -3,7 +3,7 @@ import type { Role } from "@/generated/prisma/client";
 
 type ParametrosJwt = {
   token: JWT;
-  user?: { id?: string; role?: Role; autorizoDatos?: boolean } | null;
+  user?: { id?: string; role?: Role; autorizoDatos?: boolean; recordar?: boolean } | null;
   trigger?: "signIn" | "signUp" | "update";
   // Lo que envía el cliente en una actualización de sesión: se ignora a propósito.
   session?: unknown;
@@ -28,6 +28,8 @@ export async function jwtConAutorizacion(
     if (user.id) token.id = user.id;
     if (user.role) token.role = user.role;
     token.autorizoDatos = user.autorizoDatos === true;
+    // Recordarme del login (lib/auth/recordarme.ts); sin el dato, se recuerda.
+    token.recordar = user.recordar !== false;
   }
   if (trigger === "update" && token.id) {
     token.autorizoDatos = await consultar(token.id);

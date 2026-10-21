@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { authConfig } from "@/lib/auth/base-config";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import { destinoPorAutorizacion } from "@/lib/auth/gate-autorizacion";
+import { COOKIE_SESION_NAVEGADOR, esCookieDeSesion, sesionExpiradaPorNavegador } from "@/lib/auth/recordarme";
 import { getRequiredRoles } from "@/lib/auth/route-roles";
 
 // Aunque Proxy (Next.js 16+, antes "middleware") corre en Node.js runtime
@@ -20,6 +21,22 @@ export default auth((req) => {
   }
 
   const session = req.auth;
+
+  // Sesión iniciada sin "Recordarme": dura hasta cerrar el navegador. Si el
+  // marcador ya no está (se cerró), se descarta la sesión y se pide el login.
+  if (
+    session?.user &&
+    sesionExpiradaPorNavegador({
+      recordar: session.user.recordar,
+      tieneMarcador: req.cookies.has(COOKIE_SESION_NAVEGADOR),
+    })
+  ) {
+    const respuesta = NextResponse.redirect(new URL("/login", req.nextUrl.origin));
+    for (const { name } of req.cookies.getAll()) {
+      if (esCookieDeSesion(name)) respuesta.cookies.delete(name);
+    }
+    return respuesta;
+  }
 
   if (!session?.user) {
     const loginUrl = new URL("/login", req.nextUrl.origin);

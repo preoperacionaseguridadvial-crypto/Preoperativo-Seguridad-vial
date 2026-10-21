@@ -14,16 +14,26 @@ import type { Role } from "@/generated/prisma/client";
 
 type Handler = (req: {
   nextUrl: URL;
-  auth: { user: { role: Role; autorizoDatos?: boolean } } | null;
+  auth: { user: { role: Role; autorizoDatos?: boolean; recordar?: boolean } } | null;
+  cookies: { has: (n: string) => boolean; getAll: () => { name: string; value: string }[] };
 }) => Response;
 
 // Por defecto el usuario ya firmó la autorización de tratamiento de datos,
 // para que estos tests ejerciten el RBAC; la barrera de la autorización se
 // prueba aparte, más abajo.
-function crearRequest(pathname: string, role: Role | null, autorizoDatos = true) {
+function crearRequest(
+  pathname: string,
+  role: Role | null,
+  autorizoDatos = true,
+  { recordar, cookies = [] }: { recordar?: boolean; cookies?: string[] } = {},
+) {
   return {
     nextUrl: new URL(`http://localhost${pathname}`),
-    auth: role ? { user: { role, autorizoDatos } } : null,
+    auth: role ? { user: { role, autorizoDatos, recordar } } : null,
+    cookies: {
+      has: (n: string) => cookies.includes(n),
+      getAll: () => cookies.map((name) => ({ name, value: "x" })),
+    },
   };
 }
 
@@ -171,7 +181,8 @@ describe("proxy.ts (autorización de tratamiento de datos)", () => {
   it("una sesión anterior a esta función (sin el dato) también va a /autorizacion", async () => {
     const middleware = await importMiddleware();
     // `undefined` explícito dispararía el default del helper: se arma a mano.
-    const req = { nextUrl: new URL("http://localhost/inspecciones"), auth: { user: { role: "TRABAJADOR" as const } } };
+    const base = crearRequest("/inspecciones", null);
+    const req = { ...base, auth: { user: { role: "TRABAJADOR" as const } } };
     const res = middleware(req);
     expect(res.headers.get("location")).toBe("http://localhost/autorizacion");
   });
@@ -194,5 +205,38 @@ describe("proxy.ts (autorización de tratamiento de datos)", () => {
     const middleware = await importMiddleware();
     const res = middleware(crearRequest("/autorizacion", null) as Parameters<Handler>[0]);
     expect(res.headers.get("location")).toBe("http://localhost/login?callbackUrl=%2Fautorizacion");
+  });
+});
+
+describe("proxy.ts (Recordarme desmarcado)", () => {
+  it("sin marcador del navegador descarta la sesión: va a /login y borra la cookie de sesión", async () => {
+    const middleware = await importMiddleware();
+    const res = middleware(
+      crearRequest("/inspecciones", "TRABAJADOR", true, {
+        recordar: false,
+        cookies: ["authjs.session-token", "otra"],
+      }) as Parameters<Handler>[0],
+    );
+    expect(res.headers.get("location")).toBe("http://localhost/login");
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("authjs.session-token=;");
+    expect(setCookie).not.toContain("otra=");
+  });
+
+  it("con el marcador del navegador presente deja seguir la sesión", async () => {
+    const middleware = await importMiddleware();
+    const res = middleware(
+      crearRequest("/inspecciones", "TRABAJADOR", true, {
+        recordar: false,
+        cookies: ["authjs.session-token", "ess-sesion-navegador"],
+      }) as Parameters<Handler>[0],
+    );
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("una sesión sin el dato (anterior a esta función) no se cierra", async () => {
+    const middleware = await importMiddleware();
+    const res = middleware(crearRequest("/inspecciones", "TRABAJADOR") as Parameters<Handler>[0]);
+    expect(res.headers.get("location")).toBeNull();
   });
 });
