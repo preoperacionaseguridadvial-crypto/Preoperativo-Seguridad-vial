@@ -17,6 +17,7 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/checklist/_placeholder.svg")).toBe(true);
     expect(isPublicPath("/estado-conductor/alcohol.jpg")).toBe(true);
     expect(isPublicPath("/fotos-guia/placa-moto.webp")).toBe(true);
+    expect(isPublicPath("/login/equipo-seguridad.png")).toBe(true);
   });
 
   it("no abre rutas de la app con nombres parecidos a las carpetas de imágenes", () => {
