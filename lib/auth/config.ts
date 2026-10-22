@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { authConfig } from "@/lib/auth/base-config";
 import { jwtConAutorizacion } from "@/lib/auth/jwt-autorizacion";
+import { recordarDesdeCredenciales } from "@/lib/auth/recordarme";
 import { tieneAutorizacionDatos } from "@/lib/legal/autorizacion-datos";
 
 // Config completa de NextAuth (Node.js runtime): extiende authConfig con el
@@ -26,6 +27,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        recordar: { label: "Recordarme", type: "text" },
       },
       async authorize(credentials) {
         const email = typeof credentials?.email === "string" ? credentials.email : undefined;
@@ -44,6 +46,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           email: user.email,
           role: user.role,
           autorizoDatos: await tieneAutorizacionDatos(user.id),
+          recordar: recordarDesdeCredenciales(credentials?.recordar),
         };
       },
     }),

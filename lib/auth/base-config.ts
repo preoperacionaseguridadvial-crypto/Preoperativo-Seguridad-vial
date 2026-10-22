@@ -29,6 +29,7 @@ export const authConfig: NextAuthConfig = {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
         session.user.autorizoDatos = token.autorizoDatos === true;
+        session.user.recordar = token.recordar !== false;
       }
       return session;
     },

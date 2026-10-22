@@ -37,4 +37,21 @@ describe("jwtConAutorizacion", () => {
     expect(token).toEqual({ ...tokenBase, autorizoDatos: true });
     expect(consultar).not.toHaveBeenCalled();
   });
+
+  it("al iniciar sesión guarda si el usuario pidió ser recordado", async () => {
+    const consultar = vi.fn();
+    const sinRecordar = await jwtConAutorizacion(
+      { token: {} as JWT, user: { id: "u1", role: "TRABAJADOR", recordar: false } },
+      consultar,
+    );
+    expect(sinRecordar.recordar).toBe(false);
+    const recordado = await jwtConAutorizacion({ token: {} as JWT, user: { id: "u1", role: "TRABAJADOR" } }, consultar);
+    expect(recordado.recordar).toBe(true);
+  });
+
+  it("en una actualización de sesión conserva la preferencia de Recordarme", async () => {
+    const consultar = vi.fn().mockResolvedValue(true);
+    const token = await jwtConAutorizacion({ token: { ...tokenBase, recordar: false }, trigger: "update" }, consultar);
+    expect(token.recordar).toBe(false);
+  });
 });
