@@ -84,13 +84,15 @@ export default async function LoginPage({
       {/* Hero */}
       <section className="flex flex-col justify-between px-4 pb-4 pt-8 text-white sm:px-8 lg:w-[60%] lg:px-14 lg:py-12">
         <div>
-          <Image
-            src="/logo/ess-ltda.png"
-            alt="Escort Security Services"
-            width={140}
-            height={158}
-            className="h-20 w-auto brightness-0 invert lg:h-28"
-          />
+          <div className="inline-block rounded-xl bg-white p-2 shadow-lg lg:p-3">
+            <Image
+              src="/logo/ess-ltda.png"
+              alt="Escort Security Services"
+              width={140}
+              height={158}
+              className="h-16 w-auto lg:h-24"
+            />
+          </div>
           <div className="mt-4 h-1 w-14 rounded-full bg-[#2E9BD6]" aria-hidden="true" />
         </div>
 
