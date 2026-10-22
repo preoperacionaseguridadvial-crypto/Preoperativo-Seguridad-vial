@@ -13,7 +13,7 @@ export function RespuestaActual({ valorActual }: { valorActual?: RespuestaCheckl
     OK: "✓ OK",
     FALLA: "✕ Falla / daño / faltante",
     BUENO: "✓ Bueno",
-    BAJO: "⚠ Bajo",
+    BAJO: "✕ Bajo",
     MALO: "✕ Malo",
   };
   return (

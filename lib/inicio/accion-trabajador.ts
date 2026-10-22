@@ -7,8 +7,8 @@ import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 // Acción principal de la pantalla de inicio del TRABAJADOR, derivada de su
 // última inspección no cancelada. Tiene que coincidir con lo que realmente
 // hace el flujo (app/(worker)/inspecciones, `iniciarInspeccion`): una
-// EN_PROCESO se reutiliza solo dentro de VENTANA_REUSO_INSPECCION_HORAS; más
-// vieja se descarta y se abre una nueva, así que ahí no se promete "continuar".
+// EN_PROCESO se reutiliza solo dentro del mismo turno (`esReutilizable`); la
+// de un turno anterior se descarta y se abre una nueva, así que ahí no se promete "continuar".
 //
 // Regla de negocio (confirmada por el usuario, 2026-10-07): una vez ENVIADA,
 // el trabajador puede iniciar una inspección nueva, sin importar si el

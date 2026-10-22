@@ -124,7 +124,10 @@ describe("aprobarInspeccion", () => {
     );
   });
 
-  describe("confirmación al aprobar con novedades", () => {
+  // Regla de producto (2026-10-19): solo se aprueba una inspección totalmente
+  // conforme. Con cualquier motivo (ver `motivosConfirmacionAprobacion`) la
+  // única salida es rechazar — ya no existe "aprobar con novedades".
+  describe("bloqueo de aprobación con novedades", () => {
     async function agregarRespuesta(inspectionId: string, valor: RespuestaChecklist) {
       const { item } = await crearCatalogoMinimo();
       await prisma.inspectionItemResponse.create({
@@ -138,7 +141,7 @@ describe("aprobarInspeccion", () => {
       });
     }
 
-    it("sin motivos aprueba sin confirmación y deja la metadata como siempre", async () => {
+    it("sin motivos aprueba y deja la metadata como siempre", async () => {
       const supervisor = await crearUsuario(Role.SUPERVISOR);
       const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
       await agregarRespuesta(inspection.id, RespuestaChecklist.OK);
@@ -150,14 +153,14 @@ describe("aprobarInspeccion", () => {
       expect(log.metadata).toEqual({ observacion: "Todo bien" });
     });
 
-    it("con una respuesta FALLA y sin confirmación lanza un error en español y no toca la inspección", async () => {
+    it("con una respuesta FALLA lanza un error en español y no toca la inspección", async () => {
       const supervisor = await crearUsuario(Role.SUPERVISOR);
       const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
       await agregarRespuesta(inspection.id, RespuestaChecklist.FALLA);
       loginComo(supervisor);
 
       await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(
-        /novedades reportadas.*confirmar/i,
+        /novedades reportadas.*solo puede rechazarse/i,
       );
 
       const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
@@ -167,51 +170,26 @@ describe("aprobarInspeccion", () => {
       expect(await prisma.auditLog.count({ where: { entityId: inspection.id } })).toBe(0);
     });
 
-    it("con confirmación aprueba y registra en la auditoría que fue con novedades y cuáles", async () => {
-      const supervisor = await crearUsuario(Role.SUPERVISOR);
-      const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
-        consumioAlcohol: true,
-      });
-      await agregarRespuesta(inspection.id, RespuestaChecklist.MALO);
-      loginComo(supervisor);
-
-      const resultado = await aprobarInspeccion(inspection.id, "  Revisado en sitio  ", true);
-
-      expect(resultado.status).toBe(InspectionStatus.APROBADA);
-      const log = await auditoriaAprobar(inspection.id);
-      const metadata = log.metadata as {
-        observacion: string;
-        aprobadaConNovedades: boolean;
-        motivos: string[];
-      };
-      expect(metadata.observacion).toBe("Revisado en sitio");
-      expect(metadata.aprobadaConNovedades).toBe(true);
-      expect(metadata.motivos).toHaveLength(2);
-      expect(metadata.motivos[0]).toBe("Item de prueba: Malo");
-      expect(metadata.motivos[1]).toMatch(/alcohol/i);
-    });
-
-    it("BAJO no exige confirmación", async () => {
+    it("BAJO bloquea la aprobación (reemplaza a MALO en fluidos)", async () => {
       const supervisor = await crearUsuario(Role.SUPERVISOR);
       const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
       await agregarRespuesta(inspection.id, RespuestaChecklist.BAJO);
       loginComo(supervisor);
 
-      const resultado = await aprobarInspeccion(inspection.id);
-      expect(resultado.status).toBe(InspectionStatus.APROBADA);
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/solo puede rechazarse/i);
     });
 
-    it("una inspección NO_APTA_PARA_OPERAR (puedeOperar=false) exige confirmación", async () => {
+    it("una inspección NO_APTA_PARA_OPERAR (puedeOperar=false) no se puede aprobar", async () => {
       const supervisor = await crearUsuario(Role.SUPERVISOR);
       const inspection = await crearInspeccion(InspectionStatus.NO_APTA_PARA_OPERAR);
       loginComo(supervisor);
 
-      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
-      const aprobada = await aprobarInspeccion(inspection.id, undefined, true);
-      expect(aprobada.status).toBe(InspectionStatus.APROBADA);
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/solo puede rechazarse/i);
+      const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+      expect(despues.status).toBe(InspectionStatus.NO_APTA_PARA_OPERAR);
     });
 
-    it("una novedad general (sin ítem) exige confirmación", async () => {
+    it("una novedad general (sin ítem) bloquea la aprobación", async () => {
       const supervisor = await crearUsuario(Role.SUPERVISOR);
       const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
       await prisma.novedad.create({
@@ -219,7 +197,17 @@ describe("aprobarInspeccion", () => {
       });
       loginComo(supervisor);
 
-      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
+      await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/solo puede rechazarse/i);
+    });
+
+    it("con novedades se puede rechazar", async () => {
+      const supervisor = await crearUsuario(Role.SUPERVISOR);
+      const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);
+      await agregarRespuesta(inspection.id, RespuestaChecklist.FALLA);
+      loginComo(supervisor);
+
+      const resultado = await rechazarInspeccion(inspection.id, "Espejo roto");
+      expect(resultado.status).toBe(InspectionStatus.RECHAZADA);
     });
   });
 });
@@ -288,7 +276,7 @@ describe("declaración de estado del conductor — advertencia derivada, nunca a
     expect(requiereAtencionEstadoConductor(inspection)).toBe(true);
   });
 
-  it("aprobarInspeccion aprueba igual una inspección con declaración preocupante (el Supervisor decide)", async () => {
+  it("aprobarInspeccion no aprueba una inspección con declaración preocupante (regla 2026-10-19: solo conforme)", async () => {
     const supervisor = await crearUsuario(Role.SUPERVISOR);
     const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
       tomaMedicamentos: true,
@@ -297,11 +285,7 @@ describe("declaración de estado del conductor — advertencia derivada, nunca a
     });
     loginComo(supervisor);
 
-    // Sigue sin bloquearse: el Supervisor decide, pero ahora debe confirmar.
-    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
-    const resultado = await aprobarInspeccion(inspection.id, undefined, true);
-
-    expect(resultado.status).toBe(InspectionStatus.APROBADA);
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/solo puede rechazarse/i);
   });
 
   it("una declaración sin respuestas preocupantes no requiere atención", async () => {
@@ -342,17 +326,17 @@ describe("flujo de dos etapas — Supervisor Oleariari (etapa 1)", () => {
     expect(log.metadata).toEqual({ observacion: "Visto en sitio" });
   });
 
-  it("mantiene el estado NO_APTA_PARA_OPERAR al pasar al Director", async () => {
+  it("no puede aprobar una NO_APTA_PARA_OPERAR (no pasa al Director)", async () => {
     const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
     const inspection = await crearInspeccion(InspectionStatus.NO_APTA_PARA_OPERAR, { sede: Sede.OLEARIARI });
     loginComo(supOleariari);
 
-    const resultado = await aprobarInspeccion(inspection.id, undefined, true);
-    expect(resultado.status).toBe(InspectionStatus.NO_APTA_PARA_OPERAR);
-    expect(resultado.revisadaSupervisorOleariariAt).not.toBeNull();
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/solo puede rechazarse/i);
+    const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
+    expect(despues.revisadaSupervisorOleariariAt).toBeNull();
   });
 
-  it("también exige confirmar las novedades antes de aprobar", async () => {
+  it("tampoco puede aprobar con novedades (misma regla fuera de Bogotá)", async () => {
     const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
     const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, {
       sede: Sede.OLEARIARI,
@@ -360,15 +344,9 @@ describe("flujo de dos etapas — Supervisor Oleariari (etapa 1)", () => {
     });
     loginComo(supOleariari);
 
-    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/confirmar/i);
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/solo puede rechazarse/i);
     const despues = await prisma.inspection.findUniqueOrThrow({ where: { id: inspection.id } });
     expect(despues.revisadaSupervisorOleariariAt).toBeNull();
-
-    await aprobarInspeccion(inspection.id, undefined, true);
-    const log = await prisma.auditLog.findFirstOrThrow({
-      where: { entityId: inspection.id, action: "APROBAR_INSPECCION_SUPERVISOR_OLEARIARI" },
-    });
-    expect((log.metadata as { aprobadaConNovedades: boolean }).aprobadaConNovedades).toBe(true);
   });
 
   it("rechazar cierra la inspección y nunca llega al Director", async () => {

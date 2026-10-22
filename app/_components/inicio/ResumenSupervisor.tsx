@@ -5,7 +5,15 @@ import type { PendienteConFoto } from "@/lib/inspections/pendientes-con-foto";
  * SUPERVISOR: las inspecciones que esperan revisión, como las tarjetas de
  * /aprobaciones. Llegan ya ordenadas (las que requieren atención primero).
  */
-export function ResumenSupervisor({ pendientes, ahora }: { pendientes: PendienteConFoto[]; ahora: Date }) {
+export function ResumenSupervisor({
+  pendientes,
+  ahora,
+  habilitacionHasta = null,
+}: {
+  pendientes: PendienteConFoto[];
+  ahora: Date;
+  habilitacionHasta?: Date | null;
+}) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Por revisar</h2>
@@ -14,7 +22,12 @@ export function ResumenSupervisor({ pendientes, ahora }: { pendientes: Pendiente
       ) : (
         <ul className="flex flex-col gap-3">
           {pendientes.map((inspection) => (
-            <TarjetaPendiente key={inspection.id} inspection={inspection} ahora={ahora} />
+            <TarjetaPendiente
+              key={inspection.id}
+              inspection={inspection}
+              ahora={ahora}
+              habilitacionHasta={habilitacionHasta}
+            />
           ))}
         </ul>
       )}

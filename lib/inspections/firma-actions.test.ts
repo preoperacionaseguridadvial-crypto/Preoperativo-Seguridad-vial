@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mismo patrón que foto-actions.test.ts: solo se mockea la sesión de NextAuth
 // y el cliente de S3/MinIO; Prisma y sus constraints corren contra Postgres real.
@@ -17,6 +17,7 @@ import { InspectionStatus, Role, Sede, TipoFirma } from "@/generated/prisma/clie
 import { guardarFirmaConductor, guardarFirmaSupervisor } from "@/lib/inspections/firma-actions";
 import { MAX_FIRMA_BYTES } from "@/lib/storage/validar-archivo";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
+import { fijarHoraEnVentana, restaurarHora } from "@/test/helpers/horario";
 
 const PNG_MINIMO = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
 const JPEG_MINIMO = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
@@ -38,10 +39,15 @@ async function crearInspeccionEnProceso() {
 }
 
 beforeEach(async () => {
+  fijarHoraEnVentana();
   await limpiarBaseDeTest();
   mockAuth.mockReset();
   mockUploadObject.mockReset();
   mockUploadObject.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  restaurarHora();
 });
 
 afterAll(async () => {

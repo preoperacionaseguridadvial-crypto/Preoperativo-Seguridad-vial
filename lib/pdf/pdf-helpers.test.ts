@@ -124,7 +124,8 @@ describe("formatoValorItemPdf", () => {
     const malo = formatoValorItemPdf(RespuestaChecklist.MALO);
 
     expect(bueno.estilo).toBe("ok");
-    expect(bajo.estilo).toBe("warn");
+    // Desde 2026-10-19 BAJO reemplaza a MALO en fluidos: mismo estilo de falla.
+    expect(bajo).toEqual({ texto: "X BAJO", estilo: "falla" });
     expect(malo.estilo).toBe("falla");
 
     const textos = new Set([bueno.texto, bajo.texto, malo.texto, "✓ OK.", "X FALLA, DAÑO, FALTANTE"]);

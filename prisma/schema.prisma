@@ -201,6 +201,8 @@ model User {
   firmas                          Firma[]
   configuracionesActualizadas     AppSetting[]
   autorizacionDatos               AutorizacionDatos?
+  habilitacionesRecibidas         HabilitacionHorario[] @relation("HabilitacionBeneficiario")
+  habilitacionesOtorgadas         HabilitacionHorario[] @relation("HabilitacionOtorgante")
 
   @@index([role])
 }
@@ -330,6 +332,13 @@ model Inspection {
   condicionesAptas    Boolean?
   consumioAlcohol     Boolean?
   declaracionEstadoAt DateTime?
+
+  // horarios-sst: la inspección se envió fuera de las ventanas del
+  // recorredor, gracias a una habilitación de SST (`habilitacionId`). El
+  // aprobador ve la alerta de "enviada fuera de horario".
+  enviadaFueraDeHorario Boolean              @default(false)
+  habilitacionId        String?
+  habilitacion          HabilitacionHorario? @relation(fields: [habilitacionId], references: [id])
 
   respuestas InspectionItemResponse[]
   novedades  Novedad[]
@@ -549,6 +558,33 @@ model AppSetting {
   // Nullable: la fila sembrada por el seed no tiene un Administrador autor.
   updatedById String?
   updatedBy   User?   @relation(fields: [updatedById], references: [id])
+}
+
+// horarios-sst: excepciones que otorga la Administradora SST.
+// RECORREDOR: el trabajador puede iniciar, continuar y enviar inspecciones
+// dentro de [desde, hasta) aunque esté fuera de las ventanas normales.
+// APROBACION: el aprobador puede decidir inspecciones con el plazo de 60
+// minutos vencido dentro de [desde, hasta). Siempre con justificación.
+enum TipoHabilitacion {
+  RECORREDOR
+  APROBACION
+}
+
+model HabilitacionHorario {
+  id            String           @id @default(cuid())
+  tipo          TipoHabilitacion
+  usuarioId     String
+  usuario       User             @relation("HabilitacionBeneficiario", fields: [usuarioId], references: [id])
+  desde         DateTime
+  hasta         DateTime
+  justificacion String
+  otorgadaPorId String
+  otorgadaPor   User             @relation("HabilitacionOtorgante", fields: [otorgadaPorId], references: [id])
+  createdAt     DateTime         @default(now())
+
+  inspecciones Inspection[]
+
+  @@index([usuarioId, tipo, desde])
 }
 
 model AuditLog {

@@ -16,6 +16,8 @@ import {
   type SortTrabajador,
   type SortVehiculo,
 } from "@/lib/inspections/reportes-queries";
+import { getReporteHorarios } from "@/lib/horarios/reportes-horario";
+import { SeccionHorarios } from "./_components/SeccionHorarios";
 import { FiltrosReporte } from "./_components/FiltrosReporte";
 import { BannerAlertas } from "./_components/BannerAlertas";
 import { TarjetasAnillo } from "./_components/TarjetasAnillo";
@@ -45,6 +47,7 @@ type SearchParams = {
   estado?: string;
   resultado?: string;
   supervisor?: string;
+  sede?: string;
   vista?: string;
   sortTrabajador?: string;
   dirTrabajador?: string;
@@ -109,6 +112,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     trabajadoresOpciones,
     supervisoresOpciones,
     inspeccionesDetalle,
+    reporteHorarios,
   ] = await Promise.all([
     getKpisReporte(filtrosReporte),
     getTendenciaDiaria(filtrosReporte),
@@ -127,7 +131,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       workerId: filtrosReporte.workerId,
       supervisorId: filtrosReporte.supervisorId,
       puedeOperar: filtrosReporte.puedeOperar,
+      sede: filtrosReporte.sede,
     }),
+    getReporteHorarios(filtrosReporte),
   ]);
 
   const filasTrabajador = qTrabajador
@@ -199,6 +205,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <FallasPorItem datos={fallasPorItem} />
         <NovedadesPorTipo datos={novedadesPorTipo} />
       </div>
+
+      <SeccionHorarios datos={reporteHorarios} />
 
       <InspeccionesRecientes inspecciones={inspeccionesDetalle} role={role} />
 

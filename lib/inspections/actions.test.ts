@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mockeamos la sesión de NextAuth (no la base de datos): `auth()` normalmente
 // lee una cookie firmada y no tiene sentido simularla acá — lo único que
@@ -49,7 +49,7 @@ import {
   limpiarBaseDeTest,
 } from "@/test/helpers/db";
 import { getChecklistCatalog } from "@/lib/inspections/queries";
-import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
+import { fijarHoraEnVentana, restaurarHora } from "@/test/helpers/horario";
 import { MAX_ADJUNTO_NOVEDAD_BYTES } from "@/lib/storage/validar-archivo";
 
 function loginComo(user: { id: string; role: Role }) {
@@ -112,12 +112,19 @@ async function completarFotosYDeclaracion(inspectionId: string) {
   });
 }
 
+// Las acciones del trabajador solo operan dentro de la ventana de inspección:
+// se congela `Date` a las 6:00 de Bogotá.
 beforeEach(async () => {
+  fijarHoraEnVentana();
   await limpiarBaseDeTest();
   await crearCatalogoMinimo();
   mockAuth.mockReset();
   mockUploadObject.mockReset();
   mockUploadObject.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  restaurarHora();
 });
 
 afterAll(async () => {
@@ -544,7 +551,7 @@ describe("inmutabilidad: una inspección ENVIADA no puede volver a editarse con 
 // ítems de fluidos). `responderItem` valida `valor` contra ese discriminador
 // vía lib/inspections/respuesta.ts.
 describe("responderItem — valores según tipoRespuesta", () => {
-  it("acepta BUENO/BAJO/MALO en un ítem TRIESTADO", async () => {
+  it("acepta BUENO/BAJO en un ítem TRIESTADO", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -593,7 +600,9 @@ describe("responderItem — valores según tipoRespuesta", () => {
     ).rejects.toThrow(/no es un valor válido/i);
   });
 
-  it("MALO en un ítem TRIESTADO crea una Novedad; BAJO no crea nada", async () => {
+  // Pedido del dueño de producto (2026-10-19): los fluidos solo admiten
+  // Bueno/Bajo. MALO se rechaza aunque siga existiendo en el enum.
+  it("rechaza MALO en un ítem TRIESTADO; BAJO crea una Novedad", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -610,24 +619,27 @@ describe("responderItem — valores según tipoRespuesta", () => {
       inspection.id,
       itemFluido.id,
       RespuestaChecklist.BAJO,
-    );
-    expect(novedadBajo).toBeNull();
-
-    const { novedad: novedadMalo } = await responderItem(
-      inspection.id,
-      itemFluido.id,
-      RespuestaChecklist.MALO,
-      "Nivel muy bajo, huele a quemado",
+      "Nivel por debajo del mínimo",
       "FALLA",
     );
-    expect(novedadMalo).not.toBeNull();
+    expect(novedadBajo).not.toBeNull();
     const enBase = await prisma.novedad.findFirst({
       where: { inspectionItemResponse: { checklistItemId: itemFluido.id, inspectionId: inspection.id } },
     });
     expect(enBase).not.toBeNull();
+
+    await expect(
+      responderItem(
+        inspection.id,
+        itemFluido.id,
+        RespuestaChecklist.MALO,
+        "Nivel muy bajo, huele a quemado",
+        "FALLA",
+      ),
+    ).rejects.toThrow(/no es un valor válido/i);
   });
 
-  it("BAJO no requiere observación ni tipo de novedad", async () => {
+  it("BAJO exige observación, igual que FALLA", async () => {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const { categoria } = await crearCatalogoMinimo();
@@ -642,7 +654,7 @@ describe("responderItem — valores según tipoRespuesta", () => {
 
     await expect(
       responderItem(inspection.id, itemFluido.id, RespuestaChecklist.BAJO),
-    ).resolves.not.toThrow();
+    ).rejects.toThrow();
   });
 });
 
@@ -852,8 +864,8 @@ describe("iniciarInspeccion — idempotente ante doble envío", () => {
   });
 });
 
-// Ventana de reuso: la inspección preoperacional es un chequeo diario, así que
-// una EN_PROCESO vieja no se devuelve — se cancela y se abre una nueva.
+// Ventana de reuso: una EN_PROCESO se retoma solo dentro del mismo turno, así que
+// una de un turno anterior no se devuelve — se cancela y se abre una nueva.
 describe("iniciarInspeccion — ventana de reuso de la inspección EN_PROCESO", () => {
   const HORA_MS = 60 * 60 * 1000;
 
@@ -874,14 +886,14 @@ describe("iniciarInspeccion — ventana de reuso de la inspección EN_PROCESO", 
     });
   }
 
-  it("la ventana de reuso es de 24 horas", () => {
-    expect(VENTANA_REUSO_INSPECCION_HORAS).toBe(24);
-  });
-
-  it("reutiliza una EN_PROCESO iniciada hace 23 horas, conservando su startedAt", async () => {
+  it("reutiliza una EN_PROCESO iniciada en la ventana actual, conservando su startedAt", async () => {
     const { vehicle, worker } = await trabajadorConVehiculo();
     const primera = await iniciarInspeccion(vehicle.id);
-    await envejecer(primera.id, 23);
+    // La hora simulada es 06:00 de Bogotá; la ventana abrió a las 05:45.
+    await prisma.inspection.update({
+      where: { id: primera.id },
+      data: { startedAt: new Date(Date.now() - 10 * 60 * 1000) },
+    });
     const startedAtOriginal = (
       await prisma.inspection.findUniqueOrThrow({ where: { id: primera.id } })
     ).startedAt;
@@ -894,7 +906,7 @@ describe("iniciarInspeccion — ventana de reuso de la inspección EN_PROCESO", 
     expect(await prisma.auditLog.count({ where: { userId: worker.id } })).toBe(1);
   });
 
-  it("cancela una EN_PROCESO iniciada hace 25 horas y abre una nueva, dejando una sola EN_PROCESO", async () => {
+  it("cancela una EN_PROCESO de un turno anterior (hace 25 horas) y abre una nueva, dejando una sola EN_PROCESO", async () => {
     const { vehicle, worker } = await trabajadorConVehiculo();
     const vieja = await iniciarInspeccion(vehicle.id);
     await envejecer(vieja.id, 25);

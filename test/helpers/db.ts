@@ -22,6 +22,7 @@ export async function limpiarBaseDeTest() {
   // clave configurada (ver lib/settings/queries.test.ts).
   await prisma.appSetting.deleteMany({});
   await prisma.inspection.deleteMany({});
+  await prisma.habilitacionHorario.deleteMany({});
   await prisma.checklistItem.deleteMany({});
   await prisma.checklistCategory.deleteMany({});
   await prisma.vehicle.deleteMany({});

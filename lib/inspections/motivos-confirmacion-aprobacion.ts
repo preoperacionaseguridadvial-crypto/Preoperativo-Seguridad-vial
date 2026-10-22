@@ -28,17 +28,19 @@ export type InspeccionParaConfirmacion = {
 
 const ETIQUETA_VALOR: Partial<Record<RespuestaChecklist, string>> = {
   FALLA: "Falla",
+  BAJO: "Bajo",
   MALO: "Malo",
 };
 
 /**
- * Lista ordenada de motivos (texto legible) por los que aprobar esta
- * inspección exige confirmación explícita del supervisor. Vacía = nada
- * reportado, se aprueba como siempre. Regla de producto (2026-10-07): FALLA o
- * MALO en el checklist (vía `esNovedad`, única fuente de esa regla) y
- * novedades generales; `puedeOperar === false`; y declaraciones del conductor
- * preocupantes (mismos criterios que `requiereAtencionEstadoConductor`, pero
- * una razón por respuesta). BAJO nunca es motivo. Es dato derivado: el
+ * Lista ordenada de motivos (texto legible) por los que esta inspección no
+ * está conforme. Vacía = nada reportado, se puede aprobar. Desde 2026-10-19
+ * cualquier motivo impide aprobar (solo se puede rechazar, ver
+ * `aprobarInspeccion`). Regla de producto (2026-10-07): FALLA,
+ * BAJO o MALO histórico en el checklist (vía `esNovedad`, única fuente de esa
+ * regla) y novedades generales; `puedeOperar === false`; y declaraciones del
+ * conductor preocupantes (mismos criterios que
+ * `requiereAtencionEstadoConductor`, pero una razón por respuesta). Es dato derivado: el
  * servidor la recalcula al aprobar, jamás confía en lo que mande el cliente.
  */
 export function motivosConfirmacionAprobacion(inspection: InspeccionParaConfirmacion): string[] {

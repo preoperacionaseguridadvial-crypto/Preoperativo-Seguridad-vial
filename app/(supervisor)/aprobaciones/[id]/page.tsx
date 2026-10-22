@@ -6,7 +6,7 @@ import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervi
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
-import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
+import { PREGUNTAS_ESTADO_CONDUCTOR, requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirmacion-aprobacion";
 import { AprobarInspeccionForm } from "@/app/_components/AprobarInspeccionForm";
 import { Role, Sede, TipoFirma } from "@/generated/prisma/enums";
@@ -17,7 +17,15 @@ import {
   etapaParaRol,
   tipoFirmaPendiente,
 } from "@/lib/inspections/cola-aprobacion";
-import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
+import { formatFecha, formatFechaHora, formatHora } from "@/lib/fechas/formato";
+import {
+  MENSAJE_APROBACION_FUERA_DE_PLAZO,
+  habilitacionAprobacionHasta,
+} from "@/lib/horarios/habilitaciones";
+import {
+  MENSAJE_ENVIADA_FUERA_DE_HORARIO,
+  estadoPlazoParaAprobador,
+} from "@/lib/horarios/estado-plazo-aprobador";
 
 // Pantalla de detalle de la revisión de los aprobadores (Fase 3): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -109,17 +117,21 @@ export default async function AprobacionDetallePage({
     categoria.items.sort((a, b) => a.checklistItem.orden - b.checklistItem.orden);
   }
 
-  const noApta = inspection.status === "NO_APTA_PARA_OPERAR";
   // Slice 3 (A6/D8): dato derivado, nunca bloquea ni auto-transiciona —
   // solo decide si esta pantalla muestra la advertencia.
   const alertaEstadoConductor = requiereAtencionEstadoConductor(inspection);
 
-  // Qué hay reportado que obliga a confirmar la aprobación (lista vacía = se
-  // aprueba como siempre). La server action lo recalcula; esto solo alimenta
-  // el diálogo.
-  const motivosConfirmacion = motivosConfirmacionAprobacion(inspection);
+  // Qué hay reportado que impide aprobar (lista vacía = se puede aprobar).
+  // La server action lo recalcula; esto solo decide qué se muestra.
+  const motivosNoConformes = motivosConfirmacionAprobacion(inspection);
 
   const ahora = new Date();
+  // Plazo de 60 minutos por etapa: una sola consulta de habilitación, y solo si
+  // este aprobador puede decidir ahora (el servidor vuelve a validarlo).
+  const habilitacionHasta =
+    puedeDecidir && !decidida ? await habilitacionAprobacionHasta(session.user.id, ahora) : null;
+  const plazo = estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta });
+  const pendiente = esperaA !== null;
   const tecnicomecanicaVencida = Boolean(
     inspection.vehicle.fechaVencimientoTecnicomecanica &&
       inspection.vehicle.fechaVencimientoTecnicomecanica < ahora,
@@ -128,9 +140,8 @@ export default async function AprobacionDetallePage({
   async function aprobarAction(formData: FormData) {
     "use server";
     const observacion = formData.get("observacion")?.toString();
-    const confirmado = formData.get("confirmado")?.toString() === "true";
     try {
-      await aprobarInspeccion(id, observacion, confirmado);
+      await aprobarInspeccion(id, observacion);
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo aprobar la inspección.";
       redirect(`/aprobaciones/${id}?error=${encodeURIComponent(message)}`);
@@ -174,6 +185,15 @@ export default async function AprobacionDetallePage({
           </a>
         )}
       </div>
+
+      {pendiente && plazo.fueraDeHorario && (
+        <div
+          role="alert"
+          className="rounded-md border-l-4 border-status-warn bg-status-warn-soft p-4 text-sm font-semibold text-status-warn-ink"
+        >
+          {MENSAJE_ENVIADA_FUERA_DE_HORARIO}
+        </div>
+      )}
 
       <section className="rounded-md border border-gray-200 p-4 text-sm">
         <dl className="flex flex-col gap-2">
@@ -231,20 +251,6 @@ export default async function AprobacionDetallePage({
 
       <section
         className={`rounded-md p-4 text-sm ${
-          noApta ? "bg-red-50 text-red-900" : "bg-green-50 text-green-900"
-        }`}
-      >
-        <p className="text-xs uppercase tracking-wide opacity-70">Resultado reportado</p>
-        <p className="text-lg font-semibold">
-          {inspection.puedeOperar ? "✓ Puede operar" : "✕ No puede operar"}
-        </p>
-        {!inspection.puedeOperar && inspection.justificacionNoOperar && (
-          <p className="mt-1">{inspection.justificacionNoOperar}</p>
-        )}
-      </section>
-
-      <section
-        className={`rounded-md p-4 text-sm ${
           alertaEstadoConductor ? "bg-amber-50 text-amber-900" : "border border-gray-200"
         }`}
       >
@@ -252,19 +258,15 @@ export default async function AprobacionDetallePage({
         {alertaEstadoConductor && (
           <p className="text-base font-semibold">⚠ Requiere atención</p>
         )}
-        <dl className="mt-2 flex flex-col gap-1">
-          <div className="flex justify-between">
-            <dt>¿Medicamento/sustancia/condición que afecte su capacidad?</dt>
-            <dd className="font-medium">{siNoOTexto(inspection.tomaMedicamentos)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt>¿Condiciones físicas y mentales adecuadas?</dt>
-            <dd className="font-medium">{siNoOTexto(inspection.condicionesAptas)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt>¿Consumió alcohol u otra sustancia?</dt>
-            <dd className="font-medium">{siNoOTexto(inspection.consumioAlcohol)}</dd>
-          </div>
+        {/* Texto textual del cliente (2026-10-19), misma fuente que la
+            pantalla del conductor — no abreviar. */}
+        <dl className="mt-2 flex flex-col gap-2">
+          {PREGUNTAS_ESTADO_CONDUCTOR.map((pregunta) => (
+            <div key={pregunta.campo} className="flex justify-between gap-4">
+              <dt>{pregunta.texto}</dt>
+              <dd className="shrink-0 font-medium">{siNoOTexto(inspection[pregunta.campo])}</dd>
+            </div>
+          ))}
         </dl>
       </section>
 
@@ -402,30 +404,68 @@ export default async function AprobacionDetallePage({
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
 
-          <AprobarInspeccionForm action={aprobarAction} motivos={motivosConfirmacion} />
+          {plazo.vence && !plazo.vencido && (
+            <p className="text-sm text-gray-600">Plazo para decidir: hasta las {formatHora(plazo.vence)}</p>
+          )}
 
-          <form action={rechazarAction} className="flex flex-col gap-3">
-            <div>
-              <label htmlFor="observacion-rechazar" className="mb-1 block text-sm font-medium text-gray-700">
-                Observaciones (obligatorio para rechazar)
-              </label>
-              <textarea
-                id="observacion-rechazar"
-                name="observacion"
-                required
-                minLength={3}
-                rows={3}
-                placeholder="Explicá por qué se rechaza esta inspección."
-                className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#2E9BD6] focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full rounded-md bg-red-600 px-4 py-4 text-base font-semibold text-white hover:bg-red-700"
+          {plazo.habilitadoHasta && (
+            <p className="rounded-md bg-status-info-soft px-3 py-2 text-sm text-status-info-ink">
+              Habilitado por SST hasta las {formatHora(plazo.habilitadoHasta)}
+            </p>
+          )}
+
+          {!plazo.puedeDecidir ? (
+            // Plazo de 60 minutos superado y sin habilitación de SST: no se
+            // muestran los formularios (el servidor lo bloquea igualmente).
+            <div
+              role="alert"
+              className="rounded-md border-l-4 border-status-crit bg-status-crit-soft p-4 text-sm font-semibold text-status-crit-ink"
             >
-              ✕ Rechazar
-            </button>
-          </form>
+              {MENSAJE_APROBACION_FUERA_DE_PLAZO}
+            </div>
+          ) : (
+            <>
+              {motivosNoConformes.length > 0 ? (
+                // Regla 2026-10-19: con novedades no se puede aprobar, solo
+                // rechazar (el servidor lo vuelve a validar en aprobarInspeccion).
+                <div className="rounded-md border-l-4 border-status-crit bg-status-crit-soft p-4 text-sm text-status-crit-ink">
+                  <p className="font-semibold">
+                    Esta inspección tiene novedades reportadas: no se puede aprobar, solo rechazar.
+                  </p>
+                  <ul className="mt-2 list-disc pl-5">
+                    {motivosNoConformes.map((motivo, indice) => (
+                      <li key={indice}>{motivo}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <AprobarInspeccionForm action={aprobarAction} />
+              )}
+
+              <form action={rechazarAction} className="flex flex-col gap-3">
+                <div>
+                  <label htmlFor="observacion-rechazar" className="mb-1 block text-sm font-medium text-gray-700">
+                    Observaciones (obligatorio para rechazar)
+                  </label>
+                  <textarea
+                    id="observacion-rechazar"
+                    name="observacion"
+                    required
+                    minLength={3}
+                    rows={3}
+                    placeholder="Explicá por qué se rechaza esta inspección."
+                    className="w-full rounded-md border border-gray-300 px-3 py-3 text-base focus:border-[#2E9BD6] focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full rounded-md bg-red-600 px-4 py-4 text-base font-semibold text-white hover:bg-red-700"
+                >
+                  ✕ Rechazar
+                </button>
+              </form>
+            </>
+          )}
         </section>
       )}
     </main>
@@ -471,9 +511,9 @@ function FirmaEvidencia({
 // Corrección Slice 3: antes solo distinguía OK/Falla — los ítems de
 // fluidos con `tipoRespuesta = TRIESTADO` (Slice 2, BUENO/BAJO/MALO) caían
 // todos en "Falla" salvo OK, mostrando "Bueno" y "Bajo" como si fueran
-// fallas reales. "Bajo" es advertencia, no falla (no crea Novedad, ver
-// lib/inspections/respuesta.ts `esNovedad`) — color propio (ámbar) para no
-// confundirlo con "Malo".
+// fallas reales. Desde 2026-10-19 "Bajo" reemplaza a "Malo" en los fluidos
+// (crea Novedad, ver lib/inspections/respuesta.ts `esNovedad`) y se pinta en
+// rojo como falla.
 function badgeLabel(valor: string) {
   switch (valor) {
     case "OK":
@@ -492,8 +532,7 @@ function badgeLabel(valor: string) {
 function badgeClass(valor: string) {
   const base = "rounded-full px-2 py-0.5 text-xs font-semibold";
   if (valor === "OK" || valor === "BUENO") return `${base} bg-green-100 text-green-800`;
-  if (valor === "BAJO") return `${base} bg-amber-100 text-amber-800`;
-  return `${base} bg-red-100 text-red-800`; // FALLA, MALO
+  return `${base} bg-red-100 text-red-800`; // FALLA, BAJO, MALO
 }
 
 function siNoOTexto(valor: boolean | null) {

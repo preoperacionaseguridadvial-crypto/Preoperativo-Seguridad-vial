@@ -69,7 +69,9 @@ export default async function ChecklistItemPage({
   const allItems = catalogConEstado.flatMap((category) => category.items);
   const totalItems = allItems.length;
   const conformes = allItems.filter((i) => i.estado === "OK" || i.estado === "BUENO").length;
-  const noConformes = allItems.filter((i) => i.estado === "FALLA" || i.estado === "MALO").length;
+  const noConformes = allItems.filter(
+    (i) => i.estado === "FALLA" || i.estado === "BAJO" || i.estado === "MALO",
+  ).length;
   const pendientes = allItems.filter((i) => i.estado === "PENDIENTE").length;
   const revisados = totalItems - pendientes;
 
@@ -116,21 +118,14 @@ export default async function ChecklistItemPage({
 
   /**
    * Ítems de fluidos (`tipoRespuesta = TRIESTADO`, fase soporte-moto-carro
-   * Slice 2, A2). "Bueno" y "Bajo" se guardan directo, sin pedir nada — BAJO
-   * no crea Novedad ni bloquea el envío (decisión confirmada: solo dato
-   * queryable con badge de advertencia, ver lib/inspections/respuesta.ts).
-   * "Malo" usa el Link a la pantalla de novedad (RespuestaTriestadoItem),
-   * igual que "Falla" para ítems binarios.
+   * Slice 2, A2). "Bueno" se guarda directo. Desde 2026-10-19 (pedido del
+   * dueño de producto) "Bajo" reemplaza a "Malo" en el flujo de novedad: usa
+   * el Link a la pantalla de novedad (RespuestaTriestadoItem), igual que
+   * "Falla" para ítems binarios.
    */
   async function marcarBueno() {
     "use server";
     await responderItem(id, itemId, RespuestaChecklist.BUENO);
-    redirect(await getNextStepPath(id));
-  }
-
-  async function marcarBajo() {
-    "use server";
-    await responderItem(id, itemId, RespuestaChecklist.BAJO);
     redirect(await getNextStepPath(id));
   }
 
@@ -162,7 +157,6 @@ export default async function ChecklistItemPage({
             idInspeccion={id}
             itemId={itemId}
             marcarBueno={marcarBueno}
-            marcarBajo={marcarBajo}
             valorActual={respuestaActual?.valor}
           />
         ) : (

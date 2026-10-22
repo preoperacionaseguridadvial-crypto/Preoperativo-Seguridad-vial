@@ -6,6 +6,7 @@ import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, Prisma, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { deleteObject, uploadObject } from "@/lib/storage/s3";
 import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
+import { exigirHorarioParaContinuar } from "@/lib/horarios/habilitaciones";
 import { PERFIL_FOTO_INSPECCION, validarArchivo } from "@/lib/storage/validar-archivo";
 
 // Mismo criterio que `campoDuplicado` en lib/admin/user-actions.ts: solo el
@@ -45,6 +46,7 @@ export async function subirFotoInspeccion(
   if (inspection.status !== InspectionStatus.EN_PROCESO) {
     throw new Error("La inspección ya no está en proceso: no se pueden agregar fotos.");
   }
+  await exigirHorarioParaContinuar(inspection, "subirFotoInspeccion", new Date());
 
   // Mientras la inspección siga EN_PROCESO la foto se puede reemplazar
   // (corrección, feature correccion-respuestas-inspeccion): hay una sola fila

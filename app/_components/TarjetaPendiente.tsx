@@ -2,19 +2,31 @@ import Link from "next/link";
 import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 import type { PendienteConFoto } from "@/lib/inspections/pendientes-con-foto";
-import { formatFechaHora } from "@/lib/fechas/formato";
+import { MENSAJE_ENVIADA_FUERA_DE_HORARIO, estadoPlazoParaAprobador } from "@/lib/horarios/estado-plazo-aprobador";
+import { formatFechaHora, formatHora } from "@/lib/fechas/formato";
 
 /**
  * Tarjeta de una inspección pendiente de decisión (Supervisor): miniatura o
  * ícono, placa, trabajador, antigüedad y alertas visibles sin abrir el
  * detalle. Compartida por /aprobaciones y el inicio del Supervisor.
  */
-export function TarjetaPendiente({ inspection, ahora }: { inspection: PendienteConFoto; ahora: Date }) {
+export function TarjetaPendiente({
+  inspection,
+  ahora,
+  habilitacionHasta = null,
+}: {
+  inspection: PendienteConFoto;
+  ahora: Date;
+  /** Fin de la habilitación de aprobación vigente del aprobador (una consulta por pantalla). */
+  habilitacionHasta?: Date | null;
+}) {
   const noApta = inspection.status === "NO_APTA_PARA_OPERAR";
   const alertaConductor = requiereAtencionEstadoConductor(inspection);
   const novedades = inspection._count.novedades;
   const esCarro = inspection.vehicle.tipoVehiculo === "CARRO";
   const espera = tiempoTranscurrido(inspection.completedAt, ahora);
+  const plazo = estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta });
+  const sinPlazo = plazo.vencido && !plazo.puedeDecidir;
 
   return (
     <li>
@@ -55,8 +67,27 @@ export function TarjetaPendiente({ inspection, ahora }: { inspection: PendienteC
             </span>
           )}
 
-          {(noApta || alertaConductor || novedades > 0) && (
+          {plazo.vence && (
+            <span className={`text-xs ${sinPlazo ? "font-semibold text-status-crit-ink" : "text-ink-muted"}`}>
+              {plazo.vencido
+                ? plazo.habilitadoHasta
+                  ? `Plazo vencido a las ${formatHora(plazo.vence)} · habilitado hasta las ${formatHora(plazo.habilitadoHasta)}`
+                  : `Plazo vencido a las ${formatHora(plazo.vence)}`
+                : `Plazo para decidir: hasta las ${formatHora(plazo.vence)}`}
+            </span>
+          )}
+
+          {plazo.fueraDeHorario && (
+            <p className="mt-1 rounded-md border-l-4 border-status-warn bg-status-warn-soft px-2 py-1.5 text-xs font-medium text-status-warn-ink">
+              {MENSAJE_ENVIADA_FUERA_DE_HORARIO}
+            </p>
+          )}
+
+          {(noApta || alertaConductor || novedades > 0 || sinPlazo) && (
             <div className="mt-1 flex flex-wrap gap-1.5">
+              {sinPlazo && (
+                <Chip className="bg-status-crit text-white">Plazo vencido: requiere habilitación SST</Chip>
+              )}
               {noApta && (
                 <Chip className="bg-status-crit text-white">No apta para operar</Chip>
               )}

@@ -267,6 +267,25 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
       expect(estiloDe(ramas[ramaFirmas]).width).toBeUndefined();
     });
 
+    // Pedido del cliente (2026-10-19): las preguntas de la declaración del
+    // conductor van con su texto literal, no abreviadas.
+    it("muestra las 3 preguntas de la declaración del conductor con el texto textual del cliente", async () => {
+      const inspection = await crearInspeccionCompleta(TipoVehiculo.MOTO);
+      const data = await getInspeccionParaPdf(inspection.id);
+      if (!data) throw new Error("getInspeccionParaPdf devolvió null para una inspección recién creada.");
+
+      const textos = recorrer(InspeccionPdfDocument({ data }))
+        .map((v) => v.elemento.props?.children)
+        .filter((c): c is string => typeof c === "string");
+      expect(textos).toEqual(
+        expect.arrayContaining([
+          "¿Se encuentra bajo los efectos de algún medicamento, sustancia o condición que pueda afectar su capacidad para conducir de manera segura?",
+          "¿Se encuentra en condiciones físicas y mentales adecuadas para conducir de manera segura?",
+          "¿Ha consumido alcohol o alguna sustancia que pueda afectar su capacidad para conducir?",
+        ]),
+      );
+    });
+
     // roles-oleariari: Oleariari lleva 3 firmas (conductor, Supervisor Oleariari,
     // Director de Operaciones); Bogotá 2, con el aprobador rotulado con su cargo.
     async function titulosDeFirma(sede: Sede, conEtapa1: boolean) {

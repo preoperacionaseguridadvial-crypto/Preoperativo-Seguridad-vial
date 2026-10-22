@@ -14,27 +14,33 @@ import {
   FOTOS_DIARIAS_REQUERIDAS,
 } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
-import { VENTANA_REUSO_INSPECCION_HORAS } from "@/lib/inspections/reuso-inspeccion";
+import { esReutilizable } from "@/lib/inspections/reuso-inspeccion";
 import { esNovedad, valoresPermitidos } from "@/lib/inspections/respuesta";
 import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
+import {
+  exigirHorarioParaCancelar,
+  exigirHorarioParaContinuar,
+  exigirHorarioParaIniciar,
+} from "@/lib/horarios/habilitaciones";
 
 // Server actions del flujo de inspección del TRABAJADOR (Fase 2). Todas
 // validan rol vía `requireRole` (nunca confían en el frontend) y, cuando
 // aplica, que la inspección pertenezca al usuario autenticado — el
 // middleware/proxy es solo la primera barrera a nivel de ruta.
 //
-// Reglas heredadas de Fase 1 que se respetan acá: nunca hay ventana horaria
-// para iniciar una inspección, los timestamps oficiales (`startedAt` vía
-// default de Prisma, `completedAt` con `new Date()`) siempre se generan en
-// el servidor, y una inspección enviada nunca se borra ni se edita
+// Reglas que se respetan acá: iniciar, continuar y enviar solo se permiten en
+// las ventanas de inspección o con una habilitación de SST (lib/horarios), los
+// timestamps oficiales (`startedAt`, `completedAt`) siempre se generan en el
+// servidor, y una inspección enviada nunca se borra ni se edita
 // retroactivamente (por eso las mutaciones de este archivo verifican
 // `status === EN_PROCESO` antes de escribir).
 
 /**
  * Valida que la inspección exista, pertenezca al trabajador autenticado y
  * siga EN_PROCESO (una inspección enviada nunca se edita retroactivamente).
+ * No mira el horario: ver `getOwnInspeccionEnProceso`.
  */
-async function getOwnInspeccionEnProceso(inspectionId: string, workerId: string) {
+async function getOwnInspeccionPropiaEnProceso(inspectionId: string, workerId: string) {
   const inspection = await prisma.inspection.findUnique({ where: { id: inspectionId } });
 
   if (!inspection || inspection.workerId !== workerId) {
@@ -44,6 +50,16 @@ async function getOwnInspeccionEnProceso(inspectionId: string, workerId: string)
     throw new Error("La inspección ya no está en proceso: no se puede modificar.");
   }
 
+  return inspection;
+}
+
+/**
+ * Lo anterior más el control de horario: la inspección debe seguir en la
+ * ventana en que se inició, o el trabajador tener una habilitación vigente.
+ */
+async function getOwnInspeccionEnProceso(inspectionId: string, workerId: string, accion: string) {
+  const inspection = await getOwnInspeccionPropiaEnProceso(inspectionId, workerId);
+  await exigirHorarioParaContinuar(inspection, accion, new Date());
   return inspection;
 }
 
@@ -78,6 +94,7 @@ async function reemplazarInspeccionAbandonada(
   workerId: string,
   vehicleId: string,
   sede: Sede | null,
+  ahora: Date,
 ) {
   return prisma.$transaction(async (tx) => {
     const cancelada = await tx.inspection.updateMany({
@@ -86,7 +103,7 @@ async function reemplazarInspeccionAbandonada(
     });
 
     const nueva = await tx.inspection.create({
-      data: { workerId, conductorId: workerId, vehicleId, sede },
+      data: { workerId, conductorId: workerId, vehicleId, sede, startedAt: ahora },
     });
 
     if (cancelada.count > 0) {
@@ -108,8 +125,9 @@ async function reemplazarInspeccionAbandonada(
 /**
  * Crea una nueva inspección para el vehículo indicado (o devuelve la que el
  * trabajador ya tiene EN_PROCESO sobre ese vehículo, ver más abajo).
- * `startedAt` lo pone el default de Prisma (`now()` del servidor). Sin
- * restricción de ventana horaria: puede iniciarse en cualquier momento.
+ * `startedAt` es la hora del servidor con la que se verificó el horario. Solo
+ * puede iniciarse dentro de una ventana de inspección o con una habilitación
+ * vigente de SST (`exigirHorarioParaIniciar`).
  *
  * `conductorId` se setea igual a `workerId`: en el flujo actual, quien hace
  * la inspección es siempre el conductor responsable de la unidad (99% de los
@@ -122,6 +140,8 @@ async function reemplazarInspeccionAbandonada(
  */
 export async function iniciarInspeccion(vehicleId: string) {
   const session = await requireRole([Role.TRABAJADOR]);
+  const ahora = new Date();
+  await exigirHorarioParaIniciar(session.user.id, "iniciarInspeccion", ahora);
 
   // Cada trabajador tiene UN vehículo (1:1, `User.vehicleId`, decisión del
   // usuario 2026-09-18). Defensa en profundidad: la pantalla de inicio
@@ -158,12 +178,12 @@ export async function iniciarInspeccion(vehicleId: string) {
 
   // Idempotencia ante doble envío (doble tap en el botón de iniciar): si el
   // trabajador ya tiene una inspección EN_PROCESO sobre este vehículo Y es
-  // reciente (dentro de VENTANA_REUSO_INSPECCION_HORAS), se devuelve esa misma
+  // del turno en curso (`esReutilizable`), se devuelve esa misma
   // — la pantalla de inicio ya la lista como "Continuar inspección" y la ✕
   // permite descartarla (`cancelarInspeccion`). Una inspección CANCELADA o ya
-  // enviada nunca bloquea una nueva. Una EN_PROCESO más vieja que la ventana
-  // se considera abandonada (el preoperacional es un chequeo diario): se
-  // cancela y se abre una nueva con `startedAt` fresco.
+  // enviada nunca bloquea una nueva. Una EN_PROCESO de un turno anterior
+  // se considera abandonada (la pendiente se retoma solo dentro del mismo
+  // turno): se cancela y se abre una nueva con `startedAt` fresco.
   //
   // Garantía real ante la carrera: el índice único parcial
   // `Inspection_workerId_vehicleId_en_proceso_key` (a lo sumo una EN_PROCESO
@@ -173,19 +193,18 @@ export async function iniciarInspeccion(vehicleId: string) {
   // camino rápido, ya no es lo que evita el duplicado.
   const trabajadorId = session.user.id;
   const enProceso = await buscarEnProceso(trabajadorId, vehicleId);
-  const limiteReuso = new Date(Date.now() - VENTANA_REUSO_INSPECCION_HORAS * 60 * 60 * 1000);
-  if (enProceso && enProceso.startedAt >= limiteReuso) {
+  if (enProceso && esReutilizable(enProceso.startedAt, ahora)) {
     return enProceso;
   }
 
   let inspection;
   try {
     inspection = enProceso
-      ? await reemplazarInspeccionAbandonada(enProceso.id, trabajadorId, vehicleId, trabajador.sede)
+      ? await reemplazarInspeccionAbandonada(enProceso.id, trabajadorId, vehicleId, trabajador.sede, ahora)
       : await prisma.inspection.create({
           // `sede` es un snapshot de la sede del trabajador: define el circuito de
           // aprobación (Oleariari: dos etapas) aunque luego cambie de sede.
-          data: { workerId: trabajadorId, conductorId: trabajadorId, vehicleId, sede: trabajador.sede },
+          data: { workerId: trabajadorId, conductorId: trabajadorId, vehicleId, sede: trabajador.sede, startedAt: ahora },
         });
   } catch (err) {
     // Solo la violación de unicidad (P2002) significa "otra request ya creó la
@@ -235,6 +254,7 @@ export async function cancelarInspeccion(inspectionId: string) {
   if (inspection.status !== InspectionStatus.EN_PROCESO) {
     throw new Error("Solo se puede cancelar una inspección que sigue en proceso.");
   }
+  await exigirHorarioParaCancelar(inspection, "cancelarInspeccion", new Date());
 
   const updated = await prisma.inspection.update({
     where: { id: inspectionId },
@@ -261,7 +281,7 @@ export async function registrarKilometraje(
   data: { kilometraje: number },
 ) {
   const session = await requireRole([Role.TRABAJADOR]);
-  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id, "registrarKilometraje");
 
   if (!Number.isFinite(data.kilometraje) || data.kilometraje < 0) {
     throw new Error("Kilometraje inválido.");
@@ -309,7 +329,7 @@ export async function responderItem(
   ubicacion?: string,
 ) {
   const session = await requireRole([Role.TRABAJADOR]);
-  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id, "responderItem");
 
   const item = await prisma.checklistItem.findUnique({ where: { id: checklistItemId } });
   if (!item) {
@@ -458,6 +478,7 @@ export async function subirFotoNovedad(novedadId: string, formData: FormData) {
   if (novedad.inspection.status !== InspectionStatus.EN_PROCESO) {
     throw new Error("La inspección ya no está en proceso: no se pueden agregar adjuntos.");
   }
+  await exigirHorarioParaContinuar(novedad.inspection, "subirFotoNovedad", new Date());
   if (novedad.photos.length > 0) {
     throw new Error("Esta novedad ya tiene una foto adjunta: no se pueden agregar más.");
   }
@@ -527,7 +548,7 @@ export async function registrarResultado(
   justificacion?: string,
 ) {
   const session = await requireRole([Role.TRABAJADOR]);
-  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id, "registrarResultado");
 
   const justificacionLimpia = justificacion?.trim() || "";
   if (!puedeOperar && !justificacionLimpia) {
@@ -571,7 +592,7 @@ export async function registrarRespuestaEstadoConductor(
   valor: boolean,
 ) {
   const session = await requireRole([Role.TRABAJADOR]);
-  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id, "registrarRespuestaEstadoConductor");
 
   if (!PREGUNTAS_ESTADO_CONDUCTOR.some((pregunta) => pregunta.campo === campo)) {
     throw new Error("La pregunta indicada no es parte de la declaración del conductor.");
@@ -614,7 +635,9 @@ export async function registrarRespuestaEstadoConductor(
  */
 export async function enviarInspeccion(inspectionId: string) {
   const session = await requireRole([Role.TRABAJADOR]);
-  const inspection = await getOwnInspeccionEnProceso(inspectionId, session.user.id);
+  const ahora = new Date();
+  const inspection = await getOwnInspeccionPropiaEnProceso(inspectionId, session.user.id);
+  const { habilitacionId } = await exigirHorarioParaContinuar(inspection, "enviarInspeccion", ahora);
 
   if (inspection.puedeOperar === null) {
     throw new Error("Falta registrar si el vehículo puede operar antes de enviar.");
@@ -694,7 +717,12 @@ export async function enviarInspeccion(inspectionId: string) {
 
   const updated = await prisma.inspection.update({
     where: { id: inspectionId },
-    data: { status, completedAt: new Date() },
+    data: {
+      status,
+      completedAt: ahora,
+      // Solo si fue la habilitación (y no la ventana) la que permitió enviar.
+      ...(habilitacionId ? { enviadaFueraDeHorario: true, habilitacionId } : {}),
+    },
   });
 
   await logAudit({

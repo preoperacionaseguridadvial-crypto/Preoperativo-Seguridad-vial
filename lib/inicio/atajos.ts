@@ -20,7 +20,7 @@ export function fechaLegible(fecha: Date): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
-export type IconoAtajo = "inspeccion" | "aprobaciones" | "consulta" | "dashboard" | "usuarios" | "configuracion";
+export type IconoAtajo = "inspeccion" | "aprobaciones" | "consulta" | "dashboard" | "usuarios" | "configuracion" | "reloj";
 
 export type Atajo = {
   href: string;
@@ -72,6 +72,12 @@ const ATAJOS = {
     descripcion: "Parámetros del formato",
     icono: "configuracion",
   },
+  habilitaciones: {
+    href: "/admin/habilitaciones",
+    titulo: "Inspecciones fuera de horario",
+    descripcion: "Habilitar recorredores y aprobadores",
+    icono: "reloj",
+  },
 } satisfies Record<string, Atajo>;
 
 const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
@@ -79,7 +85,7 @@ const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
   SUPERVISOR: [ATAJOS.aprobaciones, ATAJOS.consulta],
   SUPERVISOR_OLEARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
   DIRECTOR: [ATAJOS.dashboard, ATAJOS.consulta],
-  SST: [ATAJOS.dashboard, ATAJOS.consulta, ATAJOS.administracion],
+  SST: [ATAJOS.dashboard, ATAJOS.consulta, ATAJOS.administracion, ATAJOS.habilitaciones],
   ADMINISTRADOR: [ATAJOS.usuarios, ATAJOS.configuracion, ATAJOS.dashboard, ATAJOS.consulta],
 };
 

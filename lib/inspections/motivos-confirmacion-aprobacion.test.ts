@@ -32,11 +32,11 @@ describe("motivosConfirmacionAprobacion", () => {
     expect(motivos).toEqual([]);
   });
 
-  it("BAJO no genera motivo", () => {
+  it("BAJO genera motivo (reemplaza a MALO en fluidos)", () => {
     const motivos = motivosConfirmacionAprobacion(
       inspeccionLimpia({ respuestas: [respuesta("Aceite", RespuestaChecklist.BAJO)] }),
     );
-    expect(motivos).toEqual([]);
+    expect(motivos).toEqual(["Aceite: Bajo"]);
   });
 
   it("FALLA y MALO generan un motivo con el nombre del ítem y su etiqueta", () => {

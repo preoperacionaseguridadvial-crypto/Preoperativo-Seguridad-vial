@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/config";
 import { getPendientesConFoto } from "@/lib/inspections/pendientes-con-foto";
 import { partirPendientes } from "@/lib/inspections/partir-pendientes";
 import { esRolAprobador } from "@/lib/inspections/cola-aprobacion";
+import { habilitacionAprobacionHasta } from "@/lib/horarios/habilitaciones";
 import { TarjetaPendiente } from "@/app/_components/TarjetaPendiente";
 // "Buscar todas las inspecciones" reusa la pantalla de solo lectura de
 // oversight (app/(gestion)/consulta-inspecciones), a la que SUPERVISOR ya
@@ -31,8 +32,11 @@ export default async function AprobacionesPage() {
   }
 
   // Miniatura del vehículo firmada: ver getPendientesConFoto.
-  const pendientes = await getPendientesConFoto(rol);
   const ahora = new Date();
+  const [pendientes, habilitacionHasta] = await Promise.all([
+    getPendientesConFoto(rol),
+    habilitacionAprobacionHasta(session.user.id, ahora),
+  ]);
 
   const { conAlerta, sinAlerta } = partirPendientes(pendientes);
 
@@ -69,7 +73,12 @@ export default async function AprobacionesPage() {
       {conAlerta.length > 0 && (
         <Seccion titulo="Requieren atención">
           {conAlerta.map((inspection) => (
-            <TarjetaPendiente key={inspection.id} inspection={inspection} ahora={ahora} />
+            <TarjetaPendiente
+              key={inspection.id}
+              inspection={inspection}
+              ahora={ahora}
+              habilitacionHasta={habilitacionHasta}
+            />
           ))}
         </Seccion>
       )}
@@ -77,7 +86,12 @@ export default async function AprobacionesPage() {
       {sinAlerta.length > 0 && (
         <Seccion titulo="Por revisar">
           {sinAlerta.map((inspection) => (
-            <TarjetaPendiente key={inspection.id} inspection={inspection} ahora={ahora} />
+            <TarjetaPendiente
+              key={inspection.id}
+              inspection={inspection}
+              ahora={ahora}
+              habilitacionHasta={habilitacionHasta}
+            />
           ))}
         </Seccion>
       )}

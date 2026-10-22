@@ -21,6 +21,7 @@ import { Role, TipoFirma, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { subirFotoInspeccion } from "@/lib/inspections/foto-actions";
 import { MAX_FOTO_INSPECCION_BYTES } from "@/lib/storage/validar-archivo";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
+import { fijarHoraEnVentana, restaurarHora } from "@/test/helpers/horario";
 
 // Cabeceras mínimas con los magic bytes reales (el validador inspecciona el
 // contenido, no solo `file.type`).
@@ -48,6 +49,7 @@ async function crearInspeccionEnProcesoDeTrabajador() {
 }
 
 beforeEach(async () => {
+  fijarHoraEnVentana();
   await limpiarBaseDeTest();
   mockAuth.mockReset();
   mockUploadObject.mockReset();
@@ -57,6 +59,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  restaurarHora();
   vi.restoreAllMocks();
 });
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAuth = vi.fn();
 vi.mock("@/lib/auth/config", () => ({
@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { InspectionStatus, Role, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { POST } from "@/app/(worker)/inspecciones/[id]/fotos/[tipo]/subir/route";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
+import { fijarHoraEnVentana, restaurarHora } from "@/test/helpers/horario";
 
 const JPEG_MINIMO = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 
@@ -43,10 +44,15 @@ async function inspeccionDe(
 
 describe("POST /inspecciones/[id]/fotos/[tipo]/subir", () => {
   beforeEach(async () => {
+    fijarHoraEnVentana();
     await limpiarBaseDeTest();
     mockAuth.mockReset();
     mockUploadObject.mockReset().mockResolvedValue(undefined);
     mockDeleteObject.mockReset().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    restaurarHora();
   });
 
   afterAll(async () => {

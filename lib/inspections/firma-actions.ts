@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, TipoFirma } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
+import { exigirHorarioParaContinuar } from "@/lib/horarios/habilitaciones";
 import { PERFIL_FIRMA, validarArchivo } from "@/lib/storage/validar-archivo";
 
 // Server actions de la firma manuscrita digital (Fase D). El formato oficial
@@ -86,6 +87,7 @@ export async function guardarFirmaConductor(inspectionId: string, formData: Form
   if (inspection.status !== InspectionStatus.EN_PROCESO) {
     throw new Error("La inspección ya no está en proceso: no se puede firmar.");
   }
+  await exigirHorarioParaContinuar(inspection, "guardarFirmaConductor", new Date());
 
   await crearFirma({
     inspectionId,

@@ -44,7 +44,9 @@ export default async function ChecklistListPage({ params }: { params: Promise<{ 
   const allItems = catalogConEstado.flatMap((category) => category.items);
   const totalItems = allItems.length;
   const conformes = allItems.filter((item) => item.estado === "OK" || item.estado === "BUENO").length;
-  const noConformes = allItems.filter((item) => item.estado === "FALLA" || item.estado === "MALO").length;
+  const noConformes = allItems.filter(
+    (item) => item.estado === "FALLA" || item.estado === "BAJO" || item.estado === "MALO",
+  ).length;
   const pendientes = allItems.filter((item) => item.estado === "PENDIENTE").length;
   const revisados = totalItems - pendientes;
 

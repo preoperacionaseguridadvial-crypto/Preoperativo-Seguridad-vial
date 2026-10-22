@@ -90,7 +90,7 @@ Hay que tener en cuenta tres aclaraciones:
 | Sección | Moto | Carro |
 |---|---|---|
 | Inspección visual | Espejos, frenos, luces con direccionales, llantas, **casco** | Espejos, frenos, luces altas/bajas/reversa/internas, llantas con repuesto, **cinturones**, **limpiabrisas** |
-| Fluidos (Bueno / Bajo / Malo) | Aceite, líquido de frenos, refrigerante | Aceite, líquido de frenos, refrigerante |
+| Fluidos (Bueno / Bajo) | Aceite, líquido de frenos, refrigerante | Aceite, líquido de frenos, refrigerante |
 | Equipo de prevención | Canguro de emergencia vial | **Botiquín**, **extintor** |
 | Documentación | Licencia de tránsito, **SOAT**, **revisión técnico-mecánica**, **licencia de conducción**, cédula | Igual |
 

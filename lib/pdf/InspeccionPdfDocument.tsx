@@ -4,7 +4,7 @@ import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/render
 import type { Style } from "@react-pdf/types";
 import type { InspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
-import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
+import { PREGUNTAS_ESTADO_CONDUCTOR, requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import {
   cajasFirmaPdf,
   categoriasGenericasPdf,
@@ -94,9 +94,6 @@ const TXT = {
   // lib/pdf/pdf-helpers.ts, formatoValorItemPdf/BAJO) y se confía en el
   // color ámbar + negrita (declaracionEstadoAlerta) + el texto mismo.
   declaracionEstadoAlerta: "REQUIERE ATENCIÓN",
-  preguntaMedicamentos: "¿Medicamento/sustancia/condición que afecte su capacidad?",
-  preguntaCondiciones: "¿Condiciones físicas y mentales adecuadas?",
-  preguntaAlcohol: "¿Consumió alcohol u otra sustancia?",
 };
 
 const ESTADO_APROBACION_LABELS: Record<string, string> = {
@@ -631,18 +628,14 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
               <Text style={styles.declaracionEstadoAlerta}>{TXT.declaracionEstadoAlerta}</Text>
             )}
           </View>
-          <View style={styles.declaracionEstadoFila}>
-            <Text style={styles.declaracionEstadoPregunta}>{TXT.preguntaMedicamentos}</Text>
-            <Text style={styles.declaracionEstadoRespuesta}>{formatSiNoPdf(data.tomaMedicamentos)}</Text>
-          </View>
-          <View style={styles.declaracionEstadoFila}>
-            <Text style={styles.declaracionEstadoPregunta}>{TXT.preguntaCondiciones}</Text>
-            <Text style={styles.declaracionEstadoRespuesta}>{formatSiNoPdf(data.condicionesAptas)}</Text>
-          </View>
-          <View style={styles.declaracionEstadoFila}>
-            <Text style={styles.declaracionEstadoPregunta}>{TXT.preguntaAlcohol}</Text>
-            <Text style={styles.declaracionEstadoRespuesta}>{formatSiNoPdf(data.consumioAlcohol)}</Text>
-          </View>
+          {/* Texto textual del cliente (2026-10-19), misma fuente que la
+              pantalla del conductor — no abreviar. */}
+          {PREGUNTAS_ESTADO_CONDUCTOR.map((pregunta) => (
+            <View key={pregunta.campo} style={styles.declaracionEstadoFila}>
+              <Text style={styles.declaracionEstadoPregunta}>{pregunta.texto}</Text>
+              <Text style={styles.declaracionEstadoRespuesta}>{formatSiNoPdf(data[pregunta.campo])}</Text>
+            </View>
+          ))}
         </View>
 
         {/* NOVEDADES (solo si existen) */}
