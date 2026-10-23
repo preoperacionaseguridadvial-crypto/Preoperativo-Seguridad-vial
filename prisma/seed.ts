@@ -1,9 +1,10 @@
 import bcrypt from "bcrypt";
-import { PrismaClient, TipoVehiculo, TipoRespuestaItem } from "../generated/prisma/client";
+import { PrismaClient, TipoRespuestaItem } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { CLAVE_FECHA_VIGENCIA, PLACEHOLDER_FECHA_VIGENCIA } from "../lib/settings/constants";
 import { SEED_FECHA_VENCIMIENTO_TECNICOMECANICA, SEED_USERS, SEED_VEHICULOS } from "./seed-usuarios";
 import { resolverModoSeed } from "./seed-modo";
+import { CHECKLIST } from "./catalogo-checklist";
 
 const adapter = new PrismaPg(process.env.DATABASE_URL ?? "");
 const prisma = new PrismaClient({ adapter });
@@ -13,119 +14,6 @@ const prisma = new PrismaClient({ adapter });
 // defecto en un ambiente real: los usuarios de producción no se crean con
 // este script sino con una contraseña propia.
 const SEED_PASSWORD = process.env.SEED_USER_PASSWORD ?? "Cambiar123!";
-
-// Catálogo REAL del checklist, auditado contra el formato oficial FO-SVS-23
-// y autorizado por el dueño de producto — reemplaza al catálogo del Slice 1
-// (moto-only, sin fluidos). Reestructuración de la fase soporte-moto-carro
-// (Slice 2, A1/A2): cuatro categorías ("Documentación", "Inspección Visual",
-// "Fluidos", "Equipo de prevención"), cada ítem branchea por `tipoVehiculo`
-// (`undefined` = aplica a MOTO y CARRO) y declara `tipoRespuesta` (por
-// defecto BINARIO; TRIESTADO para los 3 ítems de fluidos).
-//
-// "Frenos" (el sistema de frenos en sí) es BINARIO y compartido — distinto
-// de "Nivel líquido de frenos" (TRIESTADO, Fluidos): confirmado
-// explícitamente con el dueño de producto para no confundir los dos ítems.
-//
-// "Equipo de prevención" es una categoría compartida conceptualmente, pero
-// sus ítems concretos son 100% específicos por tipo: MOTO usa "Canguro de
-// emergencia vial", CARRO usa "Botiquín" + "Extintor" — ningún ítem de esta
-// categoría tiene `tipoVehiculo: undefined`.
-const CHECKLIST: Array<{
-  nombre: string;
-  orden: number;
-  items: Array<{
-    nombre: string;
-    orden: number;
-    slugs: string[];
-    // Imágenes propias para CARRO en preguntas compartidas con moto: si el
-    // vehículo es CARRO reemplazan a `slugs` (ver lib/inspections/imagenes.ts).
-    slugsCarro?: string[];
-    pideUbicacion?: boolean;
-    tipoVehiculo?: TipoVehiculo;
-    tipoRespuesta?: TipoRespuestaItem;
-  }>;
-}> = [
-  // Orden del recorrido guiado (pedido del dueño de producto, 2026-09-18):
-  // Inspección Visual → Fluidos → Equipo de prevención (los tres ítem por
-  // ítem) → Documentación (una sola lista) → declaración del conductor.
-  {
-    nombre: "Documentación",
-    orden: 4,
-    items: [
-      { nombre: "Tarjeta de propiedad / Licencia de tránsito", orden: 1, slugs: [] },
-      { nombre: "SOAT", orden: 2, slugs: [] },
-      { nombre: "Revisión técnicomecánica", orden: 3, slugs: [] },
-      { nombre: "Licencia de conducción", orden: 4, slugs: [] },
-      { nombre: "Cédula de ciudadanía", orden: 5, slugs: [] },
-    ],
-  },
-  {
-    nombre: "Inspección Visual",
-    orden: 1,
-    items: [
-      { nombre: "Espejos", orden: 1, slugs: ["espejos"], slugsCarro: ["espejos-carro.webp"] },
-      { nombre: "Frenos", orden: 2, slugs: ["frenos"], slugsCarro: ["frenos-carro.webp"] },
-      {
-        nombre: "Luces externas con direccionales",
-        orden: 3,
-        slugs: ["direccionales"],
-        tipoVehiculo: TipoVehiculo.MOTO,
-      },
-      { nombre: "Llantas", orden: 4, slugs: ["llantas"], tipoVehiculo: TipoVehiculo.MOTO },
-      { nombre: "Casco", orden: 5, slugs: ["casco"], tipoVehiculo: TipoVehiculo.MOTO },
-      {
-        nombre: "Luces altas, bajas, reversa e internas con direccionales",
-        orden: 6,
-        slugs: ["luces-carro.webp"],
-        tipoVehiculo: TipoVehiculo.CARRO,
-      },
-      {
-        nombre: "Llantas, incluye repuesto",
-        orden: 7,
-        slugs: ["llantas-repuesto.webp"],
-        tipoVehiculo: TipoVehiculo.CARRO,
-      },
-      { nombre: "Cinturones de seguridad", orden: 8, slugs: ["cinturones-seguridad.webp"], tipoVehiculo: TipoVehiculo.CARRO },
-      { nombre: "Limpiabrisas", orden: 9, slugs: ["limpiabrisas.webp"], tipoVehiculo: TipoVehiculo.CARRO },
-    ],
-  },
-  {
-    nombre: "Fluidos",
-    orden: 2,
-    items: [
-      {
-        nombre: "Nivel de aceite",
-        orden: 1,
-        slugs: ["nivel-aceite"],
-        slugsCarro: ["nivel-aceite-carro.webp"],
-        tipoRespuesta: TipoRespuestaItem.TRIESTADO,
-      },
-      {
-        nombre: "Nivel líquido de frenos",
-        orden: 2,
-        slugs: ["nivel-liquido-frenos"],
-        slugsCarro: ["nivel-liquido-frenos-carro.webp"],
-        tipoRespuesta: TipoRespuestaItem.TRIESTADO,
-      },
-      {
-        nombre: "Nivel refrigerante",
-        orden: 3,
-        slugs: ["nivel-refrigerante"],
-        slugsCarro: ["nivel-refrigerante-carro.webp"],
-        tipoRespuesta: TipoRespuestaItem.TRIESTADO,
-      },
-    ],
-  },
-  {
-    nombre: "Equipo de prevención",
-    orden: 3,
-    items: [
-      { nombre: "Canguro de emergencia vial", orden: 1, slugs: ["canguro-emergencia"], tipoVehiculo: TipoVehiculo.MOTO },
-      { nombre: "Botiquín", orden: 2, slugs: ["botiquin.webp"], tipoVehiculo: TipoVehiculo.CARRO },
-      { nombre: "Extintor", orden: 3, slugs: ["extintor.webp"], tipoVehiculo: TipoVehiculo.CARRO },
-    ],
-  },
-];
 
 const CATEGORIAS_VIGENTES = CHECKLIST.map((c) => c.nombre);
 const ITEMS_VIGENTES_POR_CATEGORIA = new Map(

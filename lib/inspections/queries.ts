@@ -9,7 +9,7 @@ import {
   TipoFotoInspeccion,
 } from "@/generated/prisma/client";
 import { getSignedReadUrl } from "@/lib/storage/s3";
-import { construirPasosFlujo, pasoAnterior, pasoSiguiente } from "@/lib/inspections/pasos-flujo";
+import { construirPasosFlujo, pasoAnterior, pasoSiguiente, pasosChecklistEnOrden } from "@/lib/inspections/pasos-flujo";
 import { PREGUNTAS_ESTADO_CONDUCTOR } from "@/lib/inspections/estado-conductor";
 
 // Fase soporte-moto-carro (Slice 3, A7): las 2 fotos diarias obligatorias,
@@ -23,7 +23,8 @@ export const FOTOS_DIARIAS_REQUERIDAS: TipoFotoInspeccion[] = [
 
 /**
  * Catálogo completo del checklist para un tipo de vehículo, ordenado por
- * `orden` de categoría e ítem. Usado tanto por la UI (para renderizar el
+ * `orden` de categoría e ítem (el recorrido guiado ordena los ítems por su
+ * `orden` GLOBAL, ver `pasosChecklistEnOrden`). Usado tanto por la UI (para renderizar el
  * flujo guiado) como por `enviarInspeccion` (lib/inspections/actions.ts)
  * para validar que todos los ítems obligatorios tengan respuesta.
  *
@@ -159,9 +160,11 @@ export async function getFollowingStepPath(inspectionId: string, pasoActual: str
 }
 
 /**
- * Siguiente ChecklistItem sin responder (en orden de catálogo), con el
- * nombre de su categoría, o `null` si ya están todos respondidos. Se usa
- * para guiar al trabajador paso a paso por el checklist.
+ * Siguiente paso del checklist sin completar, en el orden del recorrido
+ * (`pasosChecklistEnOrden`: documentos primero, luego los ítems por `orden`
+ * global), con el nombre de su categoría, o `null` si ya están todos
+ * respondidos. Se usa para guiar al trabajador paso a paso por el checklist.
+ * Los documentos son una sola pantalla: devuelve el primer documento pendiente.
  */
 async function getNextUnansweredItem(
   inspectionId: string,
@@ -174,11 +177,17 @@ async function getNextUnansweredItem(
   });
   const respondedIds = new Set(responses.map((response) => response.checklistItemId));
 
-  for (const category of categories) {
-    for (const item of category.items) {
-      if (!respondedIds.has(item.id)) {
-        return { id: item.id, categoryNombre: category.nombre };
+  for (const paso of pasosChecklistEnOrden(categories, CATEGORIA_SIN_PANTALLA_PROPIA)) {
+    if (paso.tipo === "lista") {
+      const pendiente = categories
+        .filter((category) => category.nombre === CATEGORIA_SIN_PANTALLA_PROPIA)
+        .flatMap((category) => category.items)
+        .find((item) => !respondedIds.has(item.id));
+      if (pendiente) {
+        return { id: pendiente.id, categoryNombre: CATEGORIA_SIN_PANTALLA_PROPIA };
       }
+    } else if (!respondedIds.has(paso.id)) {
+      return { id: paso.id, categoryNombre: paso.categoria };
     }
   }
 

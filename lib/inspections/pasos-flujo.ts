@@ -1,7 +1,8 @@
 // Pasos del flujo guiado de la inspección del trabajador, en el orden real en
 // que `getNextStepPath` (lib/inspections/queries.ts) lleva al trabajador. Es
 // solo la vista previa de la pantalla de inicio: si cambia el orden del
-// flujo, se cambia acá y en ese test.
+// flujo, se cambia acá y en ese test. Orden (2026-10-23): kilometraje →
+// documentos → ítems por orden global → declaración → fotos → resultado → firma.
 
 export type IconoPaso = "kilometraje" | "checklist" | "conductor" | "fotos" | "resultado" | "firma";
 
@@ -34,33 +35,57 @@ export const PASOS_INSPECCION: readonly {
   { clave: "confirmar", titulo: "Confirmar y firmar", descripcion: "Revisa el resumen y firma el envío", icono: "firma" },
 ];
 
+/** Catálogo (ya filtrado por tipo de vehículo) con el `orden` GLOBAL de cada ítem. */
+export type CatalogoFlujo = { nombre: string; items: { id: string; orden: number }[] }[];
+
+export type PasoChecklist = { tipo: "lista" } | { tipo: "item"; id: string; categoria: string };
+
+/**
+ * Pasos del checklist en el orden del recorrido: primero la pantalla de lista
+ * de documentos (`categoriaLista`, si tiene ítems) y luego cada ítem de las
+ * demás categorías, ordenados por su `orden` GLOBAL (no por categoría: así
+ * Frenos puede ir entre Líquido de frenos y Refrigerante). Empate: orden del
+ * catálogo (categoría y luego ítem). Única fuente de este orden, compartida por
+ * `construirPasosFlujo` y `getNextStepPath` (lib/inspections/queries.ts).
+ */
+export function pasosChecklistEnOrden(catalogo: CatalogoFlujo, categoriaLista: string): PasoChecklist[] {
+  const pasos: PasoChecklist[] = [];
+  const items: { id: string; categoria: string; orden: number; posicion: number }[] = [];
+
+  for (const categoria of catalogo) {
+    if (categoria.nombre === categoriaLista) {
+      if (categoria.items.length > 0) pasos.push({ tipo: "lista" });
+      continue;
+    }
+    for (const item of categoria.items) {
+      items.push({ id: item.id, categoria: categoria.nombre, orden: item.orden, posicion: items.length });
+    }
+  }
+
+  items.sort((a, b) => a.orden - b.orden || a.posicion - b.posicion);
+  for (const item of items) pasos.push({ tipo: "item", id: item.id, categoria: item.categoria });
+  return pasos;
+}
+
 /**
  * Lista ordenada de los pasos reales de una inspección, como rutas RELATIVAS
  * a `/inspecciones/[id]/`. Es la misma secuencia que recorre `getNextStepPath`
  * (lib/inspections/queries.ts) y sirve para el botón "Atrás": kilometraje →
- * checklist → declaración del conductor (una entrada por pregunta) → fotos →
- * resultado → confirmar.
- *
- * El checklist se recorre ítem por ítem, salvo la categoría de documentos
- * (`categoriaLista`, "Documentación"), que es UN solo paso: la pantalla de
- * lista `/checklist`, en la posición que ocupa en el catálogo. Pura (recibe el
- * catálogo ya filtrado por tipo de vehículo) para poder probarla sin base.
+ * documentos (una sola pantalla de lista, `/checklist`) → ítems del checklist
+ * uno por uno en orden global (`pasosChecklistEnOrden`) → declaración del
+ * conductor (una entrada por pregunta) → fotos → resultado → confirmar.
+ * Pura (recibe el catálogo ya filtrado por tipo de vehículo) para poder
+ * probarla sin base.
  */
 export function construirPasosFlujo(
-  catalogo: { nombre: string; items: { id: string }[] }[],
+  catalogo: CatalogoFlujo,
   categoriaLista: string,
   totalPreguntasEstadoConductor: number,
 ): string[] {
   const pasos: string[] = ["medidas"];
 
-  for (const categoria of catalogo) {
-    if (categoria.nombre === categoriaLista) {
-      if (categoria.items.length > 0) pasos.push("checklist");
-      continue;
-    }
-    for (const item of categoria.items) {
-      pasos.push(`checklist/${item.id}`);
-    }
+  for (const paso of pasosChecklistEnOrden(catalogo, categoriaLista)) {
+    pasos.push(paso.tipo === "lista" ? "checklist" : `checklist/${paso.id}`);
   }
 
   for (let paso = 1; paso <= totalPreguntasEstadoConductor; paso++) {

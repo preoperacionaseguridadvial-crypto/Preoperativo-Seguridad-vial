@@ -11,6 +11,7 @@ import {
   getFollowingStepPath,
   categoriasParaLista,
 } from "@/lib/inspections/queries";
+import { CHECKLIST } from "@/prisma/catalogo-checklist";
 import {
   crearCatalogoMinimo,
   crearChecklistItem,
@@ -272,10 +273,10 @@ describe("getNextStepPath — paradas después del checklist", () => {
   });
 });
 
-// Recorrido guiado (pedido del dueño de producto, 2026-09-18): Inspección
-// Visual → Fluidos → Equipo de prevención → Documentación → declaración del
-// conductor → fotos. Todo va ítem por ítem salvo Documentación, que es la
-// única lista (`/checklist`).
+/// Recorrido guiado (pedido del dueño de producto, 2026-10-23): kilometraje →
+// Documentos (la única lista, `/checklist`) → ítems uno por uno en el orden
+// GLOBAL de `ChecklistItem.orden` (intercala categorías) → declaración del
+// conductor → fotos.
 describe("getNextStepPath — recorrido guiado del checklist", () => {
   async function crearCatalogoDelRecorrido() {
     const visual = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
@@ -283,12 +284,12 @@ describe("getNextStepPath — recorrido guiado del checklist", () => {
     const equipo = await prisma.checklistCategory.create({ data: { nombre: "Equipo de prevención", orden: 3 } });
     const documentos = await prisma.checklistCategory.create({ data: { nombre: "Documentación", orden: 4 } });
     return {
-      espejos: await crearChecklistItem(visual.id, { nombre: "Espejos", orden: 1 }),
-      frenos: await crearChecklistItem(visual.id, { nombre: "Frenos", orden: 2 }),
+      espejos: await crearChecklistItem(visual.id, { nombre: "Espejos", orden: 90 }),
+      frenos: await crearChecklistItem(visual.id, { nombre: "Frenos", orden: 50 }),
       soat: await crearChecklistItem(documentos.id, { nombre: "SOAT", orden: 1 }),
       cedula: await crearChecklistItem(documentos.id, { nombre: "Cédula", orden: 2 }),
-      nivel: await crearChecklistItem(fluidos.id, { nombre: "Nivel de aceite", orden: 1 }),
-      canguro: await crearChecklistItem(equipo.id, { nombre: "Canguro de emergencia vial", orden: 1 }),
+      nivel: await crearChecklistItem(fluidos.id, { nombre: "Nivel de aceite", orden: 30 }),
+      canguro: await crearChecklistItem(equipo.id, { nombre: "Canguro de emergencia vial", orden: 120 }),
     };
   }
 
@@ -300,38 +301,148 @@ describe("getNextStepPath — recorrido guiado del checklist", () => {
     }
   }
 
-  it("una inspección nueva arranca en el primer ítem visual (uno por uno), no en la lista", async () => {
-    const items = await crearCatalogoDelRecorrido();
+  it("una inspección nueva con kilometraje arranca en la lista de Documentos", async () => {
+    await crearCatalogoDelRecorrido();
     const inspection = await crearInspeccionEnProceso();
     await prisma.inspection.update({ where: { id: inspection.id }, data: { kilometraje: 100 } });
 
     const path = await getNextStepPath(inspection.id);
 
-    expect(path).toBe(`/inspecciones/${inspection.id}/checklist/${items.espejos.id}`);
+    expect(path).toBe(`/inspecciones/${inspection.id}/checklist`);
   });
 
-  it("recorre Visual, Fluidos y Equipo ítem por ítem, y recién al final abre la lista de Documentos", async () => {
+  it("sin kilometraje arranca en medidas, antes que los documentos", async () => {
+    await crearCatalogoDelRecorrido();
+    const inspection = await crearInspeccionEnProceso();
+
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/medidas`);
+  });
+
+  it("Documentos primero y luego los ítems en orden global, intercalando categorías", async () => {
     const items = await crearCatalogoDelRecorrido();
     const inspection = await crearInspeccionEnProceso();
     await prisma.inspection.update({ where: { id: inspection.id }, data: { kilometraje: 100 } });
     const base = `/inspecciones/${inspection.id}`;
 
-    await responder(inspection.id, items.espejos);
-    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.frenos.id}`);
+    // Con un documento resuelto y otro pendiente sigue mandando a la lista.
+    await responder(inspection.id, items.soat);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist`);
 
-    await responder(inspection.id, items.frenos);
+    await responder(inspection.id, items.cedula);
     expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.nivel.id}`);
 
     await responder(inspection.id, items.nivel);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.frenos.id}`);
+
+    await responder(inspection.id, items.frenos);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.espejos.id}`);
+
+    await responder(inspection.id, items.espejos);
     expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.canguro.id}`);
 
     await responder(inspection.id, items.canguro);
-    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist`);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/estado-conductor`);
+  });
+});
+
+// Recorrido completo con el catálogo REAL del seed (prisma/catalogo-checklist.ts),
+// para MOTO y CARRO: recorre getNextStepPath respondiendo cada paso y compara el
+// orden de nombres con el pedido del dueño de producto.
+describe("getNextStepPath — recorrido completo con el catálogo sembrado", () => {
+  async function sembrarCatalogo() {
+    for (const categoria of CHECKLIST) {
+      const creada = await prisma.checklistCategory.create({
+        data: { nombre: categoria.nombre, orden: categoria.orden },
+      });
+      for (const item of categoria.items) {
+        await prisma.checklistItem.create({
+          data: {
+            categoryId: creada.id,
+            nombre: item.nombre,
+            orden: item.orden,
+            tipoVehiculo: item.tipoVehiculo ?? null,
+            tipoRespuesta: item.tipoRespuesta ?? "BINARIO",
+          },
+        });
+      }
+    }
+  }
+
+  async function recorrer(tipoVehiculo: TipoVehiculo): Promise<string[]> {
+    await sembrarCatalogo();
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo });
+    const vehicle = await crearVehiculo({ tipoVehiculo });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    const base = `/inspecciones/${inspection.id}`;
+    const vistos: string[] = [];
+
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/medidas`);
+    await prisma.inspection.update({ where: { id: inspection.id }, data: { kilometraje: 100 } });
+
+    for (let i = 0; i < 40; i++) {
+      const path = await getNextStepPath(inspection.id);
+      if (path === `${base}/checklist`) {
+        vistos.push("Documentos");
+        const docs = await prisma.checklistItem.findMany({ where: { category: { nombre: "Documentación" } } });
+        for (const doc of docs) {
+          await prisma.inspectionItemResponse.create({
+            data: { inspectionId: inspection.id, checklistItemId: doc.id, valor: "OK" },
+          });
+        }
+        continue;
+      }
+      const itemId = path.split("/checklist/")[1];
+      if (!itemId) break;
+      const item = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemId } });
+      vistos.push(item.nombre);
+      await prisma.inspectionItemResponse.create({
+        data: {
+          inspectionId: inspection.id,
+          checklistItemId: item.id,
+          valor: item.tipoRespuesta === "TRIESTADO" ? "BUENO" : "OK",
+        },
+      });
+    }
+    return vistos;
+  }
+
+  it("MOTO", async () => {
+    expect(await recorrer(TipoVehiculo.MOTO)).toEqual([
+      "Documentos",
+      "Luces externas con direccionales",
+      "Llantas",
+      "Nivel de aceite",
+      "Nivel líquido de frenos",
+      "Frenos",
+      "Nivel refrigerante",
+      "Espejos",
+      "Canguro de emergencia vial",
+      "Casco",
+    ]);
+  });
+
+  it("CARRO", async () => {
+    expect(await recorrer(TipoVehiculo.CARRO)).toEqual([
+      "Documentos",
+      "Luces altas, bajas, reversa e internas con direccionales",
+      "Llantas, incluye repuesto",
+      "Nivel de aceite",
+      "Nivel líquido de frenos",
+      "Frenos",
+      "Nivel refrigerante",
+      "Cinturones de seguridad",
+      "Limpiabrisas",
+      "Espejos",
+      "Botiquín",
+      "Extintor",
+    ]);
   });
 });
 
 describe("getPreviousStepPath / getFollowingStepPath", () => {
-  it("devuelve el paso previo y el siguiente en el orden real del flujo (documentos al final del checklist)", async () => {
+  it("devuelve el paso previo y el siguiente en el orden real del flujo (documentos antes que los ítems)", async () => {
     const visual = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
     const documentos = await prisma.checklistCategory.create({ data: { nombre: "Documentación", orden: 2 } });
     const espejos = await crearChecklistItem(visual.id, { nombre: "Espejos", orden: 1 });
@@ -340,12 +451,14 @@ describe("getPreviousStepPath / getFollowingStepPath", () => {
     const base = `/inspecciones/${inspection.id}`;
 
     expect(await getPreviousStepPath(inspection.id, "medidas")).toBeNull();
-    expect(await getPreviousStepPath(inspection.id, `checklist/${espejos.id}`)).toBe(`${base}/medidas`);
-    expect(await getPreviousStepPath(inspection.id, "checklist")).toBe(`${base}/checklist/${espejos.id}`);
-    expect(await getPreviousStepPath(inspection.id, "estado-conductor?paso=1")).toBe(`${base}/checklist`);
+    expect(await getPreviousStepPath(inspection.id, "checklist")).toBe(`${base}/medidas`);
+    expect(await getPreviousStepPath(inspection.id, `checklist/${espejos.id}`)).toBe(`${base}/checklist`);
+    expect(await getPreviousStepPath(inspection.id, "estado-conductor?paso=1")).toBe(
+      `${base}/checklist/${espejos.id}`,
+    );
     expect(await getPreviousStepPath(inspection.id, "fotos")).toBe(`${base}/estado-conductor?paso=3`);
     expect(await getPreviousStepPath(inspection.id, "confirmar")).toBe(`${base}/resultado`);
-    expect(await getFollowingStepPath(inspection.id, `checklist/${espejos.id}`)).toBe(`${base}/checklist`);
+    expect(await getFollowingStepPath(inspection.id, "checklist")).toBe(`${base}/checklist/${espejos.id}`);
     expect(await getFollowingStepPath(inspection.id, "confirmar")).toBeNull();
   });
 });
