@@ -12,8 +12,27 @@ import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
  *
  * En la pantalla de inicio (`enInicio`) el link "← Inicio" no tiene sentido:
  * en su lugar va el botón de cerrar sesión.
+ *
+ * `destacado` (Gestión: dashboard, consulta): sin logo y con "Inicio" como
+ * botón sólido, igual al de cerrar sesión del inicio SST.
  */
-export function AppHeader({ enInicio = false }: { enInicio?: boolean }) {
+export function AppHeader({ enInicio = false, destacado = false }: { enInicio?: boolean; destacado?: boolean }) {
+  if (destacado) {
+    return (
+      <div className="flex items-center justify-end gap-3 border-b border-[#D9E2EA] bg-white px-4 py-2 sm:px-6">
+        <Link
+          href="/"
+          className="flex min-h-10 items-center gap-2 rounded-full bg-[#0B2A4A] px-4 text-sm font-semibold text-white shadow-lg ring-1 ring-white/40 hover:bg-[#123a63] active:bg-[#0B2A4A]"
+        >
+          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+            <path d="M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Inicio
+        </Link>
+      </div>
+    );
+  }
+
   return (
     // Alto fijo (h-12): el "← Atrás" del flujo del trabajador se ubica en esta
     // misma barra, al lado del logo (ver BotonAtras), y necesita conocerlo.

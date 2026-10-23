@@ -7,11 +7,15 @@ import { habilitacionAprobacionHasta } from "@/lib/horarios/habilitaciones";
 import { getPendientesConFoto } from "@/lib/inspections/pendientes-con-foto";
 import { ordenarPendientesPorAtencion } from "@/lib/inspections/partir-pendientes";
 import { AppHeader } from "@/app/_components/AppHeader";
+import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
 import { SaludoInicio } from "@/app/_components/inicio/SaludoInicio";
 import { AtajosInicio } from "@/app/_components/inicio/AtajosInicio";
 import { PanelTrabajador } from "@/app/_components/inicio/PanelTrabajador";
 import { ResumenSupervisor } from "@/app/_components/inicio/ResumenSupervisor";
 import { ResumenDelDia } from "@/app/_components/inicio/ResumenDelDia";
+import { HeroInicioSst } from "@/app/_components/inicio/HeroInicioSst";
+import { AccesosRapidosSst } from "@/app/_components/inicio/AccesosRapidosSst";
+import { EstadoDocumentosVehiculos } from "@/app/_components/inicio/EstadoDocumentosVehiculos";
 import { VencimientosVehiculos } from "@/app/_components/inicio/VencimientosVehiculos";
 import { AvisoDecision } from "@/app/_components/inicio/AvisoDecision";
 import { avisoDecisionFirmada } from "@/lib/inspections/aviso-decision";
@@ -57,6 +61,23 @@ export default async function Home({
     rol === "ADMINISTRADOR" || rol === "SST" ? getVehiculosConDocumentosPorVencer(ahora) : null,
     rolAprobador ? habilitacionAprobacionHasta(user.id, ahora) : null,
   ]);
+
+  if (rol === "SST") {
+    return (
+      <div className="flex flex-1 flex-col">
+        {/* Sin AppHeader: el banner ya lleva el logo; cerrar sesión va debajo. */}
+        <HeroInicioSst nombre={user.name} rol={rol} />
+        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
+          <div className="flex justify-end">
+            <CerrarSesionForm destacado />
+          </div>
+          {resumenDia && <ResumenDelDia resumen={resumenDia} />}
+          <AccesosRapidosSst atajos={atajosPorRol(rol)} />
+          {vencimientos && <EstadoDocumentosVehiculos vehiculos={vencimientos} />}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col">

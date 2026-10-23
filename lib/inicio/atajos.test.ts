@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Role } from "@/generated/prisma/client";
 import { puedeAccederARuta } from "@/lib/auth/route-roles";
-import { atajosPorRol, fechaLegible, primerNombre } from "@/lib/inicio/atajos";
+import { atajosPorRol, fechaLegible, primerNombre, rolConAreaHero } from "@/lib/inicio/atajos";
 
 describe("primerNombre", () => {
   it("toma la primera palabra del nombre", () => {
@@ -46,12 +46,7 @@ describe("atajosPorRol", () => {
     expect(hrefs(Role.SUPERVISOR)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
     expect(hrefs(Role.SUPERVISOR_OLEARIARI)).toEqual(["/aprobaciones", "/consulta-inspecciones"]);
     expect(hrefs(Role.DIRECTOR)).toEqual(["/dashboard", "/consulta-inspecciones"]);
-    expect(hrefs(Role.SST)).toEqual([
-      "/dashboard",
-      "/consulta-inspecciones",
-      "/admin/usuarios",
-      "/admin/habilitaciones",
-    ]);
+    expect(hrefs(Role.SST)).toEqual(["/dashboard", "/consulta-inspecciones", "/admin/usuarios"]);
     expect(hrefs(Role.ADMINISTRADOR)).toEqual([
       "/admin/usuarios",
       "/admin/configuracion",
@@ -59,6 +54,14 @@ describe("atajosPorRol", () => {
       "/consulta-inspecciones",
     ]);
     expect(hrefs(Role.TRABAJADOR)).toEqual(["/inspecciones"]);
+  });
+
+  it("las tarjetas del SST llevan el texto del rediseño", () => {
+    expect(atajosPorRol(Role.SST).map((a) => [a.titulo, a.descripcion])).toEqual([
+      ["Dashboard", "Indicadores y reportes del sistema."],
+      ["Consulta", "Buscar todas las inspecciones."],
+      ["Administración", "Usuarios, vehículos y configuración."],
+    ]);
   });
 
   it("puedeAccederARuta rechaza rutas de otro rol y acepta subrutas", () => {
@@ -70,5 +73,15 @@ describe("atajosPorRol", () => {
     expect(puedeAccederARuta(Role.SUPERVISOR_OLEARIARI, "/dashboard")).toBe(false);
     expect(puedeAccederARuta(Role.DIRECTOR, "/admin/usuarios")).toBe(false);
     expect(puedeAccederARuta(Role.TRABAJADOR, "/")).toBe(true);
+  });
+});
+
+describe("rolConAreaHero", () => {
+  it("el SST muestra el cargo seguido de su área", () => {
+    expect(rolConAreaHero(Role.SST)).toBe("Administrador SST · Seguridad y Salud en el Trabajo");
+  });
+
+  it("los demás roles solo muestran su cargo", () => {
+    expect(rolConAreaHero(Role.DIRECTOR)).toBe("Director");
   });
 });
