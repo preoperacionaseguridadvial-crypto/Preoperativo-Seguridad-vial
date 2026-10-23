@@ -54,8 +54,17 @@ export default async function InspeccionesPage({
 
   async function iniciarAction(vehicleId: string) {
     "use server";
-    const inspection = await iniciarInspeccion(vehicleId);
-    redirect(`/inspecciones/${inspection.id}`);
+    // Igual que cancelar: un rechazo de negocio (p. ej. fuera de horario) se
+    // muestra como aviso en la página; sin esto, en producción Next oculta el
+    // mensaje y el recorredor ve una pantalla de error genérica.
+    let inspectionId: string;
+    try {
+      inspectionId = (await iniciarInspeccion(vehicleId)).id;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "No se pudo iniciar la inspección.";
+      redirect(`/inspecciones?error=${encodeURIComponent(message)}`);
+    }
+    redirect(`/inspecciones/${inspectionId}`);
   }
 
   async function cancelarAction(inspectionId: string) {
