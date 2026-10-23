@@ -120,7 +120,7 @@ export default async function InspeccionesPage({
           className="absolute inset-0 -z-10 bg-gradient-to-r from-white/75 via-white/30 to-transparent sm:from-white/50"
         />
         <div aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-2/5 bg-gradient-to-b from-transparent to-page" />
-        <div className="mx-auto flex w-full max-w-[1350px] items-end justify-between gap-6 px-4 pb-20 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
+        <div className="relative mx-auto flex w-full max-w-[1350px] items-end justify-between gap-6 px-4 pb-20 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
           <header className="flex max-w-xl flex-col gap-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1565D8]">
               Seguridad vial, siempre contigo
@@ -128,13 +128,15 @@ export default async function InspeccionesPage({
             <h1 className="text-3xl font-extrabold leading-tight text-ink sm:text-5xl">Inspección preoperacional</h1>
             <p className="text-base text-ink-muted sm:text-lg">Revisa tu vehículo antes de salir a operar.</p>
           </header>
-          {/* El PNG trae fondo blanco: multiply lo funde con el fondo claro de la banda. */}
+          {/* El PNG trae fondo blanco: multiply lo funde con el fondo claro de la banda.
+              En pantallas grandes va centrado en la banda; en tablet, a la derecha
+              (centrado chocaría con el título). */}
           <Image
             src="/logo/ess-ltda.png"
             alt="Escort Security Services"
             width={140}
             height={158}
-            className="hidden h-28 w-auto self-center mix-blend-multiply sm:block lg:h-36"
+            className="hidden h-28 w-auto self-center mix-blend-multiply sm:block lg:absolute lg:left-1/2 lg:top-1/2 lg:h-36 lg:-translate-x-1/2 lg:-translate-y-[60%]"
           />
         </div>
       </section>
