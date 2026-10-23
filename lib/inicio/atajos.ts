@@ -91,6 +91,13 @@ const ATAJOS = {
     descripcion: "Parámetros del formato",
     icono: "configuracion",
   },
+  // Única entrada a /admin/habilitaciones desde la interfaz (/admin redirige a usuarios).
+  habilitaciones: {
+    href: "/admin/habilitaciones",
+    titulo: "Habilitaciones",
+    descripcion: "Habilitar inspecciones fuera de horario.",
+    icono: "reloj",
+  },
 } satisfies Record<string, Atajo>;
 
 const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
@@ -98,7 +105,7 @@ const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
   SUPERVISOR: [ATAJOS.aprobaciones, ATAJOS.consulta],
   SUPERVISOR_OLEARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
   DIRECTOR: [ATAJOS.dashboard, ATAJOS.consulta],
-  SST: [ATAJOS.dashboardSst, ATAJOS.consultaSst, ATAJOS.administracion],
+  SST: [ATAJOS.dashboardSst, ATAJOS.consultaSst, ATAJOS.administracion, ATAJOS.habilitaciones],
   ADMINISTRADOR: [ATAJOS.usuarios, ATAJOS.configuracion, ATAJOS.dashboard, ATAJOS.consulta],
 };
 

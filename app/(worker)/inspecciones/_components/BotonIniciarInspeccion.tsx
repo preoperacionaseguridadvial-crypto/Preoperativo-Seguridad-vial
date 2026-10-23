@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
+import { IconoFlechaDerecha, IconoPlay } from "@/app/_components/inicio/Iconos";
+import { CLASES_BOTON_PRINCIPAL } from "./clasesBotonPrincipal";
 
 // Botón de envío del formulario de inicio de inspección: se deshabilita
 // mientras el server action está pendiente, para que un doble tap no dispare
@@ -11,13 +13,10 @@ export function BotonIniciarInspeccion({ children }: { children: ReactNode }) {
   const { pending } = useFormStatus();
 
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      aria-busy={pending}
-      className="flex min-h-14 w-full items-center justify-center rounded-xl bg-brand px-4 text-base font-semibold text-white shadow-sm active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {pending ? "Iniciando…" : children}
+    <button type="submit" disabled={pending} aria-busy={pending} className={CLASES_BOTON_PRINCIPAL}>
+      <IconoPlay />
+      <span className="flex-1 text-center">{pending ? "Iniciando…" : children}</span>
+      <IconoFlechaDerecha />
     </button>
   );
 }

@@ -12,6 +12,10 @@ describe("parseTipoFoto", () => {
     expect(parseTipoFoto("lateral")).toBe(TipoFotoInspeccion.LATERAL);
     expect(parseTipoFoto("PLACA")).toBe(TipoFotoInspeccion.PLACA);
   });
+  it("acepta llantas (foto de las llantas de la moto)", () => {
+    expect(parseTipoFoto("llantas")).toBe(TipoFotoInspeccion.LLANTAS);
+    expect(parseTipoFoto("LLANTAS")).toBe(TipoFotoInspeccion.LLANTAS);
+  });
   it("rechaza cualquier otro valor", () => {
     expect(parseTipoFoto("frontal")).toBeNull();
     expect(parseTipoFoto("")).toBeNull();

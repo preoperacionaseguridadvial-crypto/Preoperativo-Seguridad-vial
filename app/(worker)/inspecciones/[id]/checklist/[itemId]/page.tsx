@@ -14,6 +14,7 @@ import {
 } from "@/lib/inspections/queries";
 import { responderItem } from "@/lib/inspections/actions";
 import { imagenesDelItem } from "@/lib/inspections/imagenes";
+import { pistaSiAplica } from "@/lib/inspections/etiquetas-respuesta";
 import { BotonAtras } from "@/app/(worker)/inspecciones/_components/BotonAtras";
 import { GaleriaReferencia } from "@/app/(worker)/inspecciones/_components/GaleriaReferencia";
 import { RespuestaChecklistItem } from "@/app/(worker)/inspecciones/_components/RespuestaChecklistItem";
@@ -21,8 +22,8 @@ import { RespuestaTriestadoItem } from "@/app/(worker)/inspecciones/_components/
 import { ProgresoInspeccion } from "@/app/(worker)/inspecciones/_components/ProgresoInspeccion";
 
 // Un ítem por pantalla, botones grandes, poco texto: respuesta rápida
-// binaria (✓ OK / ✕ FALLA-DAÑO-FALTANTE), formato oficial FO-SVS-23 — sin
-// N/A. "FALLA" manda a la pantalla de novedad (requiere descripción antes
+// binaria (✓ Bueno / ✕ Malo; se guardan OK / FALLA), formato oficial FO-SVS-23 —
+// sin N/A. "Malo" manda a la pantalla de novedad (requiere descripción antes
 // de guardar la respuesta), igual que "No conforme" antes.
 //
 // Vuelve al concepto original de "una imagen por elemento": la guía visual
@@ -129,6 +130,9 @@ export default async function ChecklistItemPage({
     redirect(await getNextStepPath(id));
   }
 
+  // "(si aplica)": solo aviso informativo (MOTO, líquido de frenos / refrigerante).
+  const pista = pistaSiAplica(inspection.vehicle.tipoVehiculo, item.nombre);
+
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 px-4 py-6">
       <BotonAtras href={hrefAtras} />
@@ -150,6 +154,7 @@ export default async function ChecklistItemPage({
         <div>
           <p className="text-xs uppercase text-[#66788A]">{item.category.nombre}</p>
           <h1 className="text-2xl font-semibold text-[#17324D]">{item.nombre}</h1>
+          {pista && <p className="mt-1 text-sm text-[#66788A]">{pista}</p>}
         </div>
 
         {item.tipoRespuesta === TipoRespuestaItem.TRIESTADO ? (

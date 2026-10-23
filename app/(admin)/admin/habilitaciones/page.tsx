@@ -48,7 +48,7 @@ export default async function HabilitacionesPage() {
   const puedeOtorgar = session.user.role === Role.SST;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-8">
       <div>
         <h1 className="text-xl font-semibold text-ink">Inspecciones fuera de horario</h1>
         <p className="text-sm text-ink-muted">Habilita a un recorredor o aprobador a actuar fuera del horario.</p>

@@ -4,10 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import type { RespuestaChecklist, TipoNovedad } from "@/generated/prisma/client";
 import { ANILLO_ACTUAL, RespuestaActual } from "@/app/(worker)/inspecciones/_components/RespuestaActual";
+import { etiquetaRespuestaConIcono } from "@/lib/inspections/etiquetas-respuesta";
 import { TIPOS_NOVEDAD_CARROCERIA, TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 
 /**
- * Botones de respuesta de la pantalla de ítem (✓ OK / ✕ FALLA). Para ítems
+ * Botones de respuesta de la pantalla de ítem (✓ Bueno / ✕ Malo; se guardan OK / FALLA). Para ítems
  * sin `pideUbicacion`, es solo un form + un Link (FALLA manda a la
  * pantalla de novedad existente, que pide su propia descripción).
  *
@@ -58,7 +59,7 @@ export function RespuestaChecklistItem({
             type="submit"
             className={`w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]${okActual ? ANILLO_ACTUAL : ""}`}
           >
-            ✓ OK
+            {etiquetaRespuestaConIcono("OK")}
           </button>
         </form>
 
@@ -66,7 +67,7 @@ export function RespuestaChecklistItem({
           href={`/inspecciones/${idInspeccion}/checklist/${itemId}/novedad`}
           className={`block w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-center text-lg font-semibold text-white hover:bg-[#B91C1C]${fallaActual ? ANILLO_ACTUAL : ""}`}
         >
-          ✕ FALLA / DAÑO / FALTANTE
+          {etiquetaRespuestaConIcono("FALLA")}
         </Link>
       </div>
     );
@@ -81,7 +82,7 @@ export function RespuestaChecklistItem({
             type="submit"
             className={`w-full rounded-[10px] bg-[#16A34A] px-4 py-5 text-lg font-semibold text-white hover:bg-[#15803D]${okActual ? ANILLO_ACTUAL : ""}`}
           >
-            ✓ OK
+            {etiquetaRespuestaConIcono("OK")}
           </button>
         </form>
 
@@ -90,7 +91,7 @@ export function RespuestaChecklistItem({
           onClick={() => setMostrarFormularioFalla(true)}
           className={`w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-lg font-semibold text-white hover:bg-[#B91C1C]${fallaActual ? ANILLO_ACTUAL : ""}`}
         >
-          ✕ FALLA / DAÑO / FALTANTE
+          {etiquetaRespuestaConIcono("FALLA")}
         </button>
       </div>
     );
@@ -142,7 +143,7 @@ export function RespuestaChecklistItem({
           disabled={!puedeMarcarFalla}
           className="w-full rounded-[10px] bg-[#DC2626] px-4 py-5 text-lg font-semibold text-white hover:bg-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Confirmar ✕ FALLA / DAÑO / FALTANTE
+          Confirmar {etiquetaRespuestaConIcono("FALLA")}
         </button>
       </form>
 
@@ -151,7 +152,7 @@ export function RespuestaChecklistItem({
         onClick={() => setMostrarFormularioFalla(false)}
         className="w-full text-center text-sm font-medium text-gray-500 underline"
       >
-        Cancelar, la moto está OK
+        Cancelar, el estado es Bueno
       </button>
 
       {!ubicacionValida && (

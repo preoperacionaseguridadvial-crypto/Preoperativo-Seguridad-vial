@@ -3,6 +3,7 @@ import type { RespuestaChecklist } from "@/generated/prisma/client";
 import { Role, Sede, TipoFirma } from "@/generated/prisma/enums";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { PLACEHOLDER_FECHA_VIGENCIA } from "@/lib/settings/queries";
+import { etiquetaRespuesta } from "@/lib/inspections/etiquetas-respuesta";
 
 // Lógica pura (sin JSX, sin Prisma) que extrae del componente del PDF
 // (InspeccionPdfDocument.tsx) las dos reglas que la corrección de Slice 2
@@ -60,19 +61,17 @@ export type EstiloValorItem = "ok" | "warn" | "falla";
 export function formatoValorItemPdf(valor: RespuestaChecklist): { texto: string; estilo: EstiloValorItem } {
   switch (valor) {
     case "OK":
-      return { texto: "✓ OK.", estilo: "ok" };
     case "BUENO":
-      return { texto: "✓ BUENO", estilo: "ok" };
+      return { texto: `✓ ${etiquetaRespuesta(valor).toUpperCase()}`, estilo: "ok" };
     case "BAJO":
       // Desde 2026-10-19 (pedido del dueño de producto) BAJO reemplaza a MALO
       // en los fluidos: crea Novedad y se dibuja igual que una falla. Sin "⚠"
       // (U+26A0): no está en Liberation Sans Narrow ni en WIN_ANSI_MAP.
-      return { texto: "X BAJO", estilo: "falla" };
+      return { texto: `X ${etiquetaRespuesta(valor).toUpperCase()}`, estilo: "falla" };
     case "MALO":
-      return { texto: "X MALO", estilo: "falla" };
     case "FALLA":
     default:
-      return { texto: "X FALLA, DAÑO, FALTANTE", estilo: "falla" };
+      return { texto: `X ${etiquetaRespuesta("FALLA").toUpperCase()}`, estilo: "falla" };
   }
 }
 
@@ -107,6 +106,24 @@ export function formatFechaVigenciaPdf(valor: string): { texto: string; esPlaceh
  */
 export function fotoPorTipo<T extends { tipo: string }>(fotos: T[], tipo: string): T | null {
   return fotos.find((foto) => foto.tipo === tipo) ?? null;
+}
+
+/**
+ * Bloques de la sección "FOTOS DIARIAS DEL VEHÍCULO" del PDF: lateral y placa
+ * siempre (el componente dibuja "Sin foto registrada" si faltan) y, solo si
+ * existe, la foto de las llantas (solo MOTO, desde la feature
+ * checklist-bueno-malo): los carros y las inspecciones anteriores no la tienen
+ * y no deben mostrar un bloque vacío.
+ */
+export function bloquesFotosDiariasPdf<T extends { tipo: string }>(
+  fotos: T[],
+): { label: string; foto: T | null }[] {
+  const bloques = [
+    { label: "Lateral", foto: fotoPorTipo(fotos, "LATERAL") },
+    { label: "Placa", foto: fotoPorTipo(fotos, "PLACA") },
+  ];
+  const llantas = fotoPorTipo(fotos, "LLANTAS");
+  return llantas ? [...bloques, { label: "Llantas", foto: llantas }] : bloques;
 }
 
 /**

@@ -11,7 +11,7 @@ import { PERFIL_ADJUNTO_NOVEDAD, validarArchivo } from "@/lib/storage/validar-ar
 import { PREGUNTAS_ESTADO_CONDUCTOR, type CampoEstadoConductor } from "@/lib/inspections/estado-conductor";
 import {
   getChecklistCatalog,
-  FOTOS_DIARIAS_REQUERIDAS,
+  fotosRequeridasParaEnvio,
 } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 import { esReutilizable } from "@/lib/inspections/reuso-inspeccion";
@@ -367,9 +367,9 @@ export async function responderItem(
 
   const observacionLimpia = observacion?.trim() || "";
   const ubicacionLimpia = ubicacion?.trim() || "";
-  // `esNovedad` es true para FALLA (binario) y MALO (triestado) — BAJO queda
-  // afuera a propósito (decisión confirmada: solo dato/observación, no
-  // Novedad, no bloquea el envío). Ver lib/inspections/respuesta.ts.
+  // `esNovedad` es true para FALLA (binario, "Malo" en pantalla), BAJO
+  // (triestado, fluidos) y MALO (histórico): los tres crean/mantienen la
+  // Novedad. Ver lib/inspections/respuesta.ts.
   if (esNovedad(valor)) {
     if (!observacionLimpia) {
       throw new Error(
@@ -684,15 +684,16 @@ export async function enviarInspeccion(inspectionId: string) {
 
   // Fase soporte-moto-carro (Slice 3, spec daily-vehicle-photos): las 2
   // fotos diarias (LATERAL/PLACA) son obligatorias, independiente del
-  // resultado del checklist. Mismo criterio de diferencia de conjuntos que
-  // arriba (por tipo, no por cantidad) — con solo 2 tipos posibles alcanza
-  // con nombrarlos directo en el mensaje de error.
+  // resultado del checklist; en MOTO también la foto de las llantas (feature
+  // checklist-bueno-malo, la misma regla que el paso del recorrido). Mismo
+  // criterio de diferencia de conjuntos que arriba (por tipo, no por cantidad).
+  const fotosRequeridas = fotosRequeridasParaEnvio(catalog, vehicle?.tipoVehiculo ?? TipoVehiculo.MOTO);
   const fotos = await prisma.fotoInspeccion.findMany({
-    where: { inspectionId, tipo: { in: FOTOS_DIARIAS_REQUERIDAS } },
+    where: { inspectionId, tipo: { in: fotosRequeridas } },
     select: { tipo: true },
   });
   const tiposConFoto = new Set(fotos.map((foto) => foto.tipo));
-  const fotosFaltantes = FOTOS_DIARIAS_REQUERIDAS.filter((tipo) => !tiposConFoto.has(tipo));
+  const fotosFaltantes = fotosRequeridas.filter((tipo) => !tiposConFoto.has(tipo));
   if (fotosFaltantes.length > 0) {
     throw new Error(`Faltan fotos obligatorias: ${fotosFaltantes.join(", ")}.`);
   }

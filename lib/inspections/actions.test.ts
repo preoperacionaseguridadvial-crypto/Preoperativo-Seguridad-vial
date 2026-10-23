@@ -245,6 +245,61 @@ describe("enviarInspeccion — fotos diarias obligatorias", () => {
   });
 });
 
+// Foto de las llantas (feature checklist-bueno-malo): en MOTO es obligatoria
+// cuando el catálogo incluye el ítem Llantas (mismo criterio que el paso del
+// recorrido); en CARRO no se exige.
+describe("enviarInspeccion — foto de las llantas (MOTO)", () => {
+  async function prepararInspeccion(tipoVehiculo: TipoVehiculo) {
+    const categoria = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
+    await crearChecklistItem(categoria.id, {
+      nombre: tipoVehiculo === TipoVehiculo.MOTO ? "Llantas" : "Llantas, incluye repuesto",
+      orden: 20,
+      tipoVehiculo,
+    });
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo({ tipoVehiculo });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    loginComo(worker);
+    const catalogo = await getChecklistCatalog(tipoVehiculo);
+    for (const item of catalogo.flatMap((categoriaDelTipo) => categoriaDelTipo.items)) {
+      await responderTodoElChecklist(inspection.id, item.id);
+    }
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LATERAL, s3Key: "a.jpg" },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.PLACA, s3Key: "b.jpg" },
+    });
+    await declararEstadoConductor(inspection.id, { tomaMedicamentos: false, condicionesAptas: true, consumioAlcohol: false });
+    return inspection;
+  }
+
+  it("MOTO: rechaza el envío sin la foto de las llantas", async () => {
+    const inspection = await prepararInspeccion(TipoVehiculo.MOTO);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos obligatorias: LLANTAS/i);
+  });
+
+  it("MOTO: acepta el envío con la foto de las llantas", async () => {
+    const inspection = await prepararInspeccion(TipoVehiculo.MOTO);
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "c.jpg" },
+    });
+
+    await expect(enviarInspeccion(inspection.id)).resolves.not.toThrow();
+  });
+
+  it("CARRO: no exige la foto de las llantas", async () => {
+    const inspection = await prepararInspeccion(TipoVehiculo.CARRO);
+
+    await expect(enviarInspeccion(inspection.id)).resolves.not.toThrow();
+  });
+});
+
 // Slice 3 (spec: driver-state-declaration): las 3 respuestas son
 // obligatorias antes de enviar, pero una respuesta "preocupante" NUNCA
 // bloquea el envío — solo se refleja como advertencia derivada para el

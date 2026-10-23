@@ -38,3 +38,12 @@ export function puedeAccederARuta(role: Role, pathname: string): boolean {
   const requiredRoles = getRequiredRoles(pathname);
   return !requiredRoles || requiredRoles.includes(role);
 }
+
+/**
+ * Ruta de inicio de cada rol. El TRABAJADOR tiene un solo inicio, la pantalla
+ * de inspecciones (saludo, vehículo, últimas inspecciones); los demás usan `/`.
+ * Siempre debe ser una ruta que `puedeAccederARuta` permita al mismo rol.
+ */
+export function rutaInicioPorRol(role: Role): string {
+  return role === "TRABAJADOR" ? "/inspecciones" : "/";
+}

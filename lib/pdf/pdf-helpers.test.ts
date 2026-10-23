@@ -6,6 +6,7 @@ import {
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
   fotoPorTipo,
+  bloquesFotosDiariasPdf,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
   formatSiNoPdf,
@@ -111,14 +112,14 @@ describe("categoriasGenericasPdf", () => {
 // fuera "OK." (bug de presentación, no solo de omisión de categoría).
 describe("formatoValorItemPdf", () => {
   it("BINARIO: OK y FALLA", () => {
-    expect(formatoValorItemPdf(RespuestaChecklist.OK)).toEqual({ texto: "✓ OK.", estilo: "ok" });
+    expect(formatoValorItemPdf(RespuestaChecklist.OK)).toEqual({ texto: "✓ BUENO", estilo: "ok" });
     expect(formatoValorItemPdf(RespuestaChecklist.FALLA)).toEqual({
-      texto: "X FALLA, DAÑO, FALTANTE",
+      texto: "X MALO",
       estilo: "falla",
     });
   });
 
-  it("TRIESTADO: BUENO, BAJO y MALO tienen textos distintos entre sí y de OK/FALLA", () => {
+  it("TRIESTADO: BUENO, BAJO y MALO; BUENO/MALO comparten texto con OK/FALLA (solo cambia la etiqueta)", () => {
     const bueno = formatoValorItemPdf(RespuestaChecklist.BUENO);
     const bajo = formatoValorItemPdf(RespuestaChecklist.BAJO);
     const malo = formatoValorItemPdf(RespuestaChecklist.MALO);
@@ -128,8 +129,11 @@ describe("formatoValorItemPdf", () => {
     expect(bajo).toEqual({ texto: "X BAJO", estilo: "falla" });
     expect(malo.estilo).toBe("falla");
 
-    const textos = new Set([bueno.texto, bajo.texto, malo.texto, "✓ OK.", "X FALLA, DAÑO, FALTANTE"]);
-    expect(textos.size).toBe(5);
+    expect(bueno.texto).toBe("✓ BUENO");
+    expect(malo.texto).toBe("X MALO");
+    expect(formatoValorItemPdf(RespuestaChecklist.OK).texto).toBe(bueno.texto);
+    expect(formatoValorItemPdf(RespuestaChecklist.FALLA).texto).toBe(malo.texto);
+    expect(new Set([bueno.texto, bajo.texto, malo.texto]).size).toBe(3);
   });
 });
 
@@ -179,6 +183,24 @@ describe("fotoPorTipo", () => {
   it("devuelve null si el tipo pedido todavía no se subió", () => {
     const fotos = [foto("LATERAL")];
     expect(fotoPorTipo(fotos, "PLACA")).toBeNull();
+  });
+});
+
+describe("bloquesFotosDiariasPdf", () => {
+  const foto = (tipo: string) => ({ tipo, url: `https://s3.example/${tipo}` });
+
+  it("siempre lateral y placa, aunque falten (el componente dibuja 'Sin foto registrada')", () => {
+    expect(bloquesFotosDiariasPdf([]).map((b) => [b.label, b.foto])).toEqual([
+      ["Lateral", null],
+      ["Placa", null],
+    ]);
+  });
+
+  it("agrega Llantas solo si la foto existe (inspecciones de carro o anteriores no la tienen)", () => {
+    const bloques = bloquesFotosDiariasPdf([foto("LATERAL"), foto("PLACA"), foto("LLANTAS")]);
+
+    expect(bloques.map((b) => b.label)).toEqual(["Lateral", "Placa", "Llantas"]);
+    expect(bloques[2].foto).toEqual(foto("LLANTAS"));
   });
 });
 

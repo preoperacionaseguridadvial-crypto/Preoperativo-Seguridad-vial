@@ -96,9 +96,13 @@ enum TipoRespuestaItem {
 // Fase soporte-moto-carro (Slice 3): tipo de foto diaria obligatoria por
 // inspección (lateral y placa del vehículo), independiente del resultado
 // del checklist. Consumido por el modelo `FotoInspeccion` (más abajo).
+// Desde la feature checklist-bueno-malo se suma LLANTAS: foto de las llantas de
+// la MOTO, que se toma justo después del ítem Llantas (paso propio del
+// recorrido, no de /fotos) — ver lib/inspections/fotos-flujo.ts.
 enum TipoFotoInspeccion {
   LATERAL
   PLACA
+  LLANTAS
 }
 
 // Fase C: tipo de novedad, alineado a las convenciones de dibujo del

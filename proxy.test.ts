@@ -158,11 +158,20 @@ describe("proxy.ts (RBAC por rol)", () => {
     expect(resAuth.headers.get("location")).toBeNull();
   });
 
-  it("permite acceso a rutas sin prefijo restringido (ej. /) a cualquier rol autenticado", async () => {
+  it("el inicio / del TRABAJADOR redirige a /inspecciones (un solo inicio)", async () => {
     const middleware = await importMiddleware();
     const res = middleware(crearRequest("/", "TRABAJADOR") as Parameters<Handler>[0]);
-    expect(res.headers.get("location")).toBeNull();
+    expect(res.headers.get("location")).toBe("http://localhost/inspecciones");
   });
+
+  it.each(["SST", "SUPERVISOR", "DIRECTOR", "ADMINISTRADOR"] as const)(
+    "permite a %s abrir / sin redirección",
+    async (role) => {
+      const middleware = await importMiddleware();
+      const res = middleware(crearRequest("/", role) as Parameters<Handler>[0]);
+      expect(res.headers.get("location")).toBeNull();
+    },
+  );
 });
 
 describe("proxy.ts (autorización de tratamiento de datos)", () => {

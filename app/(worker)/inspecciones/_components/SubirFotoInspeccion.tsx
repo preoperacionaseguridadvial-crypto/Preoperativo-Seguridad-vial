@@ -14,7 +14,7 @@ import {
 
 type Props = {
   inspectionId: string;
-  tipo: "lateral" | "placa";
+  tipo: "lateral" | "placa" | "llantas";
   titulo: string;
   /** Ya existe una foto de este tipo guardada en el servidor. */
   existe: boolean;

@@ -1,6 +1,7 @@
 import "server-only";
 import type { RespuestaChecklist, TipoNovedad } from "@/generated/prisma/client";
 import { esNovedad } from "@/lib/inspections/respuesta";
+import { etiquetaRespuesta } from "@/lib/inspections/etiquetas-respuesta";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
 
 /**
@@ -26,12 +27,6 @@ export type InspeccionParaConfirmacion = {
   }[];
 };
 
-const ETIQUETA_VALOR: Partial<Record<RespuestaChecklist, string>> = {
-  FALLA: "Falla",
-  BAJO: "Bajo",
-  MALO: "Malo",
-};
-
 /**
  * Lista ordenada de motivos (texto legible) por los que esta inspección no
  * está conforme. Vacía = nada reportado, se puede aprobar. Desde 2026-10-19
@@ -54,7 +49,7 @@ export function motivosConfirmacionAprobacion(inspection: InspeccionParaConfirma
         a.checklistItem.orden - b.checklistItem.orden,
     );
   for (const respuesta of enNovedad) {
-    motivos.push(`${respuesta.checklistItem.nombre}: ${ETIQUETA_VALOR[respuesta.valor] ?? respuesta.valor}`);
+    motivos.push(`${respuesta.checklistItem.nombre}: ${etiquetaRespuesta(respuesta.valor)}`);
   }
 
   // Las novedades ligadas a un ítem ya salen arriba como FALLA/MALO.

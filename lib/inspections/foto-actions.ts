@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
-import { Role, InspectionStatus, Prisma, TipoFotoInspeccion } from "@/generated/prisma/client";
+import { Role, InspectionStatus, Prisma, TipoFotoInspeccion, TipoVehiculo } from "@/generated/prisma/client";
 import { deleteObject, uploadObject } from "@/lib/storage/s3";
 import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
 import { exigirHorarioParaContinuar } from "@/lib/horarios/habilitaciones";
@@ -26,7 +26,7 @@ function esErrorFotoDuplicada(err: unknown): boolean {
 // no una respuesta de checklist.
 
 /**
- * Sube una de las dos fotos diarias obligatorias (LATERAL o PLACA) y crea el
+ * Sube una foto diaria obligatoria (LATERAL, PLACA o, solo en MOTO, LLANTAS) y crea el
  * registro `FotoInspeccion` (o reemplaza la existente del mismo tipo). Solo el TRABAJADOR dueño de la inspección,
  * mientras siga EN_PROCESO — mismo criterio de pertenencia y de estado que
  * el resto de las mutaciones del flujo del trabajador (ver
@@ -47,6 +47,17 @@ export async function subirFotoInspeccion(
     throw new Error("La inspección ya no está en proceso: no se pueden agregar fotos.");
   }
   await exigirHorarioParaContinuar(inspection, "subirFotoInspeccion", new Date());
+
+  // La foto de las llantas es solo de MOTO (un vehículo legacy sin tipo es MOTO).
+  if (tipo === TipoFotoInspeccion.LLANTAS) {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: inspection.vehicleId },
+      select: { tipoVehiculo: true },
+    });
+    if (vehicle?.tipoVehiculo === TipoVehiculo.CARRO) {
+      throw new Error("La foto de las llantas solo aplica a motos.");
+    }
+  }
 
   // Mientras la inspección siga EN_PROCESO la foto se puede reemplazar
   // (corrección, feature correccion-respuestas-inspeccion): hay una sola fila

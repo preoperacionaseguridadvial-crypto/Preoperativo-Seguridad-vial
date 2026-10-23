@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { RespuestaChecklist } from "@/generated/prisma/client";
+import { etiquetaRespuesta } from "@/lib/inspections/etiquetas-respuesta";
 import { responderItem } from "@/lib/inspections/actions";
 import type { EstadoChecklistItem } from "@/lib/inspections/queries";
 import { TIPOS_NOVEDAD_DOCUMENTO, TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
@@ -94,7 +95,7 @@ export function DocumentoCheckItem({
         <span className="flex-1">
           <span className="block text-sm font-medium text-[#0B3B60]">{nombre}</span>
           <span className={`block text-xs ${esOk ? "text-gray-500" : "text-red-600"}`}>
-            {esOk ? "OK" : "Novedad reportada"}
+            {esOk ? etiquetaRespuesta("OK") : "Novedad reportada"}
           </span>
         </span>
         <button
@@ -126,7 +127,7 @@ export function DocumentoCheckItem({
           <span className="block text-xs text-gray-500">
             {estado === "PENDIENTE"
               ? "Pendiente"
-              : `Respuesta actual: ${estado === "OK" ? "OK" : "Novedad reportada"}`}
+              : `Respuesta actual: ${estado === "OK" ? etiquetaRespuesta("OK") : "Novedad reportada"}`}
           </span>
         </span>
         {estado !== "PENDIENTE" && (

@@ -4,15 +4,14 @@ import { AppHeader } from "@/app/_components/AppHeader";
 // (app/(worker)/inspecciones/**). `flex flex-1 flex-col` para que el
 // `<main className="flex-1 ...">` de cada pantalla siga creciendo
 // correctamente dentro del `<body className="flex flex-col">` del layout
-// raíz (app/layout.tsx). El encabezado (logo + Inicio) vive en
-// app/_components/AppHeader.tsx, compartido con los layouts de Supervisor
-// y Gestión — mismo componente, mismo aspecto en los tres roles.
+// raíz (app/layout.tsx). Encabezado en variante destacada (sin logo, "Inicio"
+// como botón visible), igual que Gestión — ver app/_components/AppHeader.tsx.
 export default function InspeccionesLayout({ children }: { children: React.ReactNode }) {
   return (
     // `relative`: ancla del "← Atrás" que cada paso dibuja en la barra del
     // encabezado (ver _components/BotonAtras.tsx).
     <div className="relative flex flex-1 flex-col">
-      <AppHeader />
+      <AppHeader destacado hrefInicio="/inspecciones" />
       {children}
     </div>
   );

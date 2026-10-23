@@ -65,7 +65,7 @@ export default async function ConfirmarPage({
   // Corrección Slice 2 (hallazgo CRITICAL #5): antes solo miraba
   // `valor === "FALLA"` — un ítem TRIESTADO de fluidos en MALO (que sí crea
   // Novedad, ver esNovedad() en lib/inspections/respuesta.ts) quedaba fuera
-  // de "Ítems en falla" y de "Novedades reportadas" justo antes de que el
+  // de "Ítems con novedad (Malo / Bajo)" y de "Novedades reportadas" justo antes de que el
   // conductor firme. `filtrarNoConformes` reusa el mismo criterio que
   // `responderItem`/`esNovedad`.
   const noConformes = filtrarNoConformes(inspection.respuestas);

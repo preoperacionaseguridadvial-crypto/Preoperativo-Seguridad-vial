@@ -45,7 +45,7 @@ describe("motivosConfirmacionAprobacion", () => {
         respuestas: [respuesta("Luces", RespuestaChecklist.FALLA, 1), respuesta("Frenos", RespuestaChecklist.MALO, 2)],
       }),
     );
-    expect(motivos).toEqual(["Luces: Falla", "Frenos: Malo"]);
+    expect(motivos).toEqual(["Luces: Malo", "Frenos: Malo"]);
   });
 
   it("ordena las respuestas por categoría y luego por ítem, sin importar el orden de entrada", () => {
@@ -58,7 +58,7 @@ describe("motivosConfirmacionAprobacion", () => {
         ],
       }),
     );
-    expect(motivos).toEqual(["A1: Falla", "A2: Falla", "B2: Falla"]);
+    expect(motivos).toEqual(["A1: Malo", "A2: Malo", "B2: Malo"]);
   });
 
   it("incluye las novedades generales (sin ítem de checklist) pero no duplica las ligadas a un ítem", () => {
@@ -71,7 +71,7 @@ describe("motivosConfirmacionAprobacion", () => {
         ],
       }),
     );
-    expect(motivos).toEqual(["Luces: Falla", "Novedad general (Rayón): Rayón en el costado"]);
+    expect(motivos).toEqual(["Luces: Malo", "Novedad general (Rayón): Rayón en el costado"]);
   });
 
   it("incluye puedeOperar=false con su justificación cuando existe", () => {

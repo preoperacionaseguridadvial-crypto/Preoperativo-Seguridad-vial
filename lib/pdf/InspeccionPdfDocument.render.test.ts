@@ -164,6 +164,16 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
         s3Key: `fotos-inspeccion/${inspection.id}/PLACA.jpg`,
       },
     });
+    // Foto de las llantas: solo MOTO (feature checklist-bueno-malo).
+    if (tipoVehiculo === TipoVehiculo.MOTO) {
+      await prisma.fotoInspeccion.create({
+        data: {
+          inspectionId: inspection.id,
+          tipo: TipoFotoInspeccion.LLANTAS,
+          s3Key: `fotos-inspeccion/${inspection.id}/LLANTAS.jpg`,
+        },
+      });
+    }
 
     // Sin firmas a propósito: ejercita la rama "Sin firma registrada" de
     // `FirmaCaja` (InspeccionPdfDocument.tsx), que no depende de ningún

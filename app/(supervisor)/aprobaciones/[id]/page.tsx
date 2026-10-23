@@ -5,6 +5,7 @@ import { getInspeccionDetalleOrNotFound } from "@/lib/inspections/supervisor-que
 import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervisor-actions";
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
+import { etiquetaRespuesta, type ValorRespuesta } from "@/lib/inspections/etiquetas-respuesta";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
 import { PREGUNTAS_ESTADO_CONDUCTOR, requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conductor";
 import { motivosConfirmacionAprobacion } from "@/lib/inspections/motivos-confirmacion-aprobacion";
@@ -515,18 +516,7 @@ function FirmaEvidencia({
 // (crea Novedad, ver lib/inspections/respuesta.ts `esNovedad`) y se pinta en
 // rojo como falla.
 function badgeLabel(valor: string) {
-  switch (valor) {
-    case "OK":
-      return "OK";
-    case "BUENO":
-      return "Bueno";
-    case "BAJO":
-      return "Bajo";
-    case "MALO":
-      return "Malo";
-    default:
-      return "Falla";
-  }
+  return etiquetaRespuesta(valor as ValorRespuesta);
 }
 
 function badgeClass(valor: string) {

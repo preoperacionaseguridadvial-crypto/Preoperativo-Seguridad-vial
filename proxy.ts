@@ -4,7 +4,7 @@ import { authConfig } from "@/lib/auth/base-config";
 import { isPublicPath } from "@/lib/auth/public-paths";
 import { destinoPorAutorizacion } from "@/lib/auth/gate-autorizacion";
 import { COOKIE_SESION_NAVEGADOR, esCookieDeSesion, sesionExpiradaPorNavegador } from "@/lib/auth/recordarme";
-import { getRequiredRoles } from "@/lib/auth/route-roles";
+import { getRequiredRoles, rutaInicioPorRol } from "@/lib/auth/route-roles";
 
 // Aunque Proxy (Next.js 16+, antes "middleware") corre en Node.js runtime
 // por defecto, se usa igual `authConfig` (sin el Credentials provider) en
@@ -49,6 +49,14 @@ export default auth((req) => {
   const destino = destinoPorAutorizacion(pathname, session.user.autorizoDatos);
   if (destino) {
     return NextResponse.redirect(new URL(destino, req.nextUrl.origin));
+  }
+
+  // Un solo inicio por rol: el TRABAJADOR aterriza en /inspecciones.
+  if (pathname === "/") {
+    const inicio = rutaInicioPorRol(session.user.role);
+    if (inicio !== "/") {
+      return NextResponse.redirect(new URL(inicio, req.nextUrl.origin));
+    }
   }
 
   const requiredRoles = getRequiredRoles(pathname);

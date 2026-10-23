@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { InspectionStatus, Sede } from "@/generated/prisma/client";
-import { accionPrincipalTrabajador, tonoEstadoInspeccion } from "@/lib/inicio/accion-trabajador";
+import {
+  accionPrincipalTrabajador,
+  estadoUltimaInspeccion,
+  tonoEstadoInspeccion,
+} from "@/lib/inicio/accion-trabajador";
 
 const ahora = new Date("2026-10-07T15:00:00Z");
 const HORA = 60 * 60 * 1000;
@@ -179,5 +183,37 @@ describe("tonoEstadoInspeccion", () => {
     expect(tonoEstadoInspeccion(InspectionStatus.ENVIADA)).toBe("warn");
     expect(tonoEstadoInspeccion(InspectionStatus.EN_PROCESO)).toBe("info");
     expect(tonoEstadoInspeccion(InspectionStatus.CANCELADA)).toBe("neutral");
+  });
+});
+
+describe("estadoUltimaInspeccion", () => {
+  it("sin inspecciones o con una de turno anterior no hay estado que mostrar", () => {
+    expect(estadoUltimaInspeccion(null, ahora)).toBeNull();
+    expect(estadoUltimaInspeccion(inspeccion(InspectionStatus.APROBADA, { startedAt: hace(30) }), ahora)).toBeNull();
+  });
+
+  it("EN_PROCESO no se repite: ya lo cubren la tarjeta En proceso y el botón Continuar", () => {
+    expect(estadoUltimaInspeccion(inspeccion(InspectionStatus.EN_PROCESO), ahora)).toBeNull();
+  });
+
+  it.each([
+    [InspectionStatus.ENVIADA, "ESPERANDO"],
+    [InspectionStatus.PENDIENTE_APROBACION, "ESPERANDO"],
+    [InspectionStatus.APROBADA, "APROBADA"],
+    [InspectionStatus.RECHAZADA, "RECHAZADA"],
+    [InspectionStatus.NO_APTA_PARA_OPERAR, "NO_APTA"],
+  ] as const)("%s muestra el estado %s con titulo y tono", (status, estado) => {
+    const aviso = estadoUltimaInspeccion(inspeccion(status), ahora);
+    expect(aviso?.estado).toBe(estado);
+    expect(aviso?.titulo).toBeTruthy();
+    expect(aviso?.tono).toBeTruthy();
+  });
+
+  it("una rechazada conserva las observaciones del supervisor", () => {
+    const aviso = estadoUltimaInspeccion(
+      inspeccion(InspectionStatus.RECHAZADA, { observacionesSupervisor: "Falta foto" }),
+      ahora,
+    );
+    expect(aviso?.detalle).toBe("Falta foto");
   });
 });
