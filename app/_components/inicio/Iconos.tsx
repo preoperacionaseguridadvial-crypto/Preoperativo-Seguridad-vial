@@ -124,3 +124,37 @@ export function IconoDePaso({ icono, className = "size-5" }: { icono: IconoPaso;
     </svg>
   );
 }
+
+export function IconoReloj({ className = "size-6" }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconoEscudo({ className = "size-6" }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <path d="M12 3l7 2.8v5.4c0 4.4-2.8 7.6-7 9.8-4.2-2.2-7-5.4-7-9.8V5.8L12 3z" strokeLinejoin="round" />
+      <path d="M9 12l2.2 2.2L15.2 10" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconoPlay({ className = "size-5" }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M8 5.5v13l11-6.5L8 5.5z" />
+    </svg>
+  );
+}
+
+export function IconoFlechaDerecha({ className = "size-5" }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
