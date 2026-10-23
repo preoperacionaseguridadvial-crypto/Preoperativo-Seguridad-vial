@@ -143,12 +143,22 @@ export default async function InspeccionesPage({
 
       <div className="relative z-10 mx-auto flex w-full max-w-[1350px] flex-col gap-5 px-4 sm:px-6">
         {error && (
-          <p
+          // Bien visible: es lo que explica por qué no pudo iniciar (p. ej. fuera de horario).
+          <div
             role="alert"
-            className={`${subir} rounded-2xl border border-status-crit/30 bg-status-crit-soft px-4 py-3 text-sm font-medium text-status-crit-ink shadow-sm`}
+            className={`${subir} flex items-start gap-4 rounded-2xl border-2 border-[#D92D20] border-l-8 bg-[#FEF3F2] px-5 py-4 shadow-lg`}
           >
-            {error}
-          </p>
+            <span
+              aria-hidden
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#D92D20] text-white"
+            >
+              <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path d="M12 8v5M12 16.5v.5" strokeLinecap="round" />
+                <path d="M10.3 3.9 2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <p className="pt-1.5 text-base font-semibold leading-snug text-[#7A271A] sm:text-lg">{error}</p>
+          </div>
         )}
 
         {!vehiculo && (
