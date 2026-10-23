@@ -18,11 +18,15 @@ Redesign the worker start screen `/inspecciones` following the user's mockup (20
 - [x] T1 - UI redesign of `/inspecciones` (+ pure helpers with tests if needed). Route: delegated writer.
 - [x] T2 - Checks, live check as worker, commit.
 
+- [x] T3 - Single worker home (user request 2026-10-23): TRABAJADOR lands directly on `/inspecciones` (redirect from `/`); `/inspecciones` absorbs what the old worker home showed (greeting + sede + date, "Últimas inspecciones", any other PanelTrabajador states) and gets a prominent "Cerrar sesión" below the hero. "Inicio" in the flow steps leads to `/inspecciones`. Diagnose the broken vehicle photo on the worker home. Route: delegated writer.
+
 ## Progress / evidence
 - T1 2ea5113: page + BotonIniciarInspeccion rewritten, lib/inspections/pasos-inicio.ts (+test). RED (module missing) -> GREEN 4/4. npm test 1005 passed; tsc and lint clean.
 - T2 live (temp workers tagged tmp-live-recorredor-*, cleaned up): MOTO 14 items, CARRO 16 items; hero, plate, chips, 5 steps, Iniciar button present. Not checked: rendered layout/mobile, in-progress Continuar button, ?error= banner.
 - Deviations: big Continuar button added when a reusable inspection exists (duplicates list Continuar); no year field on Vehicle.
 - Branch `feat/inicio-recorredor` from `feat/checklist-bueno-malo` @ def4495. Background converted to WebP (2000x667, 21 KB).
+
+- T3 e79dc25: proxy + app/page.tsx redirect TRABAJADOR / -> /inspecciones (rutaInicioPorRol); /inspecciones gains greeting/sede/date, Cerrar sesion, Tu ultima inspeccion, Ultimas inspecciones; AppHeader hrefInicio; PanelTrabajador/TarjetaVehiculo removed; FotoVehiculo onError fallback. RED->GREEN; 1024 tests; tsc/lint clean; live 307 for worker, 200 for SST. Broken photo = dev env S3_PUBLIC_ENDPOINT points to an old LAN IP (192.168.1.7), not a repo bug.
 
 ## Next step
 User visual check on localhost; push/PR order: checklist-bueno-malo then inicio-recorredor (stacked).
