@@ -3,7 +3,8 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { auth } from "@/lib/auth/config";
 import { getInspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { InspeccionPdfDocument } from "@/lib/pdf/InspeccionPdfDocument";
-import { claveDiaBogota } from "@/lib/fechas/formato";
+import { nombreArchivoPdf } from "@/lib/inspections/pdf-lote";
+import { puedeDescargarPdf } from "@/lib/inspections/pdf-acceso";
 
 // @react-pdf/renderer necesita Node.js (usa fs para leer el logo y fuentes
 // del sistema PDF) — no puede correr en Edge Runtime.
@@ -47,15 +48,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   const inspection = await getInspeccionParaPdf(id);
-  if (!inspection || inspection.status === "EN_PROCESO" || inspection.status === "CANCELADA") {
+  if (!inspection || !puedeDescargarPdf(session.user.role, inspection.status)) {
     return NextResponse.json({ error: "Inspección no encontrada." }, { status: 404 });
   }
 
   const buffer = await renderToBuffer(InspeccionPdfDocument({ data: inspection }));
 
-  const fecha = claveDiaBogota(inspection.startedAt).replaceAll("-", "");
-  const placa = inspection.vehicle.placa.replace(/[^a-zA-Z0-9]/g, "");
-  const filename = `FO-SVS-23_${placa}_${fecha}_${inspection.id}.pdf`;
+  const filename = nombreArchivoPdf({
+    placa: inspection.vehicle.placa,
+    startedAt: inspection.startedAt,
+    id: inspection.id,
+  });
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
