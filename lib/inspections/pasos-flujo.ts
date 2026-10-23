@@ -4,6 +4,8 @@
 // flujo, se cambia acá y en ese test. Orden (2026-10-23): kilometraje →
 // documentos → ítems por orden global → declaración → fotos → resultado → firma.
 
+import type { ClaveFotoFlujo } from "@/lib/inspections/fotos-flujo";
+
 export type IconoPaso = "kilometraje" | "checklist" | "conductor" | "fotos" | "resultado" | "firma";
 
 export const PASOS_INSPECCION: readonly {
@@ -35,10 +37,20 @@ export const PASOS_INSPECCION: readonly {
   { clave: "confirmar", titulo: "Confirmar y firmar", descripcion: "Revisa el resumen y firma el envío", icono: "firma" },
 ];
 
-/** Catálogo (ya filtrado por tipo de vehículo) con el `orden` GLOBAL de cada ítem. */
-export type CatalogoFlujo = { nombre: string; items: { id: string; orden: number }[] }[];
+/**
+ * Catálogo (ya filtrado por tipo de vehículo) con el `orden` GLOBAL de cada
+ * ítem. `fotoDespues`: foto que se pide justo después de ese ítem (ver
+ * lib/inspections/fotos-flujo.ts).
+ */
+export type CatalogoFlujo = {
+  nombre: string;
+  items: { id: string; orden: number; fotoDespues?: ClaveFotoFlujo | null }[];
+}[];
 
-export type PasoChecklist = { tipo: "lista" } | { tipo: "item"; id: string; categoria: string };
+export type PasoChecklist =
+  | { tipo: "lista" }
+  | { tipo: "item"; id: string; categoria: string }
+  | { tipo: "foto"; clave: ClaveFotoFlujo };
 
 /**
  * Pasos del checklist en el orden del recorrido: primero la pantalla de lista
@@ -50,7 +62,13 @@ export type PasoChecklist = { tipo: "lista" } | { tipo: "item"; id: string; cate
  */
 export function pasosChecklistEnOrden(catalogo: CatalogoFlujo, categoriaLista: string): PasoChecklist[] {
   const pasos: PasoChecklist[] = [];
-  const items: { id: string; categoria: string; orden: number; posicion: number }[] = [];
+  const items: {
+    id: string;
+    categoria: string;
+    orden: number;
+    posicion: number;
+    fotoDespues: ClaveFotoFlujo | null;
+  }[] = [];
 
   for (const categoria of catalogo) {
     if (categoria.nombre === categoriaLista) {
@@ -58,12 +76,21 @@ export function pasosChecklistEnOrden(catalogo: CatalogoFlujo, categoriaLista: s
       continue;
     }
     for (const item of categoria.items) {
-      items.push({ id: item.id, categoria: categoria.nombre, orden: item.orden, posicion: items.length });
+      items.push({
+        id: item.id,
+        categoria: categoria.nombre,
+        orden: item.orden,
+        posicion: items.length,
+        fotoDespues: item.fotoDespues ?? null,
+      });
     }
   }
 
   items.sort((a, b) => a.orden - b.orden || a.posicion - b.posicion);
-  for (const item of items) pasos.push({ tipo: "item", id: item.id, categoria: item.categoria });
+  for (const item of items) {
+    pasos.push({ tipo: "item", id: item.id, categoria: item.categoria });
+    if (item.fotoDespues) pasos.push({ tipo: "foto", clave: item.fotoDespues });
+  }
   return pasos;
 }
 
@@ -72,7 +99,8 @@ export function pasosChecklistEnOrden(catalogo: CatalogoFlujo, categoriaLista: s
  * a `/inspecciones/[id]/`. Es la misma secuencia que recorre `getNextStepPath`
  * (lib/inspections/queries.ts) y sirve para el botón "Atrás": kilometraje →
  * documentos (una sola pantalla de lista, `/checklist`) → ítems del checklist
- * uno por uno en orden global (`pasosChecklistEnOrden`) → declaración del
+ * uno por uno en orden global (`pasosChecklistEnOrden`, con la foto de las
+ * llantas de la MOTO justo después de Llantas) → declaración del
  * conductor (una entrada por pregunta) → fotos → resultado → confirmar.
  * Pura (recibe el catálogo ya filtrado por tipo de vehículo) para poder
  * probarla sin base.
@@ -85,7 +113,9 @@ export function construirPasosFlujo(
   const pasos: string[] = ["medidas"];
 
   for (const paso of pasosChecklistEnOrden(catalogo, categoriaLista)) {
-    pasos.push(paso.tipo === "lista" ? "checklist" : `checklist/${paso.id}`);
+    if (paso.tipo === "lista") pasos.push("checklist");
+    else if (paso.tipo === "item") pasos.push(`checklist/${paso.id}`);
+    else pasos.push(`foto-${paso.clave}`);
   }
 
   for (let paso = 1; paso <= totalPreguntasEstadoConductor; paso++) {

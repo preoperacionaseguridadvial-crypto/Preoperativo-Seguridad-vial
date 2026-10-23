@@ -11,6 +11,7 @@ import {
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { construirPasosFlujo, pasoAnterior, pasoSiguiente, pasosChecklistEnOrden } from "@/lib/inspections/pasos-flujo";
 import { PREGUNTAS_ESTADO_CONDUCTOR } from "@/lib/inspections/estado-conductor";
+import { fotoDespuesDelItem, type ClaveFotoFlujo } from "@/lib/inspections/fotos-flujo";
 
 // Fase soporte-moto-carro (Slice 3, A7): las 2 fotos diarias obligatorias,
 // independiente del resultado del checklist. Un único lugar de verdad de
@@ -20,6 +21,11 @@ export const FOTOS_DIARIAS_REQUERIDAS: TipoFotoInspeccion[] = [
   TipoFotoInspeccion.LATERAL,
   TipoFotoInspeccion.PLACA,
 ];
+
+// Tipo de `FotoInspeccion` de cada paso de foto del recorrido (ver fotos-flujo.ts).
+const TIPO_FOTO_POR_CLAVE: Record<ClaveFotoFlujo, TipoFotoInspeccion> = {
+  llantas: TipoFotoInspeccion.LLANTAS,
+};
 
 /**
  * Catálogo completo del checklist para un tipo de vehículo, ordenado por
@@ -132,6 +138,41 @@ export function categoriasParaLista<T extends { nombre: string; items: { estado:
 }
 
 /**
+ * Catálogo con la foto que se pide después de cada ítem (`fotoDespues`), para
+ * armar los pasos del recorrido. Solo MOTO pide la foto de las llantas.
+ */
+function catalogoParaFlujo(
+  catalogo: Awaited<ReturnType<typeof getChecklistCatalog>>,
+  tipoVehiculo: TipoVehiculo,
+) {
+  return catalogo.map((categoria) => ({
+    nombre: categoria.nombre,
+    items: categoria.items.map((item) => ({
+      id: item.id,
+      orden: item.orden,
+      fotoDespues: fotoDespuesDelItem(tipoVehiculo, item.nombre),
+    })),
+  }));
+}
+
+/**
+ * Tipos de foto obligatorios para enviar: las 2 fotos diarias (lateral y placa)
+ * más las que el recorrido pide dentro del checklist para este vehículo (hoy, la
+ * de las llantas de la MOTO). Se deriva del mismo recorrido que
+ * `getNextStepPath`, así "se pide" y "es obligatoria" no pueden divergir.
+ */
+export function fotosRequeridasParaEnvio(
+  catalogo: Awaited<ReturnType<typeof getChecklistCatalog>>,
+  tipoVehiculo: TipoVehiculo,
+): TipoFotoInspeccion[] {
+  const delRecorrido = pasosChecklistEnOrden(
+    catalogoParaFlujo(catalogo, tipoVehiculo),
+    CATEGORIA_SIN_PANTALLA_PROPIA,
+  ).flatMap((paso) => (paso.tipo === "foto" ? [TIPO_FOTO_POR_CLAVE[paso.clave]] : []));
+  return [...FOTOS_DIARIAS_REQUERIDAS, ...delRecorrido];
+}
+
+/**
  * Pasos del flujo de esta inspección, como rutas relativas a
  * `/inspecciones/[id]/` (ver `construirPasosFlujo`). Usa el catálogo filtrado
  * por el tipo de vehículo, igual que `getNextStepPath`.
@@ -139,7 +180,11 @@ export function categoriasParaLista<T extends { nombre: string; items: { estado:
 async function getPasosFlujo(inspectionId: string): Promise<string[]> {
   const tipoVehiculo = await getTipoVehiculoDeInspeccion(inspectionId);
   const catalogo = await getChecklistCatalog(tipoVehiculo);
-  return construirPasosFlujo(catalogo, CATEGORIA_SIN_PANTALLA_PROPIA, PREGUNTAS_ESTADO_CONDUCTOR.length);
+  return construirPasosFlujo(
+    catalogoParaFlujo(catalogo, tipoVehiculo),
+    CATEGORIA_SIN_PANTALLA_PROPIA,
+    PREGUNTAS_ESTADO_CONDUCTOR.length,
+  );
 }
 
 /**
@@ -162,32 +207,32 @@ export async function getFollowingStepPath(inspectionId: string, pasoActual: str
 /**
  * Siguiente paso del checklist sin completar, en el orden del recorrido
  * (`pasosChecklistEnOrden`: documentos primero, luego los ítems por `orden`
- * global), con el nombre de su categoría, o `null` si ya están todos
- * respondidos. Se usa para guiar al trabajador paso a paso por el checklist.
- * Los documentos son una sola pantalla: devuelve el primer documento pendiente.
+ * global, con la foto de las llantas de la MOTO justo después de Llantas), como
+ * ruta relativa a `/inspecciones/[id]/`, o `null` si ya está todo completo. Se
+ * usa para guiar al trabajador paso a paso por el checklist. Los documentos son
+ * una sola pantalla (`checklist`): se pide mientras quede alguno sin responder.
  */
-async function getNextUnansweredItem(
-  inspectionId: string,
-): Promise<{ id: string; categoryNombre: string } | null> {
+async function getNextChecklistStep(inspectionId: string): Promise<string | null> {
   const tipoVehiculo = await getTipoVehiculoDeInspeccion(inspectionId);
   const categories = await getChecklistCatalog(tipoVehiculo);
-  const responses = await prisma.inspectionItemResponse.findMany({
-    where: { inspectionId },
-    select: { checklistItemId: true },
-  });
+  const [responses, fotos] = await Promise.all([
+    prisma.inspectionItemResponse.findMany({ where: { inspectionId }, select: { checklistItemId: true } }),
+    prisma.fotoInspeccion.findMany({ where: { inspectionId }, select: { tipo: true } }),
+  ]);
   const respondedIds = new Set(responses.map((response) => response.checklistItemId));
+  const tiposConFoto = new Set(fotos.map((foto) => foto.tipo));
 
-  for (const paso of pasosChecklistEnOrden(categories, CATEGORIA_SIN_PANTALLA_PROPIA)) {
+  for (const paso of pasosChecklistEnOrden(catalogoParaFlujo(categories, tipoVehiculo), CATEGORIA_SIN_PANTALLA_PROPIA)) {
     if (paso.tipo === "lista") {
-      const pendiente = categories
+      const hayDocumentoPendiente = categories
         .filter((category) => category.nombre === CATEGORIA_SIN_PANTALLA_PROPIA)
         .flatMap((category) => category.items)
-        .find((item) => !respondedIds.has(item.id));
-      if (pendiente) {
-        return { id: pendiente.id, categoryNombre: CATEGORIA_SIN_PANTALLA_PROPIA };
-      }
-    } else if (!respondedIds.has(paso.id)) {
-      return { id: paso.id, categoryNombre: paso.categoria };
+        .some((item) => !respondedIds.has(item.id));
+      if (hayDocumentoPendiente) return "checklist";
+    } else if (paso.tipo === "item") {
+      if (!respondedIds.has(paso.id)) return `checklist/${paso.id}`;
+    } else if (!tiposConFoto.has(TIPO_FOTO_POR_CLAVE[paso.clave])) {
+      return `foto-${paso.clave}`;
     }
   }
 
@@ -327,6 +372,8 @@ export async function getFotosInspeccion(inspectionId: string) {
   return {
     lateral: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.LATERAL) ?? null,
     placa: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.PLACA) ?? null,
+    // Solo MOTO: se toma en su propio paso (`/foto-llantas`), no en `/fotos`.
+    llantas: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.LLANTAS) ?? null,
   };
 }
 
@@ -384,11 +431,9 @@ export async function getNextStepPath(inspectionId: string): Promise<string> {
     return `${base}/medidas`;
   }
 
-  const nextItem = await getNextUnansweredItem(inspectionId);
-  if (nextItem) {
-    return nextItem.categoryNombre === CATEGORIA_SIN_PANTALLA_PROPIA
-      ? `${base}/checklist`
-      : `${base}/checklist/${nextItem.id}`;
+  const nextStep = await getNextChecklistStep(inspectionId);
+  if (nextStep) {
+    return `${base}/${nextStep}`;
   }
 
   // Paradas después del checklist (pedido del dueño de producto, 2026-09-18):

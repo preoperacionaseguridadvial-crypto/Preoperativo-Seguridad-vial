@@ -20,7 +20,7 @@ function catalogoPara(tipo: Vehiculo) {
 
 function recorrido(tipo: Vehiculo): string[] {
   return pasosChecklistEnOrden(catalogoPara(tipo), "Documentación").map((paso) =>
-    paso.tipo === "lista" ? "Documentos" : paso.id,
+    paso.tipo === "lista" ? "Documentos" : paso.tipo === "item" ? paso.id : `Foto ${paso.clave}`,
   );
 }
 

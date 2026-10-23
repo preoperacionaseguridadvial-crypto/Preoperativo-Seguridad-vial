@@ -6,6 +6,7 @@ import {
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
   fotoPorTipo,
+  bloquesFotosDiariasPdf,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
   formatSiNoPdf,
@@ -182,6 +183,24 @@ describe("fotoPorTipo", () => {
   it("devuelve null si el tipo pedido todavía no se subió", () => {
     const fotos = [foto("LATERAL")];
     expect(fotoPorTipo(fotos, "PLACA")).toBeNull();
+  });
+});
+
+describe("bloquesFotosDiariasPdf", () => {
+  const foto = (tipo: string) => ({ tipo, url: `https://s3.example/${tipo}` });
+
+  it("siempre lateral y placa, aunque falten (el componente dibuja 'Sin foto registrada')", () => {
+    expect(bloquesFotosDiariasPdf([]).map((b) => [b.label, b.foto])).toEqual([
+      ["Lateral", null],
+      ["Placa", null],
+    ]);
+  });
+
+  it("agrega Llantas solo si la foto existe (inspecciones de carro o anteriores no la tienen)", () => {
+    const bloques = bloquesFotosDiariasPdf([foto("LATERAL"), foto("PLACA"), foto("LLANTAS")]);
+
+    expect(bloques.map((b) => b.label)).toEqual(["Lateral", "Placa", "Llantas"]);
+    expect(bloques[2].foto).toEqual(foto("LLANTAS"));
   });
 });
 

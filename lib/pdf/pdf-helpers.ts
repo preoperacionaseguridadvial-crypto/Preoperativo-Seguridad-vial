@@ -109,6 +109,24 @@ export function fotoPorTipo<T extends { tipo: string }>(fotos: T[], tipo: string
 }
 
 /**
+ * Bloques de la sección "FOTOS DIARIAS DEL VEHÍCULO" del PDF: lateral y placa
+ * siempre (el componente dibuja "Sin foto registrada" si faltan) y, solo si
+ * existe, la foto de las llantas (solo MOTO, desde la feature
+ * checklist-bueno-malo): los carros y las inspecciones anteriores no la tienen
+ * y no deben mostrar un bloque vacío.
+ */
+export function bloquesFotosDiariasPdf<T extends { tipo: string }>(
+  fotos: T[],
+): { label: string; foto: T | null }[] {
+  const bloques = [
+    { label: "Lateral", foto: fotoPorTipo(fotos, "LATERAL") },
+    { label: "Placa", foto: fotoPorTipo(fotos, "PLACA") },
+  ];
+  const llantas = fotoPorTipo(fotos, "LLANTAS");
+  return llantas ? [...bloques, { label: "Llantas", foto: llantas }] : bloques;
+}
+
+/**
  * Texto Sí/No/— para una respuesta booleana-o-sin-responder de la
  * declaración de estado del conductor (fase soporte-moto-carro, Slice 5,
  * A6) — mismo criterio que `siNoOTexto` en

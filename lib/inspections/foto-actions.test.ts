@@ -68,6 +68,44 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+// Foto de las llantas (feature checklist-bueno-malo, solo MOTO): mismo mecanismo
+// que lateral/placa (reemplazable mientras EN_PROCESO, invalida la firma del
+// conductor al cambiarla).
+describe("subirFotoInspeccion — foto de las llantas", () => {
+  it("MOTO: guarda la foto LLANTAS y reemplazarla invalida la firma del conductor", async () => {
+    const { worker, inspection } = await crearInspeccionEnProcesoDeTrabajador();
+
+    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto());
+    expect(
+      await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS } }),
+    ).toBe(1);
+
+    await prisma.firma.create({
+      data: { inspectionId: inspection.id, userId: worker.id, tipo: TipoFirma.CONDUCTOR, s3Key: "firmas/test.png" },
+    });
+    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto());
+
+    expect(
+      await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS } }),
+    ).toBe(1);
+    expect(await prisma.firma.count({ where: { inspectionId: inspection.id, tipo: TipoFirma.CONDUCTOR } })).toBe(0);
+  });
+
+  it("CARRO: rechaza la foto de las llantas sin subir nada a S3", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR);
+    const vehicle = await crearVehiculo({ tipoVehiculo: "CARRO" });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
+
+    await expect(
+      subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto()),
+    ).rejects.toThrow(/solo aplica a motos/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+});
+
 // Hardening (#2): tipo, tamaño y contenido real (magic bytes) se validan antes
 // de subir nada a S3; la key y el contentType salen del tipo validado.
 describe("subirFotoInspeccion — validación del archivo", () => {

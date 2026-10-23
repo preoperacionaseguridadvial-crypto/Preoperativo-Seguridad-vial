@@ -94,6 +94,49 @@ describe("construirPasosFlujo", () => {
   });
 });
 
+describe("pasos de foto dentro del recorrido", () => {
+  const catalogo = [
+    { nombre: "Documentación", items: [{ id: "d1", orden: 1 }] },
+    {
+      nombre: "Inspección Visual",
+      items: [
+        { id: "luces", orden: 10 },
+        { id: "llantas", orden: 20, fotoDespues: "llantas" as const },
+      ],
+    },
+    { nombre: "Fluidos", items: [{ id: "aceite", orden: 30 }] },
+  ];
+
+  it("pasosChecklistEnOrden pone el paso de foto justo después del ítem que la pide", () => {
+    expect(pasosChecklistEnOrden(catalogo, "Documentación")).toEqual([
+      { tipo: "lista" },
+      { tipo: "item", id: "luces", categoria: "Inspección Visual" },
+      { tipo: "item", id: "llantas", categoria: "Inspección Visual" },
+      { tipo: "foto", clave: "llantas" },
+      { tipo: "item", id: "aceite", categoria: "Fluidos" },
+    ]);
+  });
+
+  it("construirPasosFlujo la expone como foto-llantas, entre Llantas y el ítem siguiente", () => {
+    const pasos = construirPasosFlujo(catalogo, "Documentación", 3);
+
+    expect(pasos.slice(0, 6)).toEqual([
+      "medidas",
+      "checklist",
+      "checklist/luces",
+      "checklist/llantas",
+      "foto-llantas",
+      "checklist/aceite",
+    ]);
+  });
+
+  it("sin ítems que pidan foto no hay pasos de foto", () => {
+    expect(pasosChecklistEnOrden([{ nombre: "Fluidos", items: [{ id: "a", orden: 1 }] }], "Documentación")).toEqual([
+      { tipo: "item", id: "a", categoria: "Fluidos" },
+    ]);
+  });
+});
+
 describe("pasosChecklistEnOrden", () => {
   it("devuelve la lista de documentos primero y luego los ítems por orden global (empate: orden del catálogo)", () => {
     const pasos = pasosChecklistEnOrden(

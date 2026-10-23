@@ -14,7 +14,7 @@ vi.mock("@/lib/storage/s3", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, Role, TipoFotoInspeccion } from "@/generated/prisma/client";
+import { InspectionStatus, Role, TipoFotoInspeccion, TipoVehiculo } from "@/generated/prisma/client";
 import { POST } from "@/app/(worker)/inspecciones/[id]/fotos/[tipo]/subir/route";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 import { fijarHoraEnVentana, restaurarHora } from "@/test/helpers/horario";
@@ -33,9 +33,10 @@ function llamar(id: string, tipo: string, conArchivo = true) {
 async function inspeccionDe(
   role: Role = Role.TRABAJADOR,
   status: InspectionStatus = InspectionStatus.EN_PROCESO,
+  tipoVehiculo: TipoVehiculo = TipoVehiculo.MOTO,
 ) {
   const worker = await crearUsuario(role);
-  const vehicle = await crearVehiculo();
+  const vehicle = await crearVehiculo({ tipoVehiculo });
   const inspection = await prisma.inspection.create({
     data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id, status },
   });
@@ -71,6 +72,27 @@ describe("POST /inspecciones/[id]/fotos/[tipo]/subir", () => {
     });
     expect(fila?.s3Key).toBe(`fotos-inspeccion/${inspection.id}/LATERAL.jpg`);
     expect(mockUploadObject).toHaveBeenCalledOnce();
+  });
+
+  it("llantas en una MOTO: guarda la foto de las llantas", async () => {
+    const { worker, inspection } = await inspeccionDe();
+    mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
+    const res = await llamar(inspection.id, "llantas");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const fila = await prisma.fotoInspeccion.findUnique({
+      where: { inspectionId_tipo: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS } },
+    });
+    expect(fila?.s3Key).toBe(`fotos-inspeccion/${inspection.id}/LLANTAS.jpg`);
+  });
+
+  it("llantas en un CARRO: 400, la foto solo aplica a motos", async () => {
+    const { worker, inspection } = await inspeccionDe(Role.TRABAJADOR, InspectionStatus.EN_PROCESO, TipoVehiculo.CARRO);
+    mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
+    const res = await llamar(inspection.id, "llantas");
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/solo aplica a motos/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
   });
 
   it("tipo desconocido: 404 y no sube nada", async () => {

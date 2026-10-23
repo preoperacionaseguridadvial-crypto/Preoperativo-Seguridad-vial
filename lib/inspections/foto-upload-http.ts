@@ -7,10 +7,14 @@ import { ForbiddenError, UnauthenticatedError } from "@/lib/auth/requireRole";
 
 export const MENSAJE_ERROR_GENERICO_FOTO = "No se pudo guardar la foto. Intentá de nuevo.";
 
-/** `lateral`/`placa` (cualquier caja) -> enum; cualquier otra cosa -> `null`. */
+/** `lateral`/`placa`/`llantas` (cualquier caja) -> enum; cualquier otra cosa -> `null`. */
 export function parseTipoFoto(raw: string): TipoFotoInspeccion | null {
   const valor = raw.toUpperCase();
-  return valor === TipoFotoInspeccion.LATERAL || valor === TipoFotoInspeccion.PLACA ? valor : null;
+  return valor === TipoFotoInspeccion.LATERAL ||
+    valor === TipoFotoInspeccion.PLACA ||
+    valor === TipoFotoInspeccion.LLANTAS
+    ? valor
+    : null;
 }
 
 function esErrorDeInfraestructura(err: unknown): boolean {

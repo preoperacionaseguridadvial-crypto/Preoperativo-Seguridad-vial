@@ -159,6 +159,7 @@ describe("getFotosInspeccion", () => {
 
     expect(fotos.lateral).toBeNull();
     expect(fotos.placa).toBeNull();
+    expect(fotos.llantas).toBeNull();
   });
 
   it("devuelve cada foto en su slot correspondiente por tipo", async () => {
@@ -174,6 +175,19 @@ describe("getFotosInspeccion", () => {
 
     expect(fotos.lateral?.s3Key).toBe("x-lateral.jpg");
     expect(fotos.placa?.s3Key).toBe("x-placa.jpg");
+  });
+
+  it("devuelve la foto de las llantas en su propio slot, sin contarla como lateral ni placa", async () => {
+    const inspection = await crearInspeccionEnProceso();
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "x-llantas.jpg" },
+    });
+
+    const fotos = await getFotosInspeccion(inspection.id);
+
+    expect(fotos.llantas?.s3Key).toBe("x-llantas.jpg");
+    expect(fotos.lateral).toBeNull();
+    expect(fotos.placa).toBeNull();
   });
 });
 
@@ -393,6 +407,13 @@ describe("getNextStepPath — recorrido completo con el catálogo sembrado", () 
         }
         continue;
       }
+      if (path === `${base}/foto-llantas`) {
+        vistos.push("Foto de las llantas");
+        await prisma.fotoInspeccion.create({
+          data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "llantas.jpg" },
+        });
+        continue;
+      }
       const itemId = path.split("/checklist/")[1];
       if (!itemId) break;
       const item = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemId } });
@@ -408,11 +429,12 @@ describe("getNextStepPath — recorrido completo con el catálogo sembrado", () 
     return vistos;
   }
 
-  it("MOTO", async () => {
+  it("MOTO (con la foto de las llantas justo después de Llantas)", async () => {
     expect(await recorrer(TipoVehiculo.MOTO)).toEqual([
       "Documentos",
       "Luces externas con direccionales",
       "Llantas",
+      "Foto de las llantas",
       "Nivel de aceite",
       "Nivel líquido de frenos",
       "Frenos",
@@ -438,6 +460,80 @@ describe("getNextStepPath — recorrido completo con el catálogo sembrado", () 
       "Botiquín",
       "Extintor",
     ]);
+  });
+});
+
+// Foto de las llantas (feature checklist-bueno-malo): solo MOTO, paso propio
+// (`/foto-llantas`) entre el ítem Llantas y el siguiente del recorrido.
+describe("getNextStepPath — foto de las llantas (MOTO)", () => {
+  async function crearCatalogoConLlantas() {
+    const visual = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
+    const fluidos = await prisma.checklistCategory.create({ data: { nombre: "Fluidos", orden: 2 } });
+    return {
+      llantasMoto: await crearChecklistItem(visual.id, { nombre: "Llantas", orden: 20, tipoVehiculo: TipoVehiculo.MOTO }),
+      llantasCarro: await crearChecklistItem(visual.id, {
+        nombre: "Llantas, incluye repuesto",
+        orden: 21,
+        tipoVehiculo: TipoVehiculo.CARRO,
+      }),
+      aceite: await crearChecklistItem(fluidos.id, { nombre: "Nivel de aceite", orden: 30 }),
+    };
+  }
+
+  async function inspeccionDe(tipoVehiculo: TipoVehiculo) {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo });
+    const vehicle = await crearVehiculo({ tipoVehiculo });
+    return prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id, kilometraje: 100 },
+    });
+  }
+
+  async function responder(inspectionId: string, itemId: string) {
+    await prisma.inspectionItemResponse.create({ data: { inspectionId, checklistItemId: itemId, valor: "OK" } });
+  }
+
+  it("MOTO: tras responder Llantas manda a /foto-llantas, antes del siguiente ítem", async () => {
+    const items = await crearCatalogoConLlantas();
+    const inspection = await inspeccionDe(TipoVehiculo.MOTO);
+    await responder(inspection.id, items.llantasMoto.id);
+
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/foto-llantas`);
+  });
+
+  it("MOTO: con la foto ya subida sigue al siguiente ítem", async () => {
+    const items = await crearCatalogoConLlantas();
+    const inspection = await inspeccionDe(TipoVehiculo.MOTO);
+    await responder(inspection.id, items.llantasMoto.id);
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "llantas.jpg" },
+    });
+
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/checklist/${items.aceite.id}`);
+  });
+
+  it("MOTO: sin responder Llantas todavía no pide la foto", async () => {
+    const items = await crearCatalogoConLlantas();
+    const inspection = await inspeccionDe(TipoVehiculo.MOTO);
+
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/checklist/${items.llantasMoto.id}`);
+  });
+
+  it("CARRO: nunca pide la foto de las llantas", async () => {
+    const items = await crearCatalogoConLlantas();
+    const inspection = await inspeccionDe(TipoVehiculo.CARRO);
+    await responder(inspection.id, items.llantasCarro.id);
+
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/checklist/${items.aceite.id}`);
+  });
+
+  it("Atrás / Siguiente la incluyen en el orden del flujo", async () => {
+    const items = await crearCatalogoConLlantas();
+    const inspection = await inspeccionDe(TipoVehiculo.MOTO);
+    const base = `/inspecciones/${inspection.id}`;
+
+    expect(await getPreviousStepPath(inspection.id, "foto-llantas")).toBe(`${base}/checklist/${items.llantasMoto.id}`);
+    expect(await getFollowingStepPath(inspection.id, "foto-llantas")).toBe(`${base}/checklist/${items.aceite.id}`);
+    expect(await getPreviousStepPath(inspection.id, `checklist/${items.aceite.id}`)).toBe(`${base}/foto-llantas`);
   });
 });
 

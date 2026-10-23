@@ -9,7 +9,7 @@ import {
   cajasFirmaPdf,
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
-  fotoPorTipo,
+  bloquesFotosDiariasPdf,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
   formatSiNoPdf,
@@ -83,8 +83,6 @@ const TXT = {
   evidenciaFotografica: "EVIDENCIA FOTOGRÁFICA",
   novedadesTitulo: "NOVEDADES",
   fotosDiariasTitulo: "FOTOS DIARIAS DEL VEHÍCULO",
-  fotoLateralLabel: "Lateral",
-  fotoPlacaLabel: "Placa",
   fotoDiariaVacia: "Sin foto registrada",
   declaracionEstadoTitulo: "DECLARACIÓN DE ESTADO DEL CONDUCTOR",
   // Corrección Slice 5 (hallazgo WARNING resilience): "⚠" (U+26A0) no está
@@ -449,8 +447,7 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
   const novedadesConFotos = novedades.filter((n) => n.photos.length > 0);
 
   // Fase soporte-moto-carro, Slice 5 (A7): las 2 fotos diarias obligatorias.
-  const fotoLateral = fotoPorTipo(data.fotos, "LATERAL");
-  const fotoPlaca = fotoPorTipo(data.fotos, "PLACA");
+  const bloquesFotosDiarias = bloquesFotosDiariasPdf(data.fotos);
 
   // Fase soporte-moto-carro, Slice 5 (A6/D8): informativo únicamente — no
   // cambia ninguna lógica de aprobación (eso ya vive del lado del servidor,
@@ -607,13 +604,14 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
           </View>
         </View>
 
-        {/* FOTOS DIARIAS (Slice 5, A7) — lateral + placa, obligatorias por
-            inspección, independientes del resultado del checklist. */}
+        {/* FOTOS DIARIAS (Slice 5, A7) — lateral + placa (+ llantas en MOTO),
+            obligatorias por inspección, independientes del resultado del checklist. */}
         <View style={styles.fotosSeccion} wrap={false}>
           <Text style={styles.fotosTitulo}>{TXT.fotosDiariasTitulo}</Text>
           <View style={styles.fotosRow}>
-            <FotoDiariaBloque label={TXT.fotoLateralLabel} foto={fotoLateral} />
-            <FotoDiariaBloque label={TXT.fotoPlacaLabel} foto={fotoPlaca} />
+            {bloquesFotosDiarias.map(({ label, foto }) => (
+              <FotoDiariaBloque key={label} label={label} foto={foto} />
+            ))}
           </View>
         </View>
 
