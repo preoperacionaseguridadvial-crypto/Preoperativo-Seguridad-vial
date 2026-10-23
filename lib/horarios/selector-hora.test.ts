@@ -1,46 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
-  aHHMM,
-  aPartes,
+  HORAS_FRECUENTES,
+  ajustarHoras,
+  ajustarMinutos,
+  duracionTexto,
+  formatearFechaLarga,
   formatearHora12,
+  formatearRango,
   horaActualRedondeada,
+  partesDeHora,
+  rangoValido,
   sumarMinutos,
 } from "./selector-hora";
-
-describe("aPartes", () => {
-  it("convierte medianoche y mediodía", () => {
-    expect(aPartes("00:00")).toEqual({ hora12: 12, minuto: 0, periodo: "AM" });
-    expect(aPartes("12:00")).toEqual({ hora12: 12, minuto: 0, periodo: "PM" });
-  });
-  it("convierte horas de la mañana y la tarde", () => {
-    expect(aPartes("05:30")).toEqual({ hora12: 5, minuto: 30, periodo: "AM" });
-    expect(aPartes("17:30")).toEqual({ hora12: 5, minuto: 30, periodo: "PM" });
-    expect(aPartes("23:55")).toEqual({ hora12: 11, minuto: 55, periodo: "PM" });
-    expect(aPartes("13:00")).toEqual({ hora12: 1, minuto: 0, periodo: "PM" });
-  });
-  it("redondea los minutos hacia abajo a múltiplos de 5", () => {
-    expect(aPartes("08:59").minuto).toBe(55);
-    expect(aPartes("08:07").minuto).toBe(5);
-  });
-});
-
-describe("aHHMM", () => {
-  it("convierte 12 a. m. y 12 p. m.", () => {
-    expect(aHHMM({ hora12: 12, minuto: 0, periodo: "AM" })).toBe("00:00");
-    expect(aHHMM({ hora12: 12, minuto: 5, periodo: "PM" })).toBe("12:05");
-  });
-  it("convierte horas normales con cero a la izquierda", () => {
-    expect(aHHMM({ hora12: 5, minuto: 5, periodo: "AM" })).toBe("05:05");
-    expect(aHHMM({ hora12: 5, minuto: 30, periodo: "PM" })).toBe("17:30");
-    expect(aHHMM({ hora12: 11, minuto: 55, periodo: "PM" })).toBe("23:55");
-  });
-  it("es inversa de aPartes para minutos múltiplos de 5", () => {
-    for (let m = 0; m < 24 * 60; m += 5) {
-      const hhmm = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-      expect(aHHMM(aPartes(hhmm))).toBe(hhmm);
-    }
-  });
-});
 
 describe("sumarMinutos", () => {
   it("suma dentro del día", () => {
@@ -68,5 +39,92 @@ describe("formatearHora12", () => {
     expect(formatearHora12("17:30")).toBe("5:30 p. m.");
     expect(formatearHora12("00:05")).toBe("12:05 a. m.");
     expect(formatearHora12("12:00")).toBe("12:00 p. m.");
+  });
+});
+
+describe("HORAS_FRECUENTES", () => {
+  it("son las ocho horas rápidas en 24 h", () => {
+    expect(HORAS_FRECUENTES).toEqual(["06:00", "07:00", "08:00", "09:00", "12:00", "18:00", "19:00", "21:00"]);
+  });
+});
+
+describe("partesDeHora", () => {
+  it("separa horas y minutos", () => {
+    expect(partesDeHora("07:05")).toEqual({ horas: 7, minutos: 5 });
+  });
+  it("tolera vacío o inválido", () => {
+    expect(partesDeHora("")).toEqual({ horas: 0, minutos: 0 });
+    expect(partesDeHora("xx")).toEqual({ horas: 0, minutos: 0 });
+  });
+});
+
+describe("ajustarHoras", () => {
+  it("suma y resta una hora", () => {
+    expect(ajustarHoras("08:30", 1)).toBe("09:30");
+    expect(ajustarHoras("08:30", -1)).toBe("07:30");
+  });
+  it("da la vuelta entre 23 y 0 sin tocar minutos", () => {
+    expect(ajustarHoras("23:45", 1)).toBe("00:45");
+    expect(ajustarHoras("00:10", -1)).toBe("23:10");
+  });
+});
+
+describe("ajustarMinutos", () => {
+  it("avanza de 5 en 5 sin acarrear a la hora", () => {
+    expect(ajustarMinutos("08:30", 1)).toBe("08:35");
+    expect(ajustarMinutos("08:30", -1)).toBe("08:25");
+  });
+  it("da la vuelta entre 55 y 0", () => {
+    expect(ajustarMinutos("08:55", 1)).toBe("08:00");
+    expect(ajustarMinutos("08:00", -1)).toBe("08:55");
+  });
+  it("normaliza minutos fuera de la rejilla", () => {
+    expect(ajustarMinutos("08:32", 1)).toBe("08:35");
+    expect(ajustarMinutos("08:32", -1)).toBe("08:30");
+  });
+});
+
+describe("duracionTexto", () => {
+  it("formatea horas y minutos", () => {
+    expect(duracionTexto("17:30", "19:00")).toBe("1 h 30 min");
+    expect(duracionTexto("17:00", "19:00")).toBe("2 h");
+    expect(duracionTexto("17:00", "17:45")).toBe("45 min");
+  });
+  it("da guion si falta un extremo o el rango no es válido", () => {
+    expect(duracionTexto("", "19:00")).toBe("-");
+    expect(duracionTexto("19:00", "19:00")).toBe("-");
+    expect(duracionTexto("19:00", "18:00")).toBe("-");
+  });
+});
+
+describe("rangoValido", () => {
+  it("exige ambos extremos y hasta mayor que desde", () => {
+    expect(rangoValido("17:00", "18:00")).toBe(true);
+    expect(rangoValido("18:00", "18:00")).toBe(false);
+    expect(rangoValido("19:00", "18:00")).toBe(false);
+    expect(rangoValido("", "18:00")).toBe(false);
+    expect(rangoValido("17:00", "")).toBe(false);
+  });
+});
+
+describe("formatearRango", () => {
+  it("une ambas horas en 12 h", () => {
+    expect(formatearRango("17:30", "18:30")).toBe("5:30 p. m. – 6:30 p. m.");
+  });
+  it("dice 'No definido' si falta un extremo", () => {
+    expect(formatearRango("17:30", "")).toBe("No definido");
+    expect(formatearRango("", "")).toBe("No definido");
+  });
+});
+
+describe("formatearFechaLarga", () => {
+  it("escribe día, mes en español y año", () => {
+    expect(formatearFechaLarga("2026-10-24")).toBe("24 de octubre de 2026");
+    expect(formatearFechaLarga("2026-01-05")).toBe("5 de enero de 2026");
+  });
+  it("da guion si es vacía o inválida", () => {
+    expect(formatearFechaLarga("")).toBe("-");
+    expect(formatearFechaLarga("2026-13-40")).toBe("-");
+    expect(formatearFechaLarga("2026-02-30")).toBe("-");
   });
 });
