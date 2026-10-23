@@ -1,4 +1,5 @@
 import type { Role } from "@/generated/prisma/client";
+import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { formatFechaLarga } from "@/lib/fechas/formato";
 
 // Pantalla de inicio por rol: etiquetas y atajos. Todo puro (sin Prisma ni
@@ -18,6 +19,12 @@ export function primerNombre(nombre: string | null | undefined): string {
 export function fechaLegible(fecha: Date): string {
   const texto = formatFechaLarga(fecha);
   return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** Cargo del rol y, para el SST, el área a la que pertenece (pastilla del hero del inicio). */
+export function rolConAreaHero(rol: Role): string {
+  const cargo = etiquetaRol(rol);
+  return rol === "SST" ? `${cargo} · Seguridad y Salud en el Trabajo` : cargo;
 }
 
 export type IconoAtajo = "inspeccion" | "aprobaciones" | "consulta" | "dashboard" | "usuarios" | "configuracion" | "reloj";
@@ -54,6 +61,18 @@ const ATAJOS = {
     descripcion: "Indicadores y reportes",
     icono: "dashboard",
   },
+  dashboardSst: {
+    href: "/dashboard",
+    titulo: "Dashboard",
+    descripcion: "Indicadores y reportes del sistema.",
+    icono: "dashboard",
+  },
+  consultaSst: {
+    href: "/consulta-inspecciones",
+    titulo: "Consulta",
+    descripcion: "Buscar todas las inspecciones.",
+    icono: "consulta",
+  },
   usuarios: {
     href: "/admin/usuarios",
     titulo: "Usuarios",
@@ -63,7 +82,7 @@ const ATAJOS = {
   administracion: {
     href: "/admin/usuarios",
     titulo: "Administración",
-    descripcion: "Usuarios, vehículos y configuración",
+    descripcion: "Usuarios, vehículos y configuración.",
     icono: "usuarios",
   },
   configuracion: {
@@ -72,12 +91,6 @@ const ATAJOS = {
     descripcion: "Parámetros del formato",
     icono: "configuracion",
   },
-  habilitaciones: {
-    href: "/admin/habilitaciones",
-    titulo: "Inspecciones fuera de horario",
-    descripcion: "Habilitar recorredores y aprobadores",
-    icono: "reloj",
-  },
 } satisfies Record<string, Atajo>;
 
 const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
@@ -85,7 +98,7 @@ const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
   SUPERVISOR: [ATAJOS.aprobaciones, ATAJOS.consulta],
   SUPERVISOR_OLEARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
   DIRECTOR: [ATAJOS.dashboard, ATAJOS.consulta],
-  SST: [ATAJOS.dashboard, ATAJOS.consulta, ATAJOS.administracion, ATAJOS.habilitaciones],
+  SST: [ATAJOS.dashboardSst, ATAJOS.consultaSst, ATAJOS.administracion],
   ADMINISTRADOR: [ATAJOS.usuarios, ATAJOS.configuracion, ATAJOS.dashboard, ATAJOS.consulta],
 };
 
