@@ -9,17 +9,17 @@ import Link from "next/link";
  * `getPreviousStepPath` (lib/inspections/queries.ts) o lo fija cuando es una
  * subpantalla (novedad, foto de novedad, justificación).
  *
- * Se dibuja DENTRO de la barra del encabezado, al lado del logo (pedido del
+ * Se dibuja DENTRO de la barra del encabezado, a la izquierda (pedido del
  * dueño de producto: en el celular una fila propia desperdiciaba espacio):
  * posición absoluta sobre el contenedor `relative` del layout
  * (app/(worker)/inspecciones/layout.tsx), con el mismo alto que AppHeader
- * (h-12). Al salir del flujo, el contenido de la página sube.
+ * destacado (h-14). Al salir del flujo, el contenido de la página sube.
  */
 export function BotonAtras({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="absolute left-12 top-0 z-10 inline-flex h-12 items-center rounded-md px-3 text-base font-semibold text-brand hover:bg-brand/5 focus-visible:outline-2 focus-visible:outline-brand"
+      className="absolute left-2 top-0 z-10 inline-flex h-14 items-center rounded-md px-3 text-base font-semibold text-brand hover:bg-brand/5 focus-visible:outline-2 focus-visible:outline-brand sm:left-4"
     >
       <span aria-hidden="true">←</span>&nbsp;Atrás
     </Link>
