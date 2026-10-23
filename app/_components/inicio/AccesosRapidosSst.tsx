@@ -19,7 +19,7 @@ export function AccesosRapidosSst({ atajos }: { atajos: Atajo[] }) {
         <h2 className="text-lg font-semibold text-[#0B2A4A]">Accesos rápidos</h2>
         <p className="text-sm text-ink-muted">Selecciona una opción para continuar.</p>
       </div>
-      <ul className="grid gap-4 lg:grid-cols-3">
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {atajos.map((atajo) => (
           <li key={`${atajo.href}-${atajo.titulo}`}>
             <Link
