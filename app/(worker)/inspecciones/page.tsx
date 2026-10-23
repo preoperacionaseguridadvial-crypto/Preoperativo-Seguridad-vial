@@ -13,20 +13,24 @@ import { pasosInicio } from "@/lib/inspections/pasos-inicio";
 import { esReutilizable } from "@/lib/inspections/reuso-inspeccion";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 import { getDatosInicioTrabajador } from "@/lib/inicio/trabajador-queries";
-import { CLASES_TONO } from "@/lib/inicio/accion-trabajador";
+import { CLASES_TONO, estadoUltimaInspeccion, tonoEstadoInspeccion } from "@/lib/inicio/accion-trabajador";
+import { fechaLegible, primerNombre } from "@/lib/inicio/atajos";
+import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
+import { estadoLegible } from "@/lib/inspections/reportes-queries";
+import { formatFechaHoraMedia } from "@/lib/fechas/formato";
+import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
 import { alertasDocumentosVehiculo, chipsDocumentosVehiculo } from "@/lib/inicio/vencimientos-vehiculo";
 import {
-  IconoCarro,
   IconoDePaso,
   IconoEscudo,
   IconoFlecha,
   IconoFlechaDerecha,
-  IconoMoto,
   IconoPlay,
   IconoReloj,
 } from "@/app/_components/inicio/Iconos";
 import { BotonIniciarInspeccion } from "./_components/BotonIniciarInspeccion";
 import { BotonDescartarInspeccion } from "./_components/BotonDescartarInspeccion";
+import { FotoVehiculo } from "./_components/FotoVehiculo";
 import { CLASES_BOTON_PRINCIPAL } from "./_components/clasesBotonPrincipal";
 
 // Punto de entrada del flujo del trabajador (Fase 2): iniciar una inspección
@@ -50,7 +54,7 @@ export default async function InspeccionesPage({
     getDatosInicioTrabajador(session.user.id),
     getInspeccionesEnProcesoDelTrabajador(session.user.id),
   ]);
-  const { vehiculo, fotoVehiculoUrl } = datos;
+  const { vehiculo, fotoVehiculoUrl, inspecciones, sede } = datos;
 
   // Progreso "N de M ítems" de cada inspección en proceso, y total de ítems
   // del checklist del vehículo para la vista previa de pasos.
@@ -104,8 +108,11 @@ export default async function InspeccionesPage({
     ? [[vehiculo.marca, vehiculo.modelo].filter(Boolean).join(" "), vehiculo.color].filter(Boolean).join(" · ")
     : "";
   const pasos = pasosInicio(totalItems);
-  // Las tarjetas se montan sobre el borde inferior de la banda; si hay un
-  // aviso de error antes de ellas, es el aviso quien sube.
+  const nombre = primerNombre(session.user.name);
+  // Estado de la última inspección (esperando / aprobada / rechazada / no apta).
+  const ultimoEstado = estadoUltimaInspeccion(inspecciones[0] ?? null, ahora);
+  // El contenido se monta sobre el borde inferior de la banda: lo primero
+  // (la fila de cerrar sesión) es quien sube.
   const subir = "-mt-12 sm:-mt-14";
 
   return (
@@ -122,6 +129,13 @@ export default async function InspeccionesPage({
         <div aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-2/5 bg-gradient-to-b from-transparent to-page" />
         <div className="relative mx-auto flex w-full max-w-[1350px] items-end justify-between gap-6 px-4 pb-20 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
           <header className="flex max-w-xl flex-col gap-2">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+              <span className="font-semibold text-ink">{nombre ? `Hola, ${nombre}` : "Hola"}</span>
+              <span className="rounded-full bg-status-info-soft px-2 py-0.5 text-xs font-semibold text-status-info-ink">
+                {etiquetaUsuario(session.user.role, sede)}
+              </span>
+              <span>{fechaLegible(ahora)}</span>
+            </p>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1565D8]">
               Seguridad vial, siempre contigo
             </p>
@@ -142,11 +156,15 @@ export default async function InspeccionesPage({
       </section>
 
       <div className="relative z-10 mx-auto flex w-full max-w-[1350px] flex-col gap-5 px-4 sm:px-6">
+        <div className={`${subir} flex justify-end`}>
+          <CerrarSesionForm destacado />
+        </div>
+
         {error && (
           // Bien visible: es lo que explica por qué no pudo iniciar (p. ej. fuera de horario).
           <div
             role="alert"
-            className={`${subir} flex items-start gap-4 rounded-2xl border-2 border-[#D92D20] border-l-8 bg-[#FEF3F2] px-5 py-4 shadow-lg`}
+            className={`flex items-start gap-4 rounded-2xl border-2 border-[#D92D20] border-l-8 bg-[#FEF3F2] px-5 py-4 shadow-lg`}
           >
             <span
               aria-hidden
@@ -162,31 +180,15 @@ export default async function InspeccionesPage({
         )}
 
         {!vehiculo && (
-          <p
-            className={`${error ? "" : subir} rounded-2xl bg-status-warn-soft px-4 py-3 text-sm text-status-warn-ink shadow-sm`}
-          >
+          <p className="rounded-2xl bg-status-warn-soft px-4 py-3 text-sm text-status-warn-ink shadow-sm">
             Pendiente de asignación de vehículo: solicita al Administrador SST o al Administrador que complete tu hoja de vida.
           </p>
         )}
 
         {vehiculo && (
-          <div className={`grid gap-4 lg:grid-cols-[2fr_1fr] ${error ? "" : subir}`}>
+          <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
             <article className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4 shadow-md sm:flex-row sm:items-center sm:p-5">
-              {fotoVehiculoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal, no candidata a next/image remoto.
-                <img
-                  src={fotoVehiculoUrl}
-                  alt={`Foto del vehículo ${vehiculo.placa}`}
-                  className="h-44 w-full shrink-0 rounded-xl border border-border bg-page object-cover sm:h-36 sm:w-56"
-                />
-              ) : (
-                <span
-                  aria-hidden
-                  className="flex h-32 w-full shrink-0 items-center justify-center rounded-xl bg-status-info-soft text-status-info-ink sm:h-36 sm:w-56"
-                >
-                  {esCarro ? <IconoCarro className="size-16" /> : <IconoMoto className="size-16" />}
-                </span>
-              )}
+              <FotoVehiculo url={fotoVehiculoUrl} placa={vehiculo.placa} esCarro={esCarro} />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <span className="w-fit rounded-full bg-status-info-soft px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-[#1565D8]">
                   Unidad asignada
@@ -262,6 +264,14 @@ export default async function InspeccionesPage({
               </li>
             ))}
           </ul>
+        )}
+
+        {ultimoEstado && (
+          <section className={`flex flex-col gap-1 rounded-2xl px-4 py-3 shadow-sm ${CLASES_TONO[ultimoEstado.tono]}`}>
+            <span className="text-xs font-semibold uppercase tracking-wide">Tu última inspección</span>
+            <h2 className="text-lg font-semibold">{ultimoEstado.titulo}</h2>
+            {ultimoEstado.detalle && <p className="text-sm">{ultimoEstado.detalle}</p>}
+          </section>
         )}
 
         {enProceso.length > 0 && (
@@ -354,6 +364,27 @@ export default async function InspeccionesPage({
                 </li>
               ))}
             </ol>
+          </section>
+        )}
+
+        {inspecciones.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-xl font-bold text-ink">Últimas inspecciones</h2>
+            <ul className="flex flex-col gap-2.5">
+              {inspecciones.map((inspeccion) => (
+                <li
+                  key={inspeccion.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-4 py-3 shadow-sm"
+                >
+                  <span className="text-sm text-ink sm:text-base">{formatFechaHoraMedia(inspeccion.startedAt)}</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${CLASES_TONO[tonoEstadoInspeccion(inspeccion.status)]}`}
+                  >
+                    {estadoLegible(inspeccion.status)}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
       </div>

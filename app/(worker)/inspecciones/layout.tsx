@@ -11,7 +11,7 @@ export default function InspeccionesLayout({ children }: { children: React.React
     // `relative`: ancla del "← Atrás" que cada paso dibuja en la barra del
     // encabezado (ver _components/BotonAtras.tsx).
     <div className="relative flex flex-1 flex-col">
-      <AppHeader destacado />
+      <AppHeader destacado hrefInicio="/inspecciones" />
       {children}
     </div>
   );

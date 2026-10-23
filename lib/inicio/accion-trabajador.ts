@@ -152,3 +152,17 @@ export const CLASES_TONO: Record<TonoEstado, string> = {
   info: "bg-status-info-soft text-status-info-ink",
   neutral: "bg-status-neutral-soft text-status-neutral-ink",
 };
+
+/**
+ * Estado de la última inspección del trabajador para mostrar como aviso
+ * (esperando aprobación, aprobada, rechazada, no apta). `null` cuando no hay
+ * nada que avisar: sin inspección, de un turno anterior o EN_PROCESO (eso ya
+ * lo muestran la tarjeta "En proceso" y el botón Continuar).
+ */
+export function estadoUltimaInspeccion(
+  ultima: InspeccionResumen | null,
+  ahora: Date = new Date(),
+): AccionTrabajador | null {
+  const accion = accionPrincipalTrabajador(ultima, ahora);
+  return accion.estado === "INICIAR" || accion.estado === "CONTINUAR" ? null : accion;
+}
