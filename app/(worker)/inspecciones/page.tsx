@@ -127,17 +127,6 @@ export default async function InspeccionesPage({
             <h1 className="text-3xl font-extrabold leading-tight text-ink sm:text-5xl">Inspección preoperacional</h1>
             <p className="text-base text-ink-muted sm:text-lg">Revisa tu vehículo antes de salir a operar.</p>
           </header>
-          <div className="hidden items-stretch gap-4 md:flex">
-            <span aria-hidden className="w-0.5 rounded-full bg-[#1565D8]" />
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold uppercase leading-relaxed tracking-[0.2em] text-ink">
-                Conductores más seguros
-                <br />
-                Vías más seguras
-              </p>
-              <span aria-hidden className="h-1 w-12 rounded-full bg-[#1565D8]" />
-            </div>
-          </div>
         </div>
       </section>
 
