@@ -155,8 +155,11 @@ export default async function InspeccionesPage({
         </div>
       </section>
 
+      {/* En celular (max-sm) el botón de iniciar/continuar sube con `order`
+          hasta quedar justo después de "Cerrar sesión" y del aviso de error,
+          para que se vea sin hacer scroll. En pantallas más grandes no cambia. */}
       <div className="relative z-10 mx-auto flex w-full max-w-[1350px] flex-col gap-5 px-4 sm:px-6">
-        <div className={`${subir} flex justify-end`}>
+        <div className={`${subir} flex justify-end max-sm:order-[-2]`}>
           <CerrarSesionForm destacado />
         </div>
 
@@ -164,7 +167,7 @@ export default async function InspeccionesPage({
           // Bien visible: es lo que explica por qué no pudo iniciar (p. ej. fuera de horario).
           <div
             role="alert"
-            className={`flex items-start gap-4 rounded-2xl border-2 border-[#D92D20] border-l-8 bg-[#FEF3F2] px-5 py-4 shadow-lg`}
+            className={`flex items-start gap-4 rounded-2xl border-2 border-[#D92D20] border-l-8 bg-[#FEF3F2] px-5 py-4 shadow-lg max-sm:order-[-2]`}
           >
             <span
               aria-hidden
@@ -319,13 +322,16 @@ export default async function InspeccionesPage({
         )}
 
         {vehiculo?.activo && !hayEnProcesoVigente && (
-          <form action={iniciarAction.bind(null, vehiculo.id)}>
+          <form action={iniciarAction.bind(null, vehiculo.id)} className="max-sm:order-[-1]">
             <BotonIniciarInspeccion>Iniciar inspección</BotonIniciarInspeccion>
           </form>
         )}
 
         {vehiculo?.activo && inspeccionVigente && (
-          <Link href={`/inspecciones/${inspeccionVigente.id}`} className={CLASES_BOTON_PRINCIPAL}>
+          <Link
+            href={`/inspecciones/${inspeccionVigente.id}`}
+            className={`${CLASES_BOTON_PRINCIPAL} max-sm:order-[-1]`}
+          >
             <IconoPlay />
             <span className="flex-1 text-center">Continuar inspección</span>
             <IconoFlechaDerecha />
