@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { iniciarInspeccion, cancelarInspeccion } from "@/lib/inspections/actions";
@@ -127,6 +128,14 @@ export default async function InspeccionesPage({
             <h1 className="text-3xl font-extrabold leading-tight text-ink sm:text-5xl">Inspección preoperacional</h1>
             <p className="text-base text-ink-muted sm:text-lg">Revisa tu vehículo antes de salir a operar.</p>
           </header>
+          {/* El PNG trae fondo blanco: multiply lo funde con el fondo claro de la banda. */}
+          <Image
+            src="/logo/ess-ltda.png"
+            alt="Escort Security Services"
+            width={140}
+            height={158}
+            className="hidden h-28 w-auto self-center mix-blend-multiply sm:block lg:h-36"
+          />
         </div>
       </section>
 
