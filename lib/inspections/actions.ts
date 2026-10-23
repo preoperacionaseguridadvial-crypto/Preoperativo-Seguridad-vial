@@ -367,9 +367,9 @@ export async function responderItem(
 
   const observacionLimpia = observacion?.trim() || "";
   const ubicacionLimpia = ubicacion?.trim() || "";
-  // `esNovedad` es true para FALLA (binario) y MALO (triestado) — BAJO queda
-  // afuera a propósito (decisión confirmada: solo dato/observación, no
-  // Novedad, no bloquea el envío). Ver lib/inspections/respuesta.ts.
+  // `esNovedad` es true para FALLA (binario, "Malo" en pantalla), BAJO
+  // (triestado, fluidos) y MALO (histórico): los tres crean/mantienen la
+  // Novedad. Ver lib/inspections/respuesta.ts.
   if (esNovedad(valor)) {
     if (!observacionLimpia) {
       throw new Error(

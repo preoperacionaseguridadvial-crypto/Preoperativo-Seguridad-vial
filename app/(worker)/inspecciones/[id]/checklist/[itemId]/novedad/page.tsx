@@ -15,6 +15,7 @@ import {
   CampoFotoNovedad,
 } from "@/app/(worker)/inspecciones/_components/CampoFotoNovedad";
 import { getTiposNovedadParaItem, TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
+import { etiquetaRespuesta } from "@/lib/inspections/etiquetas-respuesta";
 
 // Pantalla de novedad (sección 11 del brief): textarea obligatoria. La foto
 // (opcional) se toma en esta misma pantalla: queda comprimida y en vista
@@ -91,7 +92,7 @@ export default async function NovedadPage({
       <div>
         <p className="text-xs uppercase text-gray-400">{item.category.nombre}</p>
         <h1 className="text-xl font-semibold text-[#0B3B60]">
-          {item.nombre} — {esFluido ? "Bajo" : "Falla"}
+          {item.nombre} — {etiquetaRespuesta(valorNovedad)}
         </h1>
         <p className="mt-1 text-sm text-gray-500">Describí qué encontraste.</p>
       </div>

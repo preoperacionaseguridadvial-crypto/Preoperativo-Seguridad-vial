@@ -111,14 +111,14 @@ describe("categoriasGenericasPdf", () => {
 // fuera "OK." (bug de presentación, no solo de omisión de categoría).
 describe("formatoValorItemPdf", () => {
   it("BINARIO: OK y FALLA", () => {
-    expect(formatoValorItemPdf(RespuestaChecklist.OK)).toEqual({ texto: "✓ OK.", estilo: "ok" });
+    expect(formatoValorItemPdf(RespuestaChecklist.OK)).toEqual({ texto: "✓ BUENO", estilo: "ok" });
     expect(formatoValorItemPdf(RespuestaChecklist.FALLA)).toEqual({
-      texto: "X FALLA, DAÑO, FALTANTE",
+      texto: "X MALO",
       estilo: "falla",
     });
   });
 
-  it("TRIESTADO: BUENO, BAJO y MALO tienen textos distintos entre sí y de OK/FALLA", () => {
+  it("TRIESTADO: BUENO, BAJO y MALO; BUENO/MALO comparten texto con OK/FALLA (solo cambia la etiqueta)", () => {
     const bueno = formatoValorItemPdf(RespuestaChecklist.BUENO);
     const bajo = formatoValorItemPdf(RespuestaChecklist.BAJO);
     const malo = formatoValorItemPdf(RespuestaChecklist.MALO);
@@ -128,8 +128,11 @@ describe("formatoValorItemPdf", () => {
     expect(bajo).toEqual({ texto: "X BAJO", estilo: "falla" });
     expect(malo.estilo).toBe("falla");
 
-    const textos = new Set([bueno.texto, bajo.texto, malo.texto, "✓ OK.", "X FALLA, DAÑO, FALTANTE"]);
-    expect(textos.size).toBe(5);
+    expect(bueno.texto).toBe("✓ BUENO");
+    expect(malo.texto).toBe("X MALO");
+    expect(formatoValorItemPdf(RespuestaChecklist.OK).texto).toBe(bueno.texto);
+    expect(formatoValorItemPdf(RespuestaChecklist.FALLA).texto).toBe(malo.texto);
+    expect(new Set([bueno.texto, bajo.texto, malo.texto]).size).toBe(3);
   });
 });
 

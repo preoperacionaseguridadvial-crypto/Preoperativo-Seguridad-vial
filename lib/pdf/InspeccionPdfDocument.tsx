@@ -651,7 +651,9 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
                     <Text style={styles.novedadItemNombre}>
                       {(novedad.inspectionItemResponse?.checklistItem.nombre ?? "Novedad general").toUpperCase()}
                     </Text>
-                    <Text style={styles.novedadItemNombre}>X FALLA, DAÑO, FALTANTE</Text>
+                    <Text style={styles.novedadItemNombre}>
+                      {formatoValorItemPdf(novedad.inspectionItemResponse?.valor ?? "FALLA").texto}
+                    </Text>
                   </View>
                   <Text style={styles.novedadCampo}>Tipo: {TIPO_NOVEDAD_LABELS[novedad.tipo]}</Text>
                   {novedad.ubicacion && <Text style={styles.novedadCampo}>Ubicación: {novedad.ubicacion}</Text>}

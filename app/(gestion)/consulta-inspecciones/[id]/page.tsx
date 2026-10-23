@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/config";
 import { getInspeccionDetalleForOversight } from "@/lib/inspections/supervisor-queries";
 import { getFirmasInspeccion } from "@/lib/inspections/queries";
 import { TIPO_NOVEDAD_LABELS } from "@/lib/inspections/novedad-tipo";
+import { etiquetaRespuesta, type ValorRespuesta } from "@/lib/inspections/etiquetas-respuesta";
 import { AdjuntoNovedad } from "@/app/_components/AdjuntoNovedad";
 import { Role, Sede } from "@/generated/prisma/enums";
 import { etiquetaRol, etiquetaSede } from "@/lib/auth/etiquetas-rol";
@@ -334,18 +335,7 @@ function FirmaEvidencia({
 // Desde 2026-10-19 "Bajo" reemplaza a "Malo" en los fluidos (crea Novedad,
 // ver lib/inspections/respuesta.ts `esNovedad`) y se pinta en rojo como falla.
 function badgeLabel(valor: string) {
-  switch (valor) {
-    case "OK":
-      return "OK";
-    case "BUENO":
-      return "Bueno";
-    case "BAJO":
-      return "Bajo";
-    case "MALO":
-      return "Malo";
-    default:
-      return "Falla";
-  }
+  return etiquetaRespuesta(valor as ValorRespuesta);
 }
 
 function badgeClass(valor: string) {
