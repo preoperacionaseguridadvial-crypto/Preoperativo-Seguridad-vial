@@ -11,7 +11,9 @@ import { AppHeader } from "@/app/_components/AppHeader";
 import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
 import { SaludoInicio } from "@/app/_components/inicio/SaludoInicio";
 import { AtajosInicio } from "@/app/_components/inicio/AtajosInicio";
-import { ResumenSupervisor } from "@/app/_components/inicio/ResumenSupervisor";
+import { EncabezadoAprobador } from "@/app/_components/inicio/EncabezadoAprobador";
+import { PendientesPorRevisar } from "@/app/_components/inicio/PendientesPorRevisar";
+import { AccesosRapidosAprobador } from "@/app/_components/inicio/AccesosRapidosAprobador";
 import { ResumenDelDia } from "@/app/_components/inicio/ResumenDelDia";
 import { HeroInicioSst } from "@/app/_components/inicio/HeroInicioSst";
 import { AccesosRapidosSst } from "@/app/_components/inicio/AccesosRapidosSst";
@@ -64,6 +66,20 @@ export default async function Home({
     rolAprobador ? habilitacionAprobacionHasta(user.id, ahora) : null,
   ]);
 
+  if (pendientes) {
+    return (
+      <div className="flex flex-1 flex-col">
+        {/* Sin AppHeader: el encabezado ya lleva el saludo y cerrar sesión. */}
+        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
+          <EncabezadoAprobador nombre={user.name} rol={rol} ahora={ahora} />
+          {avisoDecision && <AvisoDecision aviso={avisoDecision} />}
+          <PendientesPorRevisar pendientes={pendientes} ahora={ahora} habilitacionHasta={habilitacionHasta} />
+          <AccesosRapidosAprobador atajos={atajosPorRol(rol)} />
+        </main>
+      </div>
+    );
+  }
+
   if (rol === "SST") {
     return (
       <div className="flex flex-1 flex-col">
@@ -86,8 +102,6 @@ export default async function Home({
       <AppHeader enInicio />
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-4 py-6">
         <SaludoInicio nombre={user.name} rol={rol} ahora={ahora} />
-        {avisoDecision && <AvisoDecision aviso={avisoDecision} />}
-        {pendientes && <ResumenSupervisor pendientes={pendientes} ahora={ahora} habilitacionHasta={habilitacionHasta} />}
         {resumenDia && <ResumenDelDia resumen={resumenDia} />}
         <AtajosInicio atajos={atajosPorRol(rol)} />
         {vencimientos && <VencimientosVehiculos vehiculos={vencimientos} />}
