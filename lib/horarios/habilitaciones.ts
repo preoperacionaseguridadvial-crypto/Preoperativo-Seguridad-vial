@@ -38,14 +38,33 @@ export async function habilitacionAprobacionHasta(aprobadorId: string, ahora: Da
   return habilitacion?.hasta ?? null;
 }
 
+/** Motivo del bloqueo por horario; decide qué mensaje muestra la pantalla de bloqueo. */
+export type MotivoBloqueoHorario = "INICIO" | "CONTINUAR" | "APROBACION";
+
+/**
+ * Error de negocio por horario. Lleva el mismo mensaje de siempre y un
+ * `motivo` tipado para que las pantallas distingan este caso de cualquier otro
+ * fallo sin comparar textos.
+ */
+export class HorarioBloqueadoError extends Error {
+  constructor(
+    readonly motivo: MotivoBloqueoHorario,
+    mensaje: string,
+  ) {
+    super(mensaje);
+    this.name = "HorarioBloqueadoError";
+  }
+}
+
 async function bloquear(params: {
   userId: string;
   entityType: "User" | "Inspection";
   entityId: string;
   accion: string;
+  motivo: "INICIO" | "CONTINUAR";
   mensaje: string;
 }): Promise<never> {
-  const { userId, entityType, entityId, accion, mensaje } = params;
+  const { userId, entityType, entityId, accion, motivo, mensaje } = params;
   await logAudit({
     userId,
     action: "INSPECCION_FUERA_DE_HORARIO_BLOQUEADA",
@@ -53,18 +72,46 @@ async function bloquear(params: {
     entityId,
     metadata: { accion },
   });
-  throw new Error(mensaje);
+  throw new HorarioBloqueadoError(motivo, mensaje);
+}
+
+// Predicados sin efectos (no lanzan ni auditan): la regla vive aquí una sola
+// vez y la usan tanto los `exigir*` como las pantallas que muestran el bloqueo.
+
+/** Decide si puede iniciar (o descartar) ahora: ventana abierta o habilitación RECORREDOR vigente. */
+export async function puedeIniciarInspeccion(trabajadorId: string, ahora: Date): Promise<boolean> {
+  if (ventanaActual(ahora) !== null) return true;
+  return (await habilitacionVigente(trabajadorId, TipoHabilitacion.RECORREDOR, ahora)) !== null;
+}
+
+async function evaluarContinuar(
+  inspection: { workerId: string; startedAt: Date },
+  ahora: Date,
+): Promise<{ permitido: boolean; habilitacionId: string | null }> {
+  if (iniciadaEnLaVentana(ventanaActual(ahora), inspection.startedAt)) {
+    return { permitido: true, habilitacionId: null };
+  }
+  const habilitacion = await habilitacionVigente(inspection.workerId, TipoHabilitacion.RECORREDOR, ahora);
+  return { permitido: habilitacion !== null, habilitacionId: habilitacion?.id ?? null };
+}
+
+/** Decide si la inspección puede continuar: iniciada en la ventana abierta o habilitación RECORREDOR vigente. */
+export async function puedeContinuarInspeccion(
+  inspection: { workerId: string; startedAt: Date },
+  ahora: Date,
+): Promise<boolean> {
+  return (await evaluarContinuar(inspection, ahora)).permitido;
 }
 
 /** Exige ventana abierta o habilitación vigente para iniciar una inspección. */
 export async function exigirHorarioParaIniciar(trabajadorId: string, accion: string, ahora: Date) {
-  if (ventanaActual(ahora) !== null) return;
-  if (await habilitacionVigente(trabajadorId, TipoHabilitacion.RECORREDOR, ahora)) return;
+  if (await puedeIniciarInspeccion(trabajadorId, ahora)) return;
   await bloquear({
     userId: trabajadorId,
     entityType: "User",
     entityId: trabajadorId,
     accion,
+    motivo: "INICIO",
     mensaje: MENSAJE_INICIO_FUERA_DE_HORARIO,
   });
 }
@@ -79,13 +126,13 @@ export async function exigirHorarioParaCancelar(
   accion: string,
   ahora: Date,
 ) {
-  if (ventanaActual(ahora) !== null) return;
-  if (await habilitacionVigente(inspection.workerId, TipoHabilitacion.RECORREDOR, ahora)) return;
+  if (await puedeIniciarInspeccion(inspection.workerId, ahora)) return;
   await bloquear({
     userId: inspection.workerId,
     entityType: "Inspection",
     entityId: inspection.id,
     accion,
+    motivo: "INICIO",
     mensaje: MENSAJE_INICIO_FUERA_DE_HORARIO,
   });
 }
@@ -100,16 +147,14 @@ export async function exigirHorarioParaContinuar(
   accion: string,
   ahora: Date,
 ): Promise<{ habilitacionId: string | null }> {
-  if (iniciadaEnLaVentana(ventanaActual(ahora), inspection.startedAt)) {
-    return { habilitacionId: null };
-  }
-  const habilitacion = await habilitacionVigente(inspection.workerId, TipoHabilitacion.RECORREDOR, ahora);
-  if (habilitacion) return { habilitacionId: habilitacion.id };
+  const { permitido, habilitacionId } = await evaluarContinuar(inspection, ahora);
+  if (permitido) return { habilitacionId };
   return bloquear({
     userId: inspection.workerId,
     entityType: "Inspection",
     entityId: inspection.id,
     accion,
+    motivo: "CONTINUAR",
     mensaje: MENSAJE_CONTINUAR_FUERA_DE_HORARIO,
   });
 }
@@ -138,5 +183,5 @@ export async function exigirPlazoParaDecidir(
     entityId: inspection.id,
     metadata: { accion, etapa },
   });
-  throw new Error(MENSAJE_APROBACION_FUERA_DE_PLAZO);
+  throw new HorarioBloqueadoError("APROBACION", MENSAJE_APROBACION_FUERA_DE_PLAZO);
 }

@@ -18,6 +18,7 @@ import {
   etapaParaRol,
   tipoFirmaPendiente,
 } from "@/lib/inspections/cola-aprobacion";
+import { PantallaBloqueoHorario } from "@/app/_components/PantallaBloqueoHorario";
 import { formatFecha, formatFechaHora, formatHora } from "@/lib/fechas/formato";
 import {
   MENSAJE_APROBACION_FUERA_DE_PLAZO,
@@ -132,6 +133,11 @@ export default async function AprobacionDetallePage({
   const habilitacionHasta =
     puedeDecidir && !decidida ? await habilitacionAprobacionHasta(session.user.id, ahora) : null;
   const plazo = estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta });
+  // Le toca decidir pero el plazo venció y no tiene habilitación: pantalla de
+  // bloqueo en vez de la inspección (los demás roles siguen viéndola en lectura).
+  if (puedeDecidir && !decidida && !plazo.puedeDecidir) {
+    return <PantallaBloqueoHorario motivo="APROBACION" href="/" />;
+  }
   const pendiente = esperaA !== null;
   const tecnicomecanicaVencida = Boolean(
     inspection.vehicle.fechaVencimientoTecnicomecanica &&
