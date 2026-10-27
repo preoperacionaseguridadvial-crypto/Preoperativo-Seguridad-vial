@@ -94,7 +94,7 @@ describe("colas por rol y consulta por sede", () => {
     await limpiarBaseDeTest();
   });
 
-  async function crear(sede: Sede | null, extra: { revisada?: boolean } = {}) {
+  async function crear(sede: Sede | null, extra: { revisada?: boolean; completedAt?: Date } = {}) {
     const worker = await crearUsuario(Role.TRABAJADOR);
     const vehicle = await crearVehiculo();
     const inspection = await prisma.inspection.create({
@@ -103,7 +103,7 @@ describe("colas por rol y consulta por sede", () => {
         conductorId: worker.id,
         vehicleId: vehicle.id,
         status: InspectionStatus.PENDIENTE_APROBACION,
-        completedAt: new Date(),
+        completedAt: extra.completedAt ?? new Date(),
         sede,
         revisadaSupervisorOleariariAt: extra.revisada ? new Date() : null,
       },
@@ -133,6 +133,15 @@ describe("colas por rol y consulta por sede", () => {
 
     expect(colaOleariari.map((i) => i.id)).toEqual([oleariari1.id]);
     expect(colaDirector.map((i) => i.id).sort()).toEqual([bogota.id, oleariari2.id].sort());
+  });
+
+  it("getInspeccionesPendientes ordena por envío descendente (la más reciente primero)", async () => {
+    const antigua = await crear(Sede.BOGOTA, { completedAt: new Date("2026-10-22T16:00:00Z") });
+    const reciente = await crear(Sede.BOGOTA, { completedAt: new Date("2026-10-23T15:00:00Z") });
+
+    const cola = await getInspeccionesPendientes(Role.SUPERVISOR);
+
+    expect(cola.map((i) => i.id)).toEqual([reciente.id, antigua.id]);
   });
 
   it("getAllInspeccionesForOversight filtra por sede cuando se pide", async () => {
