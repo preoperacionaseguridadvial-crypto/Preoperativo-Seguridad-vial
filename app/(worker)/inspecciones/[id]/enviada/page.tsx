@@ -6,6 +6,7 @@ import { Role } from "@/generated/prisma/enums";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { esperandoA, etapaPendiente, type DatosEtapa } from "@/lib/inspections/cola-aprobacion";
 import { formatFechaHora } from "@/lib/fechas/formato";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 // Quién aprueba depende de la sede (roles-oleariari): en Oleariari pasa primero
 // por el Supervisor Oleariari y después por el Director de Operaciones.
@@ -135,7 +136,7 @@ export default async function InspeccionEnviadaPage({
         </section>
       )}
 
-      {session.user.role === "SST" && (
+      {tienePermisosSst(session.user.role) && (
         <a
           href={`/api/inspecciones/${id}/pdf`}
           className="mt-2 rounded-md border border-[#0B3B60] px-4 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"

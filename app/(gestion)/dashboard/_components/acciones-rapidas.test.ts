@@ -5,10 +5,10 @@ import { accionesRapidasPara, puedeExportarExcel } from "./acciones-rapidas";
 // el panel de "Acciones rápidas" solo ofrece enlaces que el rol del visor
 // realmente puede abrir (nada que termine en 403 o en redirect).
 describe("puedeExportarExcel", () => {
-  it("solo DIRECTOR y SST (la ruta responde 403 al resto, incluido ADMINISTRADOR)", () => {
+  it("solo DIRECTOR, SST y ADMINISTRADOR (la ruta responde 403 al resto)", () => {
     expect(puedeExportarExcel("DIRECTOR")).toBe(true);
     expect(puedeExportarExcel("SST")).toBe(true);
-    expect(puedeExportarExcel("ADMINISTRADOR")).toBe(false);
+    expect(puedeExportarExcel("ADMINISTRADOR")).toBe(true);
     expect(puedeExportarExcel("TRABAJADOR")).toBe(false);
   });
 });
@@ -33,10 +33,9 @@ describe("accionesRapidasPara", () => {
     expect(hrefs).not.toContain("/admin/usuarios");
   });
 
-  it("ADMINISTRADOR ve usuarios pero no el Excel (la ruta responde 403)", () => {
+  it("ADMINISTRADOR ve las mismas acciones que SST (usuarios y Excel)", () => {
     const hrefs = accionesRapidasPara("ADMINISTRADOR", urlExcel).map((a) => a.href);
-    expect(hrefs).toContain("/admin/usuarios");
-    expect(hrefs).not.toContain(urlExcel);
+    expect(hrefs).toEqual(accionesRapidasPara("SST", urlExcel).map((a) => a.href));
   });
 
   it("el Excel se marca como descarga (<a> normal) y el resto navega con <Link>", () => {

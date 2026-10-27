@@ -6,6 +6,7 @@ import { actualizarUsuario, restablecerPassword } from "@/lib/admin/user-actions
 import { leerVehiculoDeFormulario } from "@/lib/admin/hoja-de-vida";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { Role, Sede, TipoVehiculo } from "@/generated/prisma/client";
+import { puedeGestionarAdministradores } from "@/lib/auth/permisos";
 import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
 import { EditarUsuarioForm } from "./_components/EditarUsuarioForm";
 import { CampoPassword, ResumenError } from "../_components/ui-formulario";
@@ -37,6 +38,12 @@ export default async function EditarUsuarioPage({
   if (!usuario) {
     notFound();
   }
+
+  // Cuentas de ADMINISTRADOR: solo otro ADMINISTRADOR las modifica. El
+  // servidor lo exige igual (user-actions); acá solo se evita mostrar
+  // formularios que siempre fallarían.
+  const puedeGestionarAdmins = puedeGestionarAdministradores(session.user.role);
+  const soloLectura = usuario.role === Role.ADMINISTRADOR && !puedeGestionarAdmins;
 
   // URL prefirmada de corta vida (solo se guarda el s3Key). Si falla la
   // firma, la edición sigue funcionando sin mostrar la foto actual.
@@ -122,6 +129,12 @@ export default async function EditarUsuarioPage({
         </Link>
       </div>
 
+      {soloLectura ? (
+        <p role="status" className="rounded-xl bg-status-info-soft px-3 py-2 text-sm font-medium text-ink">
+          Solo un Administrador puede modificar cuentas de Administrador.
+        </p>
+      ) : (
+        <>
       {error && <ResumenError mensaje={error} />}
 
       <EditarUsuarioForm
@@ -134,6 +147,7 @@ export default async function EditarUsuarioPage({
         vehiculoActivo={vehiculo?.activo}
         cedulaPendiente={!usuario.cedula && usuario.role === Role.TRABAJADOR}
         vehiculoPendiente={usuario.role === Role.TRABAJADOR && !vehiculo}
+        puedeAsignarAdministrador={puedeGestionarAdmins}
       />
 
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm">
@@ -172,6 +186,8 @@ export default async function EditarUsuarioPage({
           </button>
         </form>
       </section>
+        </>
+      )}
     </main>
   );
 }

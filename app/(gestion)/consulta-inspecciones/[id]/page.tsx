@@ -10,6 +10,7 @@ import { Role, Sede } from "@/generated/prisma/enums";
 import { etiquetaRol, etiquetaSede } from "@/lib/auth/etiquetas-rol";
 import { esperandoA, estadoEtapaOleariari } from "@/lib/inspections/cola-aprobacion";
 import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 // Pantalla de detalle de la consulta de oversight (DIRECTOR/SST): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -87,7 +88,7 @@ export default async function ConsultaInspeccionDetallePage({
             <span className="ml-2 text-base font-normal text-gray-500">{inspection.vehicle.tipo}</span>
           </h1>
         </div>
-        {session.user.role === "SST" &&
+        {tienePermisosSst(session.user.role) &&
           inspection.status !== "EN_PROCESO" &&
           inspection.status !== "CANCELADA" && (
             <a

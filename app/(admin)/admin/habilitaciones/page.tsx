@@ -6,6 +6,7 @@ import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
 import { formatFecha, formatFechaHoraMedia, formatHora } from "@/lib/fechas/formato";
 import { estadoHabilitacion, type EstadoHabilitacion } from "@/lib/horarios/habilitacion-fechas";
 import { FormularioHabilitacion } from "./_components/FormularioHabilitacion";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 const LIMITE_LISTA = 100;
 
@@ -21,7 +22,7 @@ const ESTADO_UI: Record<EstadoHabilitacion, { texto: string; clase: string }> = 
 };
 
 // Módulo SST "Inspecciones fuera de horario": otorgar habilitaciones y ver las
-// otorgadas. La barrera real es `requireRole([SST])` en la server action; acá
+// otorgadas. La barrera real es `requireRole([SST, ADMINISTRADOR])` en la server action; acá
 // solo se evita mostrar el formulario a quien no podría usarlo.
 export default async function HabilitacionesPage() {
   const session = await auth();
@@ -45,7 +46,7 @@ export default async function HabilitacionesPage() {
   ]);
 
   const opcion = (u: (typeof usuarios)[number]) => ({ id: u.id, etiqueta: `${u.name} · ${etiquetaUsuario(u.role, u.sede)}` });
-  const puedeOtorgar = session.user.role === Role.SST;
+  const puedeOtorgar = tienePermisosSst(session.user.role);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-8">

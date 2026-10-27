@@ -1,3 +1,4 @@
+import { tienePermisosSst } from "@/lib/auth/permisos";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
@@ -61,8 +62,8 @@ export default async function Home({
   const avisoDecision = rolAprobador ? avisoDecisionFirmada(await searchParams) : null;
   const [pendientes, resumenDia, vencimientos, habilitacionHasta] = await Promise.all([
     rolAprobador ? getPendientesConFoto(rolAprobador).then(ordenarPendientesPorAtencion) : null,
-    rol === "DIRECTOR" || rol === "SST" ? getResumenDelDia(ahora) : null,
-    rol === "ADMINISTRADOR" || rol === "SST" ? getVehiculosConDocumentosPorVencer(ahora) : null,
+    rol === "DIRECTOR" || tienePermisosSst(rol) ? getResumenDelDia(ahora) : null,
+    tienePermisosSst(rol) ? getVehiculosConDocumentosPorVencer(ahora) : null,
     rolAprobador ? habilitacionAprobacionHasta(user.id, ahora) : null,
   ]);
 
@@ -80,7 +81,7 @@ export default async function Home({
     );
   }
 
-  if (rol === "SST") {
+  if (tienePermisosSst(rol)) {
     return (
       <div className="flex flex-1 flex-col">
         {/* Sin AppHeader: el banner ya lleva el logo; cerrar sesión va debajo. */}

@@ -31,6 +31,7 @@ import {
   IconoReloj,
   IconoX,
 } from "./_components/Iconos";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 // Punto de entrada de la consulta de oversight (DIRECTOR/SST/SUPERVISOR/
 // ADMINISTRADOR y Supervisor Oleariari, este último solo de su sede): lista de
@@ -57,7 +58,7 @@ export default async function ConsultaInspeccionesPage({
   });
 
   const conteo = contarPorEstado(inspecciones);
-  const esSst = session.user.role === Role.SST;
+  const esSst = tienePermisosSst(session.user.role);
   const descargables = contarDescargables(session.user.role, inspecciones);
   const queryLote = queryStringFiltros(valoresFormulario);
   const puedeVerDashboard = puedeAccederARuta(session.user.role, "/dashboard");

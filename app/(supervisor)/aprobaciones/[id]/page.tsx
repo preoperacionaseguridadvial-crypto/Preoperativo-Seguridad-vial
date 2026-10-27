@@ -18,6 +18,7 @@ import {
   etapaParaRol,
   tipoFirmaPendiente,
 } from "@/lib/inspections/cola-aprobacion";
+import { PantallaBloqueoHorario } from "@/app/_components/PantallaBloqueoHorario";
 import { formatFecha, formatFechaHora, formatHora } from "@/lib/fechas/formato";
 import {
   MENSAJE_APROBACION_FUERA_DE_PLAZO,
@@ -27,6 +28,7 @@ import {
   MENSAJE_ENVIADA_FUERA_DE_HORARIO,
   estadoPlazoParaAprobador,
 } from "@/lib/horarios/estado-plazo-aprobador";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 // Pantalla de detalle de la revisión de los aprobadores (Fase 3): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -132,6 +134,11 @@ export default async function AprobacionDetallePage({
   const habilitacionHasta =
     puedeDecidir && !decidida ? await habilitacionAprobacionHasta(session.user.id, ahora) : null;
   const plazo = estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta });
+  // Le toca decidir pero el plazo venció y no tiene habilitación: pantalla de
+  // bloqueo en vez de la inspección (los demás roles siguen viéndola en lectura).
+  if (puedeDecidir && !decidida && !plazo.puedeDecidir) {
+    return <PantallaBloqueoHorario motivo="APROBACION" href="/" />;
+  }
   const pendiente = esperaA !== null;
   const tecnicomecanicaVencida = Boolean(
     inspection.vehicle.fechaVencimientoTecnicomecanica &&
@@ -177,7 +184,7 @@ export default async function AprobacionDetallePage({
             <span className="ml-2 text-base font-normal text-gray-500">{inspection.vehicle.tipo}</span>
           </h1>
         </div>
-        {session.user.role === "SST" && (
+        {tienePermisosSst(session.user.role) && (
           <a
             href={`/api/inspecciones/${id}/pdf`}
             className="shrink-0 rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"

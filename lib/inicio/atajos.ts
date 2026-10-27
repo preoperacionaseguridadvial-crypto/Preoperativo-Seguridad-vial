@@ -106,7 +106,14 @@ const ATAJOS_POR_ROL: Record<Role, Atajo[]> = {
   SUPERVISOR_OLEARIARI: [ATAJOS.aprobaciones, ATAJOS.consulta],
   DIRECTOR: [ATAJOS.dashboard, ATAJOS.consulta],
   SST: [ATAJOS.dashboardSst, ATAJOS.consultaSst, ATAJOS.administracion, ATAJOS.habilitaciones],
-  ADMINISTRADOR: [ATAJOS.usuarios, ATAJOS.configuracion, ATAJOS.dashboard, ATAJOS.consulta],
+  // Todo lo del SST (mismo inicio) + la configuración del formato.
+  ADMINISTRADOR: [
+    ATAJOS.dashboardSst,
+    ATAJOS.consultaSst,
+    ATAJOS.administracion,
+    ATAJOS.habilitaciones,
+    ATAJOS.configuracion,
+  ],
 };
 
 export function atajosPorRol(role: Role): Atajo[] {

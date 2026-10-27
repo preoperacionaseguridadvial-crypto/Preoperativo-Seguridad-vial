@@ -1,3 +1,5 @@
+import { tienePermisosSst } from "@/lib/auth/permisos";
+
 export type AccionRapida = {
   etiqueta: string;
   href: string;
@@ -7,11 +9,11 @@ export type AccionRapida = {
 };
 
 /**
- * Espejo de la validación de app/api/reportes/excel/route.ts: solo DIRECTOR y
- * SST. ADMINISTRADOR ve el dashboard (proxy.ts) pero esa ruta le responde 403.
+ * Espejo de la validación de app/api/reportes/excel/route.ts: DIRECTOR y
+ * quienes tienen permisos de SST (SST y ADMINISTRADOR).
  */
 export function puedeExportarExcel(role: string): boolean {
-  return role === "DIRECTOR" || role === "SST";
+  return role === "DIRECTOR" || tienePermisosSst(role);
 }
 
 /** Espejo de `/admin` en proxy.ts: ADMINISTRADOR y SST (DIRECTOR sería redirigido). */

@@ -12,6 +12,7 @@ import {
   nombreArchivoPdf,
   nombreArchivoZip,
 } from "@/lib/inspections/pdf-lote";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 // Igual que el PDF individual: @react-pdf/renderer necesita Node.js y la
 // autorización debe revalidarse en cada request (sin Full Route Cache).
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
   if (!session?.user) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
-  if (session.user.role !== "SST") {
+  if (!tienePermisosSst(session.user.role)) {
     return NextResponse.json({ error: "Inspecciones no encontradas." }, { status: 404 });
   }
 

@@ -27,7 +27,7 @@ export const WHERE_PENDIENTES = {
  * Cola de pendientes del aprobador `role`: `reviewedAt` nulo, estado
  * PENDIENTE_APROBACION o NO_APTA_PARA_OPERAR y, según su etapa, la sede /
  * primera etapa (ver `whereColaPendientes`). Ordenadas por `completedAt`
- * ascendente (las más antiguas primero).
+ * descendente (las más recientes primero, las más antiguas al final).
  */
 export function getInspeccionesPendientes(role: RolAprobador) {
   return prisma.inspection.findMany({
@@ -41,7 +41,7 @@ export function getInspeccionesPendientes(role: RolAprobador) {
       // Foto LATERAL diaria: miniatura de la tarjeta (el vehículo, moto o carro, tal como está hoy).
       fotos: { where: { tipo: "LATERAL" }, take: 1 },
     },
-    orderBy: { completedAt: "asc" },
+    orderBy: { completedAt: "desc" },
   });
 }
 

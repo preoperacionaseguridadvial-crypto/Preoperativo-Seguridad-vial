@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { getOwnInspectionOrNotFound } from "@/lib/inspections/queries";
-import { habilitacionVigente } from "@/lib/horarios/habilitaciones";
+import { habilitacionVigente, puedeContinuarInspeccion } from "@/lib/horarios/habilitaciones";
+import { PantallaBloqueoHorario } from "@/app/_components/PantallaBloqueoHorario";
 import { cierreDelAviso } from "@/lib/horarios/aviso-cierre";
 import { formatHora } from "@/lib/fechas/formato";
 import { TipoHabilitacion } from "@/generated/prisma/client";
@@ -28,6 +29,11 @@ export default async function InspeccionLayout({
   if (inspection.status !== "EN_PROCESO") return <>{children}</>;
 
   const ahora = new Date();
+  // Misma regla que aplican las acciones del servidor: si ya no puede
+  // continuar, en vez de dejarla fallar paso a paso se muestra el bloqueo.
+  if (!(await puedeContinuarInspeccion(inspection, ahora))) {
+    return <PantallaBloqueoHorario motivo="CONTINUAR" href="/inspecciones" />;
+  }
   const habilitacion = await habilitacionVigente(inspection.workerId, TipoHabilitacion.RECORREDOR, ahora);
   const { cierre, hora } = cierreDelAviso({
     startedAt: inspection.startedAt,

@@ -197,7 +197,7 @@ describe("actualizarUsuario — soporte-moto-carro (Slice 1)", () => {
   });
 });
 
-describe("crearUsuario/actualizarUsuario/restablecerPassword — SST con paridad total de ADMINISTRADOR", () => {
+describe("crearUsuario/actualizarUsuario/restablecerPassword — SST y ADMINISTRADOR (solo ADMINISTRADOR gestiona administradores)", () => {
   it("SST puede crear un TRABAJADOR (mismo camino que ADMINISTRADOR)", async () => {
     const sst = await crearUsuarioDeTest(Role.SST);
     loginComo(sst);
@@ -213,19 +213,113 @@ describe("crearUsuario/actualizarUsuario/restablecerPassword — SST con paridad
     expect(usuario.vehiculo?.placa).toBe("SST123");
   });
 
-  it("SST puede crear un ADMINISTRADOR (paridad total, no solo trabajadores)", async () => {
+  it("SST NO puede crear un ADMINISTRADOR", async () => {
     const sst = await crearUsuarioDeTest(Role.SST);
     loginComo(sst);
 
+    await expect(
+      crearUsuario({
+        name: "Admin Creado Por SST",
+        email: `admin-sst-${Date.now()}@test.local`,
+        password: "password123",
+        passwordConfirmacion: "password123",
+        role: Role.ADMINISTRADOR,
+      }),
+    ).rejects.toThrow(/Solo un Administrador/);
+    expect(await prisma.user.count({ where: { role: Role.ADMINISTRADOR } })).toBe(0);
+  });
+
+  it("ADMINISTRADOR puede crear un ADMINISTRADOR", async () => {
+    await loginComoAdmin();
+
     const usuario = await crearUsuario({
-      name: "Admin Creado Por SST",
-      email: `admin-sst-${Date.now()}@test.local`,
+      name: "Otro Admin",
+      email: `admin-admin-${Date.now()}@test.local`,
       password: "password123",
       passwordConfirmacion: "password123",
       role: Role.ADMINISTRADOR,
     });
 
     expect(usuario.role).toBe(Role.ADMINISTRADOR);
+  });
+
+  it("SST NO puede editar a un ADMINISTRADOR", async () => {
+    const sst = await crearUsuarioDeTest(Role.SST);
+    loginComo(sst);
+    const admin = await crearUsuarioDeTest(Role.ADMINISTRADOR, { name: "Admin" });
+
+    await expect(
+      actualizarUsuario(admin.id, {
+        name: "Cambiado",
+        email: admin.email,
+        role: Role.ADMINISTRADOR,
+        activo: false,
+      }),
+    ).rejects.toThrow(/Solo un Administrador/);
+    const guardado = await prisma.user.findUniqueOrThrow({ where: { id: admin.id } });
+    expect(guardado.name).toBe("Admin");
+    expect(guardado.activo).toBe(true);
+  });
+
+  it("SST NO puede promover a un usuario a ADMINISTRADOR", async () => {
+    const sst = await crearUsuarioDeTest(Role.SST);
+    loginComo(sst);
+    const supervisor = await crearUsuarioDeTest(Role.SUPERVISOR);
+
+    await expect(
+      actualizarUsuario(supervisor.id, {
+        name: supervisor.name,
+        email: supervisor.email,
+        role: Role.ADMINISTRADOR,
+        activo: true,
+      }),
+    ).rejects.toThrow(/Solo un Administrador/);
+    const guardado = await prisma.user.findUniqueOrThrow({ where: { id: supervisor.id } });
+    expect(guardado.role).toBe(Role.SUPERVISOR);
+  });
+
+  it("ADMINISTRADOR puede editar y promover a ADMINISTRADOR", async () => {
+    await loginComoAdmin();
+    const admin = await crearUsuarioDeTest(Role.ADMINISTRADOR, { name: "Admin" });
+    const supervisor = await crearUsuarioDeTest(Role.SUPERVISOR);
+
+    const editado = await actualizarUsuario(admin.id, {
+      name: "Cambiado",
+      email: admin.email,
+      role: Role.ADMINISTRADOR,
+      activo: true,
+    });
+    const promovido = await actualizarUsuario(supervisor.id, {
+      name: supervisor.name,
+      email: supervisor.email,
+      role: Role.ADMINISTRADOR,
+      activo: true,
+    });
+
+    expect(editado.name).toBe("Cambiado");
+    expect(promovido.role).toBe(Role.ADMINISTRADOR);
+  });
+
+  it("SST NO puede restablecer la contraseña de un ADMINISTRADOR", async () => {
+    const sst = await crearUsuarioDeTest(Role.SST);
+    loginComo(sst);
+    const admin = await crearUsuarioDeTest(Role.ADMINISTRADOR);
+    const hashAntes = (await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).passwordHash;
+
+    await expect(
+      restablecerPassword(admin.id, "nuevaPassword123", "nuevaPassword123"),
+    ).rejects.toThrow(/Solo un Administrador/);
+    const hashDespues = (await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).passwordHash;
+    expect(hashDespues).toBe(hashAntes);
+  });
+
+  it("ADMINISTRADOR puede restablecer la contraseña de un ADMINISTRADOR", async () => {
+    await loginComoAdmin();
+    const admin = await crearUsuarioDeTest(Role.ADMINISTRADOR);
+
+    await expect(
+      restablecerPassword(admin.id, "nuevaPassword123", "nuevaPassword123"),
+    ).resolves.not.toThrow();
   });
 
   it("SST puede editar cualquier usuario", async () => {

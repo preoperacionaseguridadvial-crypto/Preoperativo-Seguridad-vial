@@ -64,6 +64,15 @@ describe("GET /api/inspecciones/pdf-lote", () => {
     expect((await res.json()).error).toMatch(/No hay inspecciones/);
   });
 
+  it("ADMINISTRADOR (con permisos de SST): 200 application/zip", async () => {
+    await crearInspeccion(InspectionStatus.APROBADA);
+    loginComo(await crearUsuario(Role.ADMINISTRADOR));
+
+    const res = await request("?fechaDesde=2000-01-01");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/zip");
+  }, 60_000);
+
   it("SST: 200 application/zip con un PDF por inspección descargable", async () => {
     const a = await crearInspeccion(InspectionStatus.APROBADA);
     const b = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION);

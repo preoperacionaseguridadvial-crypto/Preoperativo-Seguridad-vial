@@ -10,12 +10,24 @@ import { UsuarioCreadoPantalla } from "./UsuarioCreadoPantalla";
 // `key` distinto = estado de `useActionState` nuevo: así "Crear otro usuario"
 // vuelve a un formulario limpio sin que las credenciales anteriores queden en
 // memoria más de lo necesario.
-export function NuevoUsuarioForm() {
+export function NuevoUsuarioForm({ puedeAsignarAdministrador }: { puedeAsignarAdministrador: boolean }) {
   const [instancia, setInstancia] = useState(0);
-  return <FormularioAlta key={instancia} onCrearOtro={() => setInstancia((n) => n + 1)} />;
+  return (
+    <FormularioAlta
+      key={instancia}
+      onCrearOtro={() => setInstancia((n) => n + 1)}
+      puedeAsignarAdministrador={puedeAsignarAdministrador}
+    />
+  );
 }
 
-function FormularioAlta({ onCrearOtro }: { onCrearOtro: () => void }) {
+function FormularioAlta({
+  onCrearOtro,
+  puedeAsignarAdministrador,
+}: {
+  onCrearOtro: () => void;
+  puedeAsignarAdministrador: boolean;
+}) {
   const [estado, formAction, pendiente] = useActionState(crearUsuarioDesdeFormulario, null);
   // Rol elegido: controla si se muestra la sección de vehículo (solo
   // TRABAJADOR lleva vehículo). Vive acá y no en el <form> para sobrevivir al
@@ -75,6 +87,7 @@ function FormularioAlta({ onCrearOtro }: { onCrearOtro: () => void }) {
           rol={rol || (valores.role ?? "")}
           onRolChange={setRol}
           conductorActivo={conductorActivo}
+          puedeAsignarAdministrador={puedeAsignarAdministrador}
         />
         <BarraEnvio pendiente={pendiente} texto="Crear usuario" textoPendiente="Creando…" />
       </form>

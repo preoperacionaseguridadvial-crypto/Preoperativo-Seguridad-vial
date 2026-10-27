@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { iniciarInspeccion, cancelarInspeccion } from "@/lib/inspections/actions";
+import { HorarioBloqueadoError } from "@/lib/horarios/habilitaciones";
 import {
   getChecklistCatalog,
   getChecklistEstadoCompleto,
@@ -77,6 +78,8 @@ export default async function InspeccionesPage({
     try {
       inspectionId = (await iniciarInspeccion(vehicleId)).id;
     } catch (err) {
+      // Bloqueo por horario: pantalla temática en vez del aviso en línea.
+      if (err instanceof HorarioBloqueadoError) redirect("/inspecciones/fuera-de-horario");
       const message = err instanceof Error ? err.message : "No se pudo iniciar la inspección.";
       redirect(`/inspecciones?error=${encodeURIComponent(message)}`);
     }
@@ -88,6 +91,7 @@ export default async function InspeccionesPage({
     try {
       await cancelarInspeccion(inspectionId);
     } catch (err) {
+      if (err instanceof HorarioBloqueadoError) redirect("/inspecciones/fuera-de-horario");
       const message = err instanceof Error ? err.message : "No se pudo cancelar la inspección.";
       redirect(`/inspecciones?error=${encodeURIComponent(message)}`);
     }
