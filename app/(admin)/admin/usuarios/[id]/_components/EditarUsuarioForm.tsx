@@ -19,6 +19,7 @@ export function EditarUsuarioForm({
   vehiculoActivo,
   cedulaPendiente,
   vehiculoPendiente,
+  puedeAsignarAdministrador,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   valores: Record<string, string>;
@@ -29,6 +30,7 @@ export function EditarUsuarioForm({
   vehiculoActivo: boolean | undefined;
   cedulaPendiente: boolean;
   vehiculoPendiente: boolean;
+  puedeAsignarAdministrador: boolean;
 }) {
   const [rol, setRol] = useState(rolInicial);
 
@@ -40,6 +42,7 @@ export function EditarUsuarioForm({
         rol={rol}
         onRolChange={setRol}
         conductorActivo={conductorActivo}
+        puedeAsignarAdministrador={puedeAsignarAdministrador}
         edicion={{
           fotoActualUrl,
           vehiculoActivo,

@@ -52,12 +52,8 @@ describe("atajosPorRol", () => {
       "/admin/usuarios",
       "/admin/habilitaciones",
     ]);
-    expect(hrefs(Role.ADMINISTRADOR)).toEqual([
-      "/admin/usuarios",
-      "/admin/configuracion",
-      "/dashboard",
-      "/consulta-inspecciones",
-    ]);
+    // ADMINISTRADOR = todo lo del SST + la configuración.
+    expect(hrefs(Role.ADMINISTRADOR)).toEqual([...hrefs(Role.SST), "/admin/configuracion"]);
     expect(hrefs(Role.TRABAJADOR)).toEqual(["/inspecciones"]);
   });
 
@@ -85,6 +81,10 @@ describe("atajosPorRol", () => {
 describe("rolConAreaHero", () => {
   it("el SST muestra el cargo seguido de su área", () => {
     expect(rolConAreaHero(Role.SST)).toBe("Administrador SST · Seguridad y Salud en el Trabajo");
+  });
+
+  it("el ADMINISTRADOR (que ve el mismo inicio que SST) muestra su cargo", () => {
+    expect(rolConAreaHero(Role.ADMINISTRADOR)).toBe("Administrador");
   });
 
   it("los demás roles solo muestran su cargo", () => {

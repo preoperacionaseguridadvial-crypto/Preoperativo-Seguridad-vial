@@ -17,6 +17,7 @@ export function SeccionesUsuario({
   rol,
   onRolChange,
   conductorActivo,
+  puedeAsignarAdministrador,
   edicion,
 }: {
   modo: "alta" | "edicion";
@@ -25,6 +26,7 @@ export function SeccionesUsuario({
   rol: string;
   onRolChange: (rol: string) => void;
   conductorActivo: boolean;
+  puedeAsignarAdministrador: boolean;
   /** Solo edición: datos propios de un usuario ya existente. */
   edicion?: {
     fotoActualUrl: string | null;
@@ -48,7 +50,12 @@ export function SeccionesUsuario({
         titulo="Tipo de usuario"
         ayuda="Elige el rol: define qué puede hacer en la app y qué datos se piden."
       >
-        <SelectorRolYSede rol={rol} onRolChange={onRolChange} sedeInicial={valor("sede")} />
+        <SelectorRolYSede
+          rol={rol}
+          onRolChange={onRolChange}
+          sedeInicial={valor("sede")}
+          puedeAsignarAdministrador={puedeAsignarAdministrador}
+        />
       </Seccion>
 
       <Seccion numero={siguiente()} titulo="Datos personales" ayuda="Quién es la persona.">

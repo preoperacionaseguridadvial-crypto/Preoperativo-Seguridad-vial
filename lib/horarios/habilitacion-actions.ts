@@ -8,9 +8,9 @@ import { Role, TipoHabilitacion } from "@/generated/prisma/client";
 import { instanteBogota } from "@/lib/horarios/habilitacion-fechas";
 
 // Módulo SST "Inspecciones fuera de horario" (regla de producto 2026-10-20):
-// el Administrador SST otorga habilitaciones justificadas y auditadas. Solo
-// SST otorga (decisión conservadora: la regla nombra a la Administradora SST;
-// ADMINISTRADOR puede sumarse cambiando el `requireRole`).
+// el Administrador SST otorga habilitaciones justificadas y auditadas.
+// ADMINISTRADOR también otorga (tiene todos los permisos de SST, decisión del
+// usuario 2026-10-27).
 
 const JUSTIFICACION_MINIMA = 10;
 
@@ -37,7 +37,7 @@ export type DatosHabilitacion = {
 };
 
 export async function otorgarHabilitacion(data: DatosHabilitacion) {
-  const session = await requireRole([Role.SST]);
+  const session = await requireRole([Role.SST, Role.ADMINISTRADOR]);
 
   const regla = ROLES_POR_TIPO[data.tipo];
   if (!regla) throw new ErrorDeUsuario("El tipo de habilitación no es válido.");

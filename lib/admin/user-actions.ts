@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
+import { puedeGestionarAdministradores } from "@/lib/auth/permisos";
 import { ErrorDeUsuario, esErrorDeUsuario } from "@/lib/admin/error-de-usuario";
 import { Role, Prisma, Sede, TipoVehiculo, type Vehicle } from "@/generated/prisma/client";
 import {
@@ -21,10 +22,11 @@ import {
 } from "@/lib/admin/hoja-de-vida";
 
 // Server actions del panel de administración: crear/editar usuarios de
-// cualquier rol y restablecer contraseñas. ADMINISTRADOR y SST tienen
-// paridad total acá (SST se encarga en la práctica de dar de alta
-// trabajadores y resetear contraseñas, tanto como el propio Administrador —
-// decisión explícita del usuario, no una restricción a "solo trabajadores").
+// cualquier rol y restablecer contraseñas. ADMINISTRADOR y SST gestionan
+// usuarios de todos los roles (SST se encarga en la práctica de dar de alta
+// trabajadores y resetear contraseñas), con UNA excepción (decisión del
+// usuario, 2026-10-27): solo un ADMINISTRADOR crea o modifica cuentas de
+// ADMINISTRADOR (ver `exigirGestionDeAdministradores`).
 // Cada TRABAJADOR tiene UN vehículo (1:1, `User.vehicleId`) que se crea y
 // edita desde su propio usuario — ya no hay un módulo de vehículos aparte
 // (decisión del usuario, 2026-09-18). Ningún usuario se borra nunca (mismo
@@ -33,6 +35,16 @@ import {
 // plano — el audit log solo registra QUE se restableció, nunca el valor.
 
 const COSTO_BCRYPT = 10;
+
+/**
+ * Cuentas de ADMINISTRADOR: solo otro ADMINISTRADOR las crea, modifica o les
+ * restablece la contraseña. Se valida en el servidor (la UI solo lo oculta).
+ */
+function exigirGestionDeAdministradores(rolActor: Role, afectaAdministrador: boolean) {
+  if (afectaAdministrador && !puedeGestionarAdministradores(rolActor)) {
+    throw new ForbiddenError("Solo un Administrador puede crear o modificar cuentas de Administrador.");
+  }
+}
 
 /**
  * Qué campo único chocó en un P2002. Antes solo `email` era único; ahora
@@ -124,6 +136,7 @@ export async function crearUsuario(data: {
   conductorActivo?: boolean;
 }) {
   const session = await requireRole([Role.ADMINISTRADOR, Role.SST]);
+  exigirGestionDeAdministradores(session.user.role, data.role === Role.ADMINISTRADOR);
 
   const nombreLimpio = data.name.trim();
   const emailLimpio = data.email.trim().toLowerCase();
@@ -361,6 +374,11 @@ export async function actualizarUsuario(
   if (!actual) {
     throw new ErrorDeUsuario("El usuario no existe.");
   }
+  // Tanto editar a un ADMINISTRADOR como asignar ese rol queda reservado.
+  exigirGestionDeAdministradores(
+    session.user.role,
+    actual.role === Role.ADMINISTRADOR || data.role === Role.ADMINISTRADOR,
+  );
 
   // Vehículo del trabajador. Editar uno existente NO vuelve a exigir la foto
   // ni los datos si era un vehículo legacy sin hoja de vida (D4), pero si se
@@ -483,6 +501,12 @@ export async function restablecerPassword(
   if (newPassword !== newPasswordConfirmacion) {
     throw new ErrorDeUsuario("Las contraseñas no coinciden.");
   }
+
+  const objetivo = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!objetivo) {
+    throw new ErrorDeUsuario("El usuario no existe.");
+  }
+  exigirGestionDeAdministradores(session.user.role, objetivo.role === Role.ADMINISTRADOR);
 
   const passwordHash = await bcrypt.hash(newPassword, COSTO_BCRYPT);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });

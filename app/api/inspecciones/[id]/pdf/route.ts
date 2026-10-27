@@ -5,6 +5,7 @@ import { getInspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { InspeccionPdfDocument } from "@/lib/pdf/InspeccionPdfDocument";
 import { nombreArchivoPdf } from "@/lib/inspections/pdf-lote";
 import { puedeDescargarPdf } from "@/lib/inspections/pdf-acceso";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 // @react-pdf/renderer necesita Node.js (usa fs para leer el logo y fuentes
 // del sistema PDF) — no puede correr en Edge Runtime.
@@ -41,7 +42,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  if (session.user.role !== "SST") {
+  if (!tienePermisosSst(session.user.role)) {
     // 404 sin distinguir "no existe" de "no autorizado": no se filtra
     // existencia a quien no tiene permiso.
     return NextResponse.json({ error: "Inspección no encontrada." }, { status: 404 });

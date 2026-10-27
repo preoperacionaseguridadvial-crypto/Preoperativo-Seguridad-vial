@@ -30,11 +30,15 @@ export function SelectorRolYSede({
   rol,
   onRolChange,
   sedeInicial = "",
+  puedeAsignarAdministrador,
 }: {
   rol: string;
   onRolChange: (rol: string) => void;
   sedeInicial?: string;
+  /** Solo un ADMINISTRADOR puede crear/asignar ese rol (el servidor lo revalida). */
+  puedeAsignarAdministrador: boolean;
 }) {
+  const roles = ROLES_ASIGNABLES.filter((r) => r !== "ADMINISTRADOR" || puedeAsignarAdministrador);
   const [sede, setSede] = useState(sedeInicial);
 
   return (
@@ -42,7 +46,7 @@ export function SelectorRolYSede({
       <fieldset>
         <legend className="sr-only">Tipo de usuario</legend>
         <div className="grid gap-2">
-          {ROLES_ASIGNABLES.map((r) => (
+          {roles.map((r) => (
             <label
               key={r}
               className="flex min-h-16 cursor-pointer items-center gap-3 rounded-xl border border-border bg-surface p-3 transition-colors has-[:checked]:border-brand has-[:checked]:bg-status-info-soft has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand/40"

@@ -6,6 +6,7 @@ import { estadoLegible, parseFiltrosDesdeQuery } from "@/lib/inspections/reporte
 import { getReporteHorarios, type ReporteHorarios } from "@/lib/horarios/reportes-horario";
 import { ETIQUETA_ETAPA } from "@/lib/horarios/metricas-horario";
 import { claveDiaBogota, formatFechaCorta, formatFechaHora, formatHora } from "@/lib/fechas/formato";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 // Node.js (exceljs no corre en Edge Runtime) — mismo criterio que
 // app/api/inspecciones/[id]/pdf/route.ts.
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
-  if (session.user.role !== "DIRECTOR" && session.user.role !== "SST") {
+  if (session.user.role !== "DIRECTOR" && !tienePermisosSst(session.user.role)) {
     return NextResponse.json({ error: "No autorizado." }, { status: 403 });
   }
 

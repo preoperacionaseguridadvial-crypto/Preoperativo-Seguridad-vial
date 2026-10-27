@@ -4,6 +4,7 @@ import { estadoLegible } from "@/lib/inspections/reportes-queries";
 import { tonoAprobacion, tonoEstado } from "./estado";
 import { EstadoPill } from "./EstadoPill";
 import { formatFechaCorta, formatHora } from "@/lib/fechas/formato";
+import { tienePermisosSst } from "@/lib/auth/permisos";
 
 export type InspeccionDetalle = Awaited<ReturnType<typeof getAllInspeccionesForOversight>>[number];
 
@@ -65,7 +66,7 @@ export function TablaInspecciones({
                 <Link href={`/consulta-inspecciones/${insp.id}`} className="font-medium text-status-info-ink hover:underline">
                   Ver
                 </Link>
-                {conPdf && role === "SST" && (
+                {conPdf && tienePermisosSst(role) && (
                   <>
                     {" · "}
                     <a href={`/api/inspecciones/${insp.id}/pdf`} className="font-medium text-status-info-ink hover:underline">

@@ -70,6 +70,17 @@ describe("otorgarHabilitacion", () => {
     });
   });
 
+  it("ADMINISTRADOR también otorga una habilitación y queda como otorgante", async () => {
+    const admin = await crearUsuario(Role.ADMINISTRADOR);
+    const trabajador = await crearUsuario(Role.TRABAJADOR);
+    loginComo(admin);
+
+    const creada = await otorgarHabilitacion(datos(trabajador.id));
+
+    const fila = await prisma.habilitacionHorario.findUniqueOrThrow({ where: { id: creada.id } });
+    expect(fila.otorgadaPorId).toBe(admin.id);
+  });
+
   it.each([Role.SUPERVISOR, Role.SUPERVISOR_OLEARIARI])(
     "SST otorga una habilitación APROBACION a %s",
     async (rol) => {
@@ -86,7 +97,7 @@ describe("otorgarHabilitacion", () => {
     },
   );
 
-  it.each([Role.TRABAJADOR, Role.SUPERVISOR, Role.ADMINISTRADOR, Role.DIRECTOR])(
+  it.each([Role.TRABAJADOR, Role.SUPERVISOR, Role.DIRECTOR])(
     "rechaza a %s como otorgante",
     async (rol) => {
       const quien = await crearUsuario(rol);
