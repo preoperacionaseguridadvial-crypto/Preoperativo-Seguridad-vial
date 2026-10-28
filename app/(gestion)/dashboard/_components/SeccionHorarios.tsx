@@ -56,7 +56,7 @@ export function SeccionHorarios({ datos }: { datos: ReporteHorarios }) {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Aprobaciones vencidas" subtitulo="Más de 60 minutos para decidir">
+        <Tarjeta titulo="Aprobaciones vencidas" subtitulo="Fuera del horario de aprobación (5:45 a 8:00 a. m. y p. m.)">
           <p className="text-sm text-ink">
             Pendientes con plazo vencido ahora: <strong>{p.SUPERVISOR_OLEARIARI + p.SUPERVISOR}</strong>
             <span className="text-ink-muted">

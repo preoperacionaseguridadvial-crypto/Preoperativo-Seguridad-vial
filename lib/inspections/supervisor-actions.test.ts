@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAuth = vi.fn();
 vi.mock("@/lib/auth/config", () => ({
@@ -64,8 +64,17 @@ async function firmarComoSupervisor(inspectionId: string, userId: string) {
 }
 
 beforeEach(async () => {
+  // Las decisiones solo se permiten dentro del horario de aprobación (5:45-8:00
+  // a. m. / p. m. de Bogotá): se congela `Date` a las 6:30 a. m. para que el
+  // resultado no dependa de la hora en que corre la suite.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-01-15T06:30:00-05:00"));
   await limpiarBaseDeTest();
   mockAuth.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 afterAll(async () => {

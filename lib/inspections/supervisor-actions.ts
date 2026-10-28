@@ -200,7 +200,7 @@ export async function rechazarInspeccion(inspectionId: string, observacion: stri
   return updated;
 }
 
-/** Decidida con una habilitación de SST porque el plazo de 60 minutos ya había vencido. */
+/** Decidida con una habilitación de SST porque estaba fuera de la ventana de aprobación. */
 function metadataFueraDePlazo(plazo: { habilitacionId: string | null }) {
   return plazo.habilitacionId ? { fueraDePlazo: true, habilitacionId: plazo.habilitacionId } : {};
 }

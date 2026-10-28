@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { InspectionStatus, type Sede, type TipoHabilitacion } from "@/generated/prisma/client";
 import { normalizarRango, type FiltrosReporte } from "@/lib/inspections/reportes-queries";
-import { plazoVencido, PLAZO_APROBACION_MINUTOS } from "@/lib/horarios/plazo-aprobacion";
+import { plazoVencido } from "@/lib/horarios/plazo-aprobacion";
 import {
   decisionesDeInspeccion,
   minutosEntre,
@@ -106,8 +106,9 @@ export async function getReporteHorarios(filtros: FiltrosHorarios): Promise<Repo
       where: {
         status: { in: [InspectionStatus.PENDIENTE_APROBACION, InspectionStatus.NO_APTA_PARA_OPERAR] },
         reviewedAt: null,
-        // El plazo nunca vence antes de 60 min desde el envío: prefiltro en BD.
-        completedAt: { not: null, lte: new Date(ahora.getTime() - PLAZO_APROBACION_MINUTOS * 60_000) },
+        // El vencimiento depende de la ventana de cada etapa: acá solo las
+        // enviadas, y `plazoVencido` filtra en memoria.
+        completedAt: { not: null },
         ...(sede && { sede }),
       },
       select: { sede: true, completedAt: true, revisadaSupervisorOleariariAt: true },
