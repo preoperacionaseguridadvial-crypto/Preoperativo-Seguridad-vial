@@ -19,6 +19,7 @@ import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
 import { estadoLegible } from "@/lib/inspections/reportes-queries";
 import { formatFechaHoraMedia } from "@/lib/fechas/formato";
 import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
+import { ActivarNotificaciones } from "@/app/_components/ActivarNotificaciones";
 import { alertasDocumentosVehiculo, chipsDocumentosVehiculo } from "@/lib/inicio/vencimientos-vehiculo";
 import {
   IconoDePaso,
@@ -276,6 +277,8 @@ export default async function InspeccionesPage({
             {ultimoEstado.detalle && <p className="text-sm">{ultimoEstado.detalle}</p>}
           </section>
         )}
+
+        <ActivarNotificaciones />
 
         {enProceso.length > 0 && (
           <section className="flex flex-col gap-3">
