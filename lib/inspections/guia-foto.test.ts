@@ -16,11 +16,12 @@ describe("guiaDeFoto", () => {
     expect(g.src).toBe("/fotos-guia/placa-carro.svg");
     expect(g.instruccion).toContain("placa trasera");
   });
-  it("llantas de moto: reutiliza la foto de referencia de llantas de moto, con instrucción por llanta", () => {
+  it("llantas de moto: la delantera reutiliza la referencia de llantas y la trasera tiene guía propia", () => {
     const delantera = guiaDeFoto("llanta_delantera", "MOTO");
     expect(delantera.src).toBe("/checklist/llantas.jpg");
     expect(delantera.instruccion).toMatch(/delantera/i);
-    expect(guiaDeFoto("llanta_trasera", null).src).toBe("/checklist/llantas.jpg");
+    expect(guiaDeFoto("llanta_trasera", null).src).toBe("/fotos-guia/llanta-trasera-moto.webp");
+    expect(guiaDeFoto("llanta_trasera", "MOTO").src).toBe("/fotos-guia/llanta-trasera-moto.webp");
     expect(guiaDeFoto("llanta_trasera", "MOTO").instruccion).toMatch(/trasera/i);
   });
   it("llantas de carro: reutiliza la foto de referencia de llantas del carro, con instrucción por posición", () => {
