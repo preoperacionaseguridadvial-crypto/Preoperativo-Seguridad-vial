@@ -68,6 +68,32 @@ describe("lib/notificaciones/push", () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  it("deja rastro en el log cuando los destinatarios no tienen dispositivos suscritos", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const user = await crearUsuario(Role.SUPERVISOR);
+
+    await enviarAUsuarios([user.id], PAYLOAD);
+
+    expect(mockSendNotification).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(expect.stringContaining("[push] 1 destinatario(s), 0 dispositivo(s)"));
+  });
+
+  it("registra en el log cuántos envíos salieron bien y cuántos fallaron", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const user = await crearUsuario(Role.SUPERVISOR);
+    await suscribir(user.id, "https://push.example/ok");
+    await suscribir(user.id, "https://push.example/falla");
+    mockSendNotification.mockImplementation(async (sub: { endpoint: string }) => {
+      if (sub.endpoint.endsWith("falla")) throw Object.assign(new Error("boom"), { statusCode: 500 });
+      return { statusCode: 201 };
+    });
+
+    await enviarAUsuarios([user.id], PAYLOAD);
+
+    expect(info).toHaveBeenCalledWith(expect.stringContaining("[push] 1 destinatario(s), 2 dispositivo(s): 1 enviada(s), 1 fallida(s)"));
+  });
+
   it("envía a todas las suscripciones de los usuarios con el payload JSON", async () => {
     const a = await crearUsuario(Role.SUPERVISOR);
     const b = await crearUsuario(Role.SST);

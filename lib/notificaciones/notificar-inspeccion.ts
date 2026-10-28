@@ -54,7 +54,10 @@ export async function enviarNotificacionInspeccion(
   extras: ExtrasNotificacion = {},
 ): Promise<void> {
   try {
-    if (!pushConfigurado()) return;
+    if (!pushConfigurado()) {
+      console.warn(`[push] ${evento} ${inspectionId}: faltan variables VAPID, no se notifica.`);
+      return;
+    }
 
     const inspeccion = await prisma.inspection.findUnique({
       where: { id: inspectionId },
@@ -70,6 +73,8 @@ export async function enviarNotificacionInspeccion(
     if (!inspeccion) return;
 
     const grupos = await resolverDestinatarios(evento, inspeccion, actorId);
+    const detalle = grupos.map((g) => `${g.audiencia}=${g.userIds.length}`).join(", ") || "sin destinatarios";
+    console.info(`[push] ${evento} ${inspectionId}: ${detalle}`);
     await Promise.all(
       grupos.map(({ audiencia, userIds }) =>
         enviarAUsuarios(

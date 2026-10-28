@@ -163,13 +163,27 @@ describe("notificaciones de inspección", () => {
       expect(idsEnviados()).not.toContain(director.id);
     });
 
-    it("push no configurado: ni consulta ni envía", async () => {
+    it("push no configurado: ni consulta ni envía, pero lo deja en el log", async () => {
       mockConfigurado.mockReturnValue(false);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const spy = vi.spyOn(prisma.inspection, "findUnique");
       await enviarNotificacionInspeccion("ENVIADA", "x", "y");
       expect(spy).not.toHaveBeenCalled();
       expect(mockEnviar).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("[push] ENVIADA x: faltan variables VAPID"));
       spy.mockRestore();
+    });
+
+    it("deja en el log el evento y cuántos destinatarios tiene cada grupo", async () => {
+      const info = vi.spyOn(console, "info").mockImplementation(() => {});
+      await crearUsuario(Role.SUPERVISOR);
+      const { worker, inspection } = await crearInspeccion(Sede.BOGOTA);
+
+      await enviarNotificacionInspeccion("ENVIADA", inspection.id, worker.id);
+
+      expect(info).toHaveBeenCalledWith(
+        expect.stringContaining(`[push] ENVIADA ${inspection.id}: APROBADOR=1`),
+      );
     });
 
     it("inspección inexistente: no lanza ni envía", async () => {

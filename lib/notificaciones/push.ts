@@ -53,6 +53,12 @@ export async function enviarAUsuarios(userIds: string[], payload: PayloadPush): 
     const suscripciones = await prisma.suscripcionPush.findMany({
       where: { userId: { in: userIds } },
     });
+    const resumen = `[push] ${userIds.length} destinatario(s), ${suscripciones.length} dispositivo(s)`;
+    // Rastro para diagnosticar avisos que no llegan: sin dispositivos no hay a quién enviar.
+    if (suscripciones.length === 0) {
+      console.info(`${resumen}: nadie tiene las notificaciones activadas.`);
+      return;
+    }
     const cuerpo = JSON.stringify(payload);
 
     const resultados = await Promise.allSettled(
@@ -71,6 +77,9 @@ export async function enviarAUsuarios(userIds: string[], payload: PayloadPush): 
         console.error("[push] Falló el envío de una notificación", resultado.reason);
       }
     });
+
+    const enviadas = resultados.filter((r) => r.status === "fulfilled").length;
+    console.info(`${resumen}: ${enviadas} enviada(s), ${resultados.length - enviadas} fallida(s).`);
 
     if (muertas.length > 0) {
       await prisma.suscripcionPush.deleteMany({ where: { endpoint: { in: muertas } } });
