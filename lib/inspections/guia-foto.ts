@@ -24,9 +24,11 @@ const INSTRUCCION: Record<TipoFotoGuia, string> = {
   llanta_trasera_derecha: "Ubícate a 1–2 metros de la llanta trasera derecha. Que se vea completa y su desgaste.",
 };
 
-// Las fotos de llanta no tienen ilustración propia: reutilizan la foto de
-// referencia del ítem de llantas de cada tipo de vehículo (public/checklist/).
+// Las fotos de llanta reutilizan la foto de referencia del ítem de llantas de
+// cada tipo de vehículo (public/checklist/), salvo la trasera de moto, que
+// tiene guía propia para que no se confunda con la delantera.
 const GUIA_LLANTAS_SRC = { moto: "/checklist/llantas.jpg", carro: "/checklist/llantas-repuesto.webp" } as const;
+const GUIA_LLANTA_TRASERA_MOTO_SRC = "/fotos-guia/llanta-trasera-moto.webp";
 
 // La guía de moto es una foto real (WebP); la de carro sigue siendo una
 // ilustración (SVG) hasta tener sus fotos.
@@ -40,6 +42,9 @@ export function guiaDeFoto(tipo: TipoFotoGuia, tipoVehiculo: TipoVehiculoGuia | 
   const variante = tipoVehiculo === "CARRO" ? "carro" : "moto";
   if (tipo === "lateral" || tipo === "placa") {
     return { src: `/fotos-guia/${tipo}-${variante}.${EXTENSION[variante]}`, instruccion: INSTRUCCION[tipo] };
+  }
+  if (tipo === "llanta_trasera" && variante === "moto") {
+    return { src: GUIA_LLANTA_TRASERA_MOTO_SRC, instruccion: INSTRUCCION[tipo] };
   }
   return { src: GUIA_LLANTAS_SRC[variante], instruccion: INSTRUCCION[tipo] };
 }
