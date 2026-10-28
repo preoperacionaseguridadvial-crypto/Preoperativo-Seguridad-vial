@@ -16,8 +16,8 @@ export const TEXTOS_BLOQUEO: Record<MotivoPantallaBloqueo, { titulo: string; men
     mensaje: "Esta inspección se inició en un horario que ya cerró, por lo que no es posible continuarla ni enviarla.",
   },
   APROBACION: {
-    titulo: "Tiempo de aprobación vencido",
-    mensaje: "Pasaron más de 60 minutos desde que la inspección quedó pendiente de su decisión.",
+    titulo: "Fuera del horario de aprobación",
+    mensaje: "Solo puede aprobar o rechazar entre las 5:45 y las 8:00 a. m. o entre las 5:45 y las 8:00 p. m.",
   },
   GENERICO: {
     titulo: "No se pudo completar la acción",

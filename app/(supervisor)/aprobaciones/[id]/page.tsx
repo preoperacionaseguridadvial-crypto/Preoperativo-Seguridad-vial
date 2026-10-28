@@ -129,12 +129,12 @@ export default async function AprobacionDetallePage({
   const motivosNoConformes = motivosConfirmacionAprobacion(inspection);
 
   const ahora = new Date();
-  // Plazo de 60 minutos por etapa: una sola consulta de habilitación, y solo si
+  // Horario de aprobación por etapa (5:45 a 8:00 a. m./p. m.): una sola consulta de habilitación, y solo si
   // este aprobador puede decidir ahora (el servidor vuelve a validarlo).
   const habilitacionHasta =
     puedeDecidir && !decidida ? await habilitacionAprobacionHasta(session.user.id, ahora) : null;
   const plazo = estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta });
-  // Le toca decidir pero el plazo venció y no tiene habilitación: pantalla de
+  // Le toca decidir pero está fuera del horario de aprobación y no tiene habilitación: pantalla de
   // bloqueo en vez de la inspección (los demás roles siguen viéndola en lectura).
   if (puedeDecidir && !decidida && !plazo.puedeDecidir) {
     return <PantallaBloqueoHorario motivo="APROBACION" href="/" />;
@@ -423,7 +423,7 @@ export default async function AprobacionDetallePage({
           )}
 
           {!plazo.puedeDecidir ? (
-            // Plazo de 60 minutos superado y sin habilitación de SST: no se
+            // Fuera del horario de aprobación y sin habilitación de SST: no se
             // muestran los formularios (el servidor lo bloquea igualmente).
             <div
               role="alert"

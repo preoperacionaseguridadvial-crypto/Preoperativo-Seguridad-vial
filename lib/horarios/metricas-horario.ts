@@ -1,5 +1,5 @@
 import { Sede } from "@/generated/prisma/enums";
-import { PLAZO_APROBACION_MINUTOS } from "@/lib/horarios/plazo-aprobacion";
+import { fueraDeVentanaDesde } from "@/lib/horarios/plazo-aprobacion";
 
 // Agregaciones puras de las métricas de cumplimiento de horarios (sin acceso a
 // base de datos, para poder probarlas con fechas fijas). Las consultas viven en
@@ -26,7 +26,7 @@ export type Decision = {
   etapa: EtapaAprobacion;
   aprobadorId: string;
   minutos: number;
-  /** Decidida con el plazo ya vencido (>= 60 min, mismo criterio que `plazoVencido`). */
+  /** Decidida fuera de la ventana de aprobación de su etapa (antes de abrir o ya cerrada). */
   fueraDePlazo: boolean;
 };
 
@@ -43,7 +43,7 @@ export function promedioMinutos(valores: number[]): number | null {
 
 function decision(etapa: EtapaAprobacion, aprobadorId: string, inicio: Date, fin: Date): Decision {
   const minutos = minutosEntre(inicio, fin);
-  return { etapa, aprobadorId, minutos, fueraDePlazo: minutos >= PLAZO_APROBACION_MINUTOS };
+  return { etapa, aprobadorId, minutos, fueraDePlazo: fueraDeVentanaDesde(inicio, fin) };
 }
 
 /**

@@ -5,82 +5,113 @@ import {
   resumirPendientes,
   textoPlazoAprobador,
 } from "@/lib/inicio/pendientes-aprobador";
+import type { EstadoPlazoAprobador } from "@/lib/horarios/estado-plazo-aprobador";
 import { formatHora } from "@/lib/fechas/formato";
 
 const MIN = 60_000;
-const ahora = new Date("2026-10-23T15:00:00Z");
+// Hora de Bogotá (UTC-5) a instante.
+const bog = (hhmm: string, dia = "2026-10-23") => new Date(`${dia}T${hhmm}:00-05:00`);
 
-// Plazo de 60 min desde el envío: `minutosDesdeEnvio` min antes de `ahora`.
-function pendiente(minutosDesdeEnvio: number, novedades = 0) {
+// Enviada en la ventana de la mañana: vence a las 8:00 a. m.
+function pendiente(hhmmEnvio: string, novedades = 0) {
   return {
     sede: null,
-    completedAt: new Date(ahora.getTime() - minutosDesdeEnvio * MIN),
+    completedAt: bog(hhmmEnvio),
     revisadaSupervisorOleariariAt: null,
     _count: { novedades },
   };
 }
 
 describe("estadoVencimiento", () => {
-  it("vencida cuando pasaron 60 min desde el envío", () => {
-    expect(estadoVencimiento(pendiente(60), ahora)).toBe("vencida");
-    expect(estadoVencimiento(pendiente(300), ahora)).toBe("vencida");
+  it("vencida desde que cierra su ventana (8:00 a. m.)", () => {
+    expect(estadoVencimiento(pendiente("06:00"), bog("08:00"))).toBe("vencida");
+    expect(estadoVencimiento(pendiente("06:00"), bog("12:00"))).toBe("vencida");
   });
 
-  it("por vencer cuando faltan POR_VENCER_MINUTOS o menos", () => {
-    expect(estadoVencimiento(pendiente(60 - POR_VENCER_MINUTOS), ahora)).toBe("por_vencer");
-    expect(estadoVencimiento(pendiente(59), ahora)).toBe("por_vencer");
+  it("por vencer cuando faltan POR_VENCER_MINUTOS o menos con la ventana abierta", () => {
+    const limite = new Date(bog("08:00").getTime() - POR_VENCER_MINUTOS * MIN);
+    expect(estadoVencimiento(pendiente("06:00"), limite)).toBe("por_vencer");
+    expect(estadoVencimiento(pendiente("06:00"), bog("07:59"))).toBe("por_vencer");
   });
 
   it("sin estado cuando aún queda holgura", () => {
-    expect(estadoVencimiento(pendiente(60 - POR_VENCER_MINUTOS - 1), ahora)).toBeNull();
-    expect(estadoVencimiento(pendiente(0), ahora)).toBeNull();
+    const antes = new Date(bog("08:00").getTime() - (POR_VENCER_MINUTOS + 1) * MIN);
+    expect(estadoVencimiento(pendiente("06:00"), antes)).toBeNull();
+    expect(estadoVencimiento(pendiente("06:00"), bog("06:00"))).toBeNull();
+  });
+
+  it("sin estado mientras su ventana aún no abre", () => {
+    expect(estadoVencimiento(pendiente("10:00"), bog("15:00"))).toBeNull();
+    expect(estadoVencimiento(pendiente("10:00"), bog("17:30"))).toBeNull();
   });
 
   it("sin estado si la inspección no tiene fecha de envío", () => {
-    expect(estadoVencimiento({ ...pendiente(0), completedAt: null }, ahora)).toBeNull();
+    expect(estadoVencimiento({ ...pendiente("06:00"), completedAt: null }, bog("06:00"))).toBeNull();
   });
 });
 
 describe("resumirPendientes", () => {
   it("lista vacía: todo en cero", () => {
-    expect(resumirPendientes([], ahora)).toEqual({ total: 0, conNovedades: 0, vencidas: 0 });
+    expect(resumirPendientes([], bog("09:00"))).toEqual({ total: 0, conNovedades: 0, vencidas: 0 });
   });
 
   it("cuenta pendientes, con novedades y vencidas", () => {
-    const lista = [pendiente(10), pendiente(90, 2), pendiente(70), pendiente(5, 1)];
-    expect(resumirPendientes(lista, ahora)).toEqual({ total: 4, conNovedades: 2, vencidas: 2 });
+    const lista = [pendiente("06:00"), pendiente("06:30", 2), pendiente("09:00"), pendiente("18:00", 1)];
+    // A las 8:30: las dos de la mañana ya vencieron; la de las 9:00 y la de las 18:00 esperan su ventana.
+    expect(resumirPendientes(lista, bog("08:30"))).toEqual({ total: 4, conNovedades: 2, vencidas: 2 });
   });
 
   it("por vencer no cuenta como vencida", () => {
-    expect(resumirPendientes([pendiente(55)], ahora).vencidas).toBe(0);
+    expect(resumirPendientes([pendiente("06:00")], bog("07:55")).vencidas).toBe(0);
   });
 });
 
 describe("textoPlazoAprobador", () => {
-  const vence = new Date(ahora.getTime() + 20 * MIN);
-  const vencio = new Date(ahora.getTime() - 20 * MIN);
-
-  it("sin fecha de vencimiento no hay texto", () => {
-    expect(
-      textoPlazoAprobador({ fueraDeHorario: false, vence: null, vencido: false, habilitadoHasta: null, puedeDecidir: true }),
-    ).toBeNull();
+  const abre = bog("17:45");
+  const vence = bog("20:00");
+  const estado = (over: Partial<EstadoPlazoAprobador>): EstadoPlazoAprobador => ({
+    fueraDeHorario: false,
+    abre,
+    vence,
+    vencido: false,
+    fueraDeVentana: false,
+    habilitadoHasta: null,
+    puedeDecidir: true,
+    ...over,
   });
 
-  it("plazo vigente: texto normal con la hora límite", () => {
-    const r = textoPlazoAprobador({ fueraDeHorario: false, vence, vencido: false, habilitadoHasta: null, puedeDecidir: true });
-    expect(r).toEqual({ texto: `Plazo hasta las ${formatHora(vence)}`, vencido: false });
+  it("sin fecha de vencimiento no hay texto", () => {
+    expect(textoPlazoAprobador(estado({ abre: null, vence: null }))).toBeNull();
+  });
+
+  it("ventana abierta: texto normal con la hora límite", () => {
+    expect(textoPlazoAprobador(estado({}))).toEqual({ texto: `Plazo hasta las ${formatHora(vence)}`, vencido: false });
+  });
+
+  it("ventana aún sin abrir: indica desde cuándo se puede decidir", () => {
+    const r = textoPlazoAprobador(estado({ fueraDeVentana: true, puedeDecidir: false }));
+    expect(r).toEqual({ texto: `Se puede decidir desde las ${formatHora(abre)}`, vencido: false });
+  });
+
+  it("ventana aún sin abrir con habilitación vigente: agrega hasta cuándo", () => {
+    const hasta = bog("16:00");
+    const r = textoPlazoAprobador(estado({ fueraDeVentana: true, habilitadoHasta: hasta }));
+    expect(r).toEqual({
+      texto: `Se puede decidir desde las ${formatHora(abre)} · habilitado hasta las ${formatHora(hasta)}`,
+      vencido: false,
+    });
   });
 
   it("plazo vencido: texto crítico", () => {
-    const r = textoPlazoAprobador({ fueraDeHorario: false, vence: vencio, vencido: true, habilitadoHasta: null, puedeDecidir: false });
-    expect(r).toEqual({ texto: `Plazo vencido a las ${formatHora(vencio)}`, vencido: true });
+    const r = textoPlazoAprobador(estado({ vencido: true, fueraDeVentana: true, puedeDecidir: false }));
+    expect(r).toEqual({ texto: `Plazo vencido a las ${formatHora(vence)}`, vencido: true });
   });
 
   it("plazo vencido con habilitación vigente: agrega hasta cuándo", () => {
-    const hasta = new Date(ahora.getTime() + 30 * MIN);
-    const r = textoPlazoAprobador({ fueraDeHorario: false, vence: vencio, vencido: true, habilitadoHasta: hasta, puedeDecidir: true });
+    const hasta = bog("21:00");
+    const r = textoPlazoAprobador(estado({ vencido: true, fueraDeVentana: true, habilitadoHasta: hasta }));
     expect(r).toEqual({
-      texto: `Plazo vencido a las ${formatHora(vencio)} · habilitado hasta las ${formatHora(hasta)}`,
+      texto: `Plazo vencido a las ${formatHora(vence)} · habilitado hasta las ${formatHora(hasta)}`,
       vencido: true,
     });
   });

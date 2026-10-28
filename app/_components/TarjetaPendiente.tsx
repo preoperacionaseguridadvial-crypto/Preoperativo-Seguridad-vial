@@ -3,7 +3,8 @@ import { requiereAtencionEstadoConductor } from "@/lib/inspections/estado-conduc
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 import type { PendienteConFoto } from "@/lib/inspections/pendientes-con-foto";
 import { MENSAJE_ENVIADA_FUERA_DE_HORARIO, estadoPlazoParaAprobador } from "@/lib/horarios/estado-plazo-aprobador";
-import { formatFechaHora, formatHora } from "@/lib/fechas/formato";
+import { textoPlazoAprobador } from "@/lib/inicio/pendientes-aprobador";
+import { formatFechaHora } from "@/lib/fechas/formato";
 
 /**
  * Tarjeta de una inspección pendiente de decisión (Supervisor): miniatura o
@@ -26,7 +27,8 @@ export function TarjetaPendiente({
   const esCarro = inspection.vehicle.tipoVehiculo === "CARRO";
   const espera = tiempoTranscurrido(inspection.completedAt, ahora);
   const plazo = estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta });
-  const sinPlazo = plazo.vencido && !plazo.puedeDecidir;
+  const textoPlazo = textoPlazoAprobador(plazo);
+  const sinPlazo = plazo.fueraDeVentana && !plazo.puedeDecidir;
 
   return (
     <li>
@@ -67,13 +69,9 @@ export function TarjetaPendiente({
             </span>
           )}
 
-          {plazo.vence && (
-            <span className={`text-xs ${sinPlazo ? "font-semibold text-status-crit-ink" : "text-ink-muted"}`}>
-              {plazo.vencido
-                ? plazo.habilitadoHasta
-                  ? `Plazo vencido a las ${formatHora(plazo.vence)} · habilitado hasta las ${formatHora(plazo.habilitadoHasta)}`
-                  : `Plazo vencido a las ${formatHora(plazo.vence)}`
-                : `Plazo para decidir: hasta las ${formatHora(plazo.vence)}`}
+          {textoPlazo && (
+            <span className={`text-xs ${sinPlazo && plazo.vencido ? "font-semibold text-status-crit-ink" : "text-ink-muted"}`}>
+              {textoPlazo.texto}
             </span>
           )}
 
@@ -86,7 +84,9 @@ export function TarjetaPendiente({
           {(noApta || alertaConductor || novedades > 0 || sinPlazo) && (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {sinPlazo && (
-                <Chip className="bg-status-crit text-white">Plazo vencido: requiere habilitación SST</Chip>
+                <Chip className="bg-status-crit text-white">
+                  {plazo.vencido ? "Plazo vencido: requiere habilitación SST" : "Fuera de horario: requiere habilitación SST"}
+                </Chip>
               )}
               {noApta && (
                 <Chip className="bg-status-crit text-white">No apta para operar</Chip>

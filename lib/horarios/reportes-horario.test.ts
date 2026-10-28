@@ -88,17 +88,18 @@ describe("getReporteHorarios", () => {
     const dir = await crearUsuario(Role.SUPERVISOR, { name: "Dir" });
     const so = await crearUsuario(Role.SUPERVISOR_OLEARIARI, { name: "SO", sede: Sede.OLEARIARI });
     const v = await crearVehiculo();
-    // Bogotá: 20 min, aprobada
+    // Ventana de aprobación de la mañana: 5:45-8:00 a. m. de Bogotá = 10:45-13:00 UTC.
+    // Bogotá: 20 min, aprobada dentro de la ventana
     await inspeccion(w.id, v.id, {
       sede: Sede.BOGOTA,
-      startedAt: t("10", "09:50"),
-      completedAt: t("10", "10:00"),
-      approvedAt: t("10", "10:20"),
-      reviewedAt: t("10", "10:20"),
+      startedAt: t("10", "10:50"),
+      completedAt: t("10", "11:00"),
+      approvedAt: t("10", "11:20"),
+      reviewedAt: t("10", "11:20"),
       status: InspectionStatus.APROBADA,
       supervisorId: dir.id,
     });
-    // Bogotá: 90 min, rechazada fuera de plazo
+    // Bogotá: 90 min, rechazada después de las 8:00 a. m. (fuera de plazo)
     await inspeccion(w.id, v.id, {
       sede: Sede.BOGOTA,
       startedAt: t("10", "11:50"),
@@ -111,12 +112,12 @@ describe("getReporteHorarios", () => {
     // Oleariari: etapa 1 10 min (so), etapa 2 40 min (dir)
     await inspeccion(w.id, v.id, {
       sede: Sede.OLEARIARI,
-      startedAt: t("11", "09:50"),
-      completedAt: t("11", "10:00"),
-      revisadaSupervisorOleariariAt: t("11", "10:10"),
+      startedAt: t("11", "10:50"),
+      completedAt: t("11", "11:00"),
+      revisadaSupervisorOleariariAt: t("11", "11:10"),
       supervisorOleariariId: so.id,
-      approvedAt: t("11", "10:50"),
-      reviewedAt: t("11", "10:50"),
+      approvedAt: t("11", "11:50"),
+      reviewedAt: t("11", "11:50"),
       status: InspectionStatus.APROBADA,
       supervisorId: dir.id,
     });
@@ -169,25 +170,25 @@ describe("getReporteHorarios", () => {
 
   it("4b. pendientes con plazo vencido ahora, por etapa (ignora el rango de fechas)", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(t("20", "15:00"));
+    vi.setSystemTime(t("20", "23:00")); // 6:00 p. m. de Bogotá: ventana 5:45-8:00 p. m. abierta
     const w = await crearUsuario(Role.TRABAJADOR, { sede: Sede.BOGOTA });
     const v = await crearVehiculo();
-    // Bogotá vencida (hace 2 h) y vigente (hace 10 min)
-    await inspeccion(w.id, v.id, { sede: Sede.BOGOTA, completedAt: t("20", "13:00") });
-    await inspeccion(w.id, v.id, { sede: Sede.BOGOTA, completedAt: t("20", "14:50") });
+    // Bogotá vencida (ventana de las 8:00 a. m. ya cerró) y vigente (enviada 5:50 p. m.)
+    await inspeccion(w.id, v.id, { sede: Sede.BOGOTA, completedAt: t("20", "12:00") });
+    await inspeccion(w.id, v.id, { sede: Sede.BOGOTA, completedAt: t("20", "22:50") });
     // Oleariari etapa 1 vencida
-    await inspeccion(w.id, v.id, { sede: Sede.OLEARIARI, completedAt: t("20", "13:30") });
-    // Oleariari etapa 2: revisión hace 30 min (vigente) aunque se envió hace 3 h
+    await inspeccion(w.id, v.id, { sede: Sede.OLEARIARI, completedAt: t("20", "12:30") });
+    // Oleariari etapa 2: revisión a las 5:30 p. m. (ventana de la tarde, vigente) aunque se envió en la mañana
     await inspeccion(w.id, v.id, {
       sede: Sede.OLEARIARI,
-      completedAt: t("20", "12:00"),
-      revisadaSupervisorOleariariAt: t("20", "14:30"),
+      completedAt: t("20", "11:00"),
+      revisadaSupervisorOleariariAt: t("20", "22:30"),
     });
-    // Oleariari etapa 2 vencida
+    // Oleariari etapa 2 vencida (revisada a las 7:00 a. m.)
     await inspeccion(w.id, v.id, {
       sede: Sede.OLEARIARI,
-      completedAt: t("20", "10:00"),
-      revisadaSupervisorOleariariAt: t("20", "13:00"),
+      completedAt: t("20", "11:00"),
+      revisadaSupervisorOleariariAt: t("20", "12:00"),
     });
 
     const r = await getReporteHorarios(RANGO);
