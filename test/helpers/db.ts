@@ -23,6 +23,7 @@ export async function limpiarBaseDeTest() {
   await prisma.appSetting.deleteMany({});
   await prisma.inspection.deleteMany({});
   await prisma.habilitacionHorario.deleteMany({});
+  await prisma.suscripcionPush.deleteMany({});
   await prisma.checklistItem.deleteMany({});
   await prisma.checklistCategory.deleteMany({});
   await prisma.vehicle.deleteMany({});

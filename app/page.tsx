@@ -10,6 +10,7 @@ import { getPendientesConFoto } from "@/lib/inspections/pendientes-con-foto";
 import { ordenarPendientesPorAtencion } from "@/lib/inspections/partir-pendientes";
 import { AppHeader } from "@/app/_components/AppHeader";
 import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
+import { ActivarNotificaciones } from "@/app/_components/ActivarNotificaciones";
 import { SaludoInicio } from "@/app/_components/inicio/SaludoInicio";
 import { AtajosInicio } from "@/app/_components/inicio/AtajosInicio";
 import { EncabezadoAprobador } from "@/app/_components/inicio/EncabezadoAprobador";
@@ -92,6 +93,7 @@ export default async function Home({
           </div>
           {resumenDia && <ResumenDelDia resumen={resumenDia} />}
           <AccesosRapidosSst atajos={atajosPorRol(rol)} />
+          <ActivarNotificaciones />
           {vencimientos && <EstadoDocumentosVehiculos vehiculos={vencimientos} />}
         </main>
       </div>
@@ -105,6 +107,7 @@ export default async function Home({
         <SaludoInicio nombre={user.name} rol={rol} ahora={ahora} />
         {resumenDia && <ResumenDelDia resumen={resumenDia} />}
         <AtajosInicio atajos={atajosPorRol(rol)} />
+        {rolAprobador && <ActivarNotificaciones />}
         {vencimientos && <VencimientosVehiculos vehiculos={vencimientos} />}
       </main>
     </div>

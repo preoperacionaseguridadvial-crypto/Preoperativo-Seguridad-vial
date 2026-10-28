@@ -7,6 +7,7 @@ import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
 import { Role, InspectionStatus, Prisma, RespuestaChecklist, TipoFirma, TipoVehiculo } from "@/generated/prisma/client";
 import type { Sede, TipoNovedad } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
+import { notificarInspeccion } from "@/lib/notificaciones/notificar-inspeccion";
 import { PERFIL_ADJUNTO_NOVEDAD, validarArchivo } from "@/lib/storage/validar-archivo";
 import { PREGUNTAS_ESTADO_CONDUCTOR, type CampoEstadoConductor } from "@/lib/inspections/estado-conductor";
 import {
@@ -734,6 +735,9 @@ export async function enviarInspeccion(inspectionId: string) {
     entityId: inspection.id,
     metadata: { status, puedeOperar: inspection.puedeOperar },
   });
+
+  // Aviso push a quien debe revisarla (best-effort, después de responder).
+  notificarInspeccion("ENVIADA", inspection.id, session.user.id);
 
   return updated;
 }

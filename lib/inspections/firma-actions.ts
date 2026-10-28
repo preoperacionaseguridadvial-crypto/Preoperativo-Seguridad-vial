@@ -7,6 +7,7 @@ import { Role, InspectionStatus, TipoFirma } from "@/generated/prisma/client";
 import { uploadObject } from "@/lib/storage/s3";
 import { exigirHorarioParaContinuar } from "@/lib/horarios/habilitaciones";
 import { PERFIL_FIRMA, validarArchivo } from "@/lib/storage/validar-archivo";
+import { notificarInspeccion } from "@/lib/notificaciones/notificar-inspeccion";
 
 // Server actions de la firma manuscrita digital (Fase D). El formato oficial
 // FO-SVS-23 tiene dos líneas de firma ("NOMBRE Y FIRMA DEL CONDUCTOR" /
@@ -146,4 +147,11 @@ export async function guardarFirmaSupervisor(inspectionId: string, formData: For
     formData,
     auditAction: esOleariari ? "FIRMAR_SUPERVISOR_OLEARIARI" : "FIRMAR_SUPERVISOR",
   });
+
+  // Con la firma de la primera etapa la inspección entra a la cola del Director
+  // (ver whereColaPendientes): recién ahora se le avisa. Si esa etapa fue un
+  // rechazo (`reviewedAt` fijado) la inspección está cerrada y no pasa al Director.
+  if (esOleariari && inspection.reviewedAt === null) {
+    notificarInspeccion("PENDIENTE_DIRECTOR", inspectionId, session.user.id);
+  }
 }

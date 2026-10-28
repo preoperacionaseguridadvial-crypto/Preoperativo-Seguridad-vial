@@ -5,6 +5,11 @@ vi.mock("@/lib/auth/config", () => ({
   auth: () => mockAuth(),
 }));
 
+const mockNotificar = vi.fn();
+vi.mock("@/lib/notificaciones/notificar-inspeccion", () => ({
+  notificarInspeccion: (...args: unknown[]) => mockNotificar(...args),
+}));
+
 import { prisma } from "@/lib/prisma";
 import { Role, InspectionStatus, Sede, TipoFirma, RespuestaChecklist } from "@/generated/prisma/client";
 import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervisor-actions";
@@ -71,6 +76,7 @@ beforeEach(async () => {
   vi.setSystemTime(new Date("2026-01-15T06:30:00-05:00"));
   await limpiarBaseDeTest();
   mockAuth.mockReset();
+  mockNotificar.mockReset();
 });
 
 afterEach(() => {
@@ -495,5 +501,84 @@ describe("flujo de dos etapas — Director de Operaciones (etapa 2)", () => {
 
     const resultado = await aprobarInspeccion(inspection.id);
     expect(resultado.status).toBe(InspectionStatus.APROBADA);
+  });
+});
+
+// Avisos push (notificaciones-push): se disparan solo tras una decisión exitosa.
+describe("notificaciones push de la decisión", () => {
+  it("el Director aprueba: avisa APROBADA con su cargo", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.BOGOTA });
+    loginComo(director);
+
+    await aprobarInspeccion(inspection.id);
+
+    expect(mockNotificar).toHaveBeenCalledTimes(1);
+    expect(mockNotificar).toHaveBeenCalledWith(
+      "APROBADA",
+      inspection.id,
+      director.id,
+      expect.objectContaining({ decididoPor: "Director de Operaciones" }),
+    );
+  });
+
+  it("el Supervisor Oleariari aprueba la primera etapa: avisa REVISADA_SUPERVISOR_OLEARIARI (no APROBADA)", async () => {
+    const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.OLEARIARI });
+    loginComo(supOleariari);
+
+    await aprobarInspeccion(inspection.id);
+
+    expect(mockNotificar).toHaveBeenCalledTimes(1);
+    expect(mockNotificar).toHaveBeenCalledWith(
+      "REVISADA_SUPERVISOR_OLEARIARI",
+      inspection.id,
+      supOleariari.id,
+      expect.anything(),
+    );
+  });
+
+  it("el Director rechaza: avisa RECHAZADA con cargo y motivo", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.BOGOTA });
+    loginComo(director);
+
+    await rechazarInspeccion(inspection.id, "  Llantas lisas ");
+
+    expect(mockNotificar).toHaveBeenCalledWith(
+      "RECHAZADA",
+      inspection.id,
+      director.id,
+      { decididoPor: "Director de Operaciones", observacion: "Llantas lisas" },
+    );
+  });
+
+  it("el Supervisor Oleariari rechaza en primera etapa: avisa RECHAZADA con su cargo", async () => {
+    const supOleariari = await crearUsuario(Role.SUPERVISOR_OLEARIARI);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.OLEARIARI });
+    loginComo(supOleariari);
+
+    await rechazarInspeccion(inspection.id, "Falta foto");
+
+    expect(mockNotificar).toHaveBeenCalledWith(
+      "RECHAZADA",
+      inspection.id,
+      supOleariari.id,
+      { decididoPor: "Supervisor Oleariari", observacion: "Falta foto" },
+    );
+  });
+
+  it("si la decisión falla, no avisa nada", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion(InspectionStatus.PENDIENTE_APROBACION, { sede: Sede.BOGOTA });
+    loginComo(director);
+
+    await expect(rechazarInspeccion(inspection.id, "   ")).rejects.toThrow(/observación es obligatoria/i);
+    await aprobarInspeccion(inspection.id);
+    mockNotificar.mockClear();
+    await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(/no está en un estado que admita revisión/i);
+    await expect(rechazarInspeccion(inspection.id, "x")).rejects.toThrow();
+
+    expect(mockNotificar).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ import {
 } from "@/lib/inspections/cola-aprobacion";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { exigirPlazoParaDecidir } from "@/lib/horarios/habilitaciones";
+import { notificarInspeccion } from "@/lib/notificaciones/notificar-inspeccion";
 
 // Server actions de la revisión de los aprobadores (Fase 3 + roles-oleariari).
 // Hay dos aprobadores: el Director de Operaciones (rol SUPERVISOR), que decide
@@ -148,6 +149,13 @@ export async function aprobarInspeccion(inspectionId: string, observacion?: stri
     metadata: { observacion: observacionLimpia, ...metadataFueraDePlazo(plazo) },
   });
 
+  // Aviso push (best-effort). La primera etapa de Oleariari todavía no llega al
+  // Director: le avisa la firma (ver guardarFirmaSupervisor).
+  notificarInspeccion(etapa === "OLEARIARI" ? "REVISADA_SUPERVISOR_OLEARIARI" : "APROBADA", inspectionId, session.user.id, {
+    decididoPor: etiquetaRol(session.user.role),
+    observacion: observacionLimpia,
+  });
+
   return updated;
 }
 
@@ -195,6 +203,11 @@ export async function rechazarInspeccion(inspectionId: string, observacion: stri
     entityType: "Inspection",
     entityId: inspectionId,
     metadata: { observacion: observacionLimpia, ...metadataFueraDePlazo(plazo) },
+  });
+
+  notificarInspeccion("RECHAZADA", inspectionId, session.user.id, {
+    decididoPor: etiquetaRol(session.user.role),
+    observacion: observacionLimpia,
   });
 
   return updated;
