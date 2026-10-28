@@ -34,11 +34,25 @@ function esEndpointValido(valor: unknown): valor is string {
   }
 }
 
+// El servidor hace POST al endpoint al notificar: solo se aceptan los servicios
+// push de los navegadores para que una suscripción no lo use contra otro host.
+const DOMINIOS_PUSH = [
+  "fcm.googleapis.com",
+  "push.apple.com",
+  "push.services.mozilla.com",
+  "notify.windows.com",
+];
+
+function esServicioPush(endpoint: string): boolean {
+  const host = new URL(endpoint).hostname;
+  return DOMINIOS_PUSH.some((dominio) => host === dominio || host.endsWith(`.${dominio}`));
+}
+
 /** Valida el JSON de `PushSubscription.toJSON()`; `null` si no tiene la forma esperada. */
 export function validarSuscripcion(body: unknown): SuscripcionEntrante | null {
   if (typeof body !== "object" || body === null) return null;
   const { endpoint, keys } = body as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } | null };
-  if (!esEndpointValido(endpoint)) return null;
+  if (!esEndpointValido(endpoint) || !esServicioPush(endpoint)) return null;
   if (typeof keys !== "object" || keys === null) return null;
   if (!esTextoAcotado(keys.p256dh, MAX_CLAVE) || !esTextoAcotado(keys.auth, MAX_CLAVE)) return null;
   return { endpoint, p256dh: keys.p256dh, auth: keys.auth };

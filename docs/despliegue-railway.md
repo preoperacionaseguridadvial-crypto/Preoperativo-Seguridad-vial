@@ -41,8 +41,20 @@ Guía para publicar la aplicación con la app y PostgreSQL en **Railway** (plan 
 | `S3_ACCESS_KEY_ID` | Access Key ID del token de R2 |
 | `S3_SECRET_ACCESS_KEY` | Secret Access Key del token de R2 |
 | `TZ` | `America/Bogota` |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Llave pública VAPID de las notificaciones push (ver abajo). |
+| `VAPID_PRIVATE_KEY` | Llave privada VAPID. Secreta: no compartirla ni guardarla en el repositorio. |
+| `VAPID_SUBJECT` | `mailto:` seguido de un correo de contacto, sin espacios ni comillas (ej. `mailto:soporte@empresa.com`). |
 
 `S3_PUBLIC_ENDPOINT` no se usa en producción (solo sirve para MinIO local).
+
+### Llaves de notificaciones push (VAPID)
+
+1. Generarlas **una sola vez** en local: `npx web-push generate-vapid-keys`.
+2. Cargar la *Public Key* en `NEXT_PUBLIC_VAPID_PUBLIC_KEY` y la *Private Key* en `VAPID_PRIVATE_KEY`.
+3. Las variables deben existir **antes del build**: la llave pública se incorpora al compilar. Si se agregan después, hacer *Redeploy*.
+4. No cambiarlas: si se regeneran, todos los dispositivos dejan de recibir notificaciones hasta que cada usuario vuelva a tocar "Activar notificaciones".
+
+Sin estas variables la app funciona igual, pero no envía notificaciones. Cada usuario debe tocar "Activar notificaciones" en su inicio desde la app instalada; en iPhone se requiere iOS 16.4 o superior y la app agregada a la pantalla de inicio.
 
 ## 4. Seed en producción
 

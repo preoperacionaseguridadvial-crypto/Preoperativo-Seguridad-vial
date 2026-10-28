@@ -87,10 +87,22 @@ describe("/api/notificaciones/suscripcion", () => {
     ["p256dh vacío", { ...SUB, keys: { p256dh: "", auth: "a" } }],
     ["auth no string", { ...SUB, keys: { p256dh: "p", auth: 5 } }],
     ["endpoint gigante", { ...SUB, endpoint: `https://x.example/${"a".repeat(3000)}` }],
+    ["endpoint fuera de los servicios push", { ...SUB, endpoint: "https://interno.example/x" }],
+    ["host que solo termina parecido", { ...SUB, endpoint: "https://evilfcm.googleapis.com.example/x" }],
   ])("payload inválido (%s): 400", async (_nombre, body) => {
     loginComo(await crearUsuario(Role.TRABAJADOR));
     expect((await POST(req("POST", body))).status).toBe(400);
     expect(await prisma.suscripcionPush.count()).toBe(0);
+  });
+
+  it.each([
+    "https://fcm.googleapis.com/fcm/send/abc",
+    "https://web.push.apple.com/QGx",
+    "https://updates.push.services.mozilla.com/wpush/v2/abc",
+    "https://wns2-par02p.notify.windows.com/w/?token=abc",
+  ])("acepta el servicio push oficial %s", async (endpoint) => {
+    loginComo(await crearUsuario(Role.TRABAJADOR));
+    expect((await POST(req("POST", { ...SUB, endpoint }))).status).toBe(200);
   });
 
   it("DELETE borra solo la suscripción del usuario actual", async () => {
