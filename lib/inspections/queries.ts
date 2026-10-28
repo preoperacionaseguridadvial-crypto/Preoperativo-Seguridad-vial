@@ -11,7 +11,12 @@ import {
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { construirPasosFlujo, pasoAnterior, pasoSiguiente, pasosChecklistEnOrden } from "@/lib/inspections/pasos-flujo";
 import { PREGUNTAS_ESTADO_CONDUCTOR } from "@/lib/inspections/estado-conductor";
-import { fotoDespuesDelItem, type ClaveFotoFlujo } from "@/lib/inspections/fotos-flujo";
+import {
+  fotoDespuesDelItem,
+  llantasDeVehiculo,
+  etiquetaFotoLlanta,
+  type ClaveFotoFlujo,
+} from "@/lib/inspections/fotos-flujo";
 
 // Fase soporte-moto-carro (Slice 3, A7): las 2 fotos diarias obligatorias,
 // independiente del resultado del checklist. Un único lugar de verdad de
@@ -22,10 +27,14 @@ export const FOTOS_DIARIAS_REQUERIDAS: TipoFotoInspeccion[] = [
   TipoFotoInspeccion.PLACA,
 ];
 
-// Tipo de `FotoInspeccion` de cada paso de foto del recorrido (ver fotos-flujo.ts).
-const TIPO_FOTO_POR_CLAVE: Record<ClaveFotoFlujo, TipoFotoInspeccion> = {
-  llantas: TipoFotoInspeccion.LLANTAS,
-};
+// Tipos de `FotoInspeccion` que pide cada paso de foto del recorrido para este
+// vehículo (ver fotos-flujo.ts): el paso `llantas` pide una foto por llanta.
+function tiposDeFotoDelPaso(clave: ClaveFotoFlujo, tipoVehiculo: TipoVehiculo): TipoFotoInspeccion[] {
+  switch (clave) {
+    case "llantas":
+      return llantasDeVehiculo(tipoVehiculo);
+  }
+}
 
 /**
  * Catálogo completo del checklist para un tipo de vehículo, ordenado por
@@ -139,7 +148,7 @@ export function categoriasParaLista<T extends { nombre: string; items: { estado:
 
 /**
  * Catálogo con la foto que se pide después de cada ítem (`fotoDespues`), para
- * armar los pasos del recorrido. Solo MOTO pide la foto de las llantas.
+ * armar los pasos del recorrido. Ambos tipos de vehículo piden las fotos de las llantas.
  */
 function catalogoParaFlujo(
   catalogo: Awaited<ReturnType<typeof getChecklistCatalog>>,
@@ -158,7 +167,7 @@ function catalogoParaFlujo(
 /**
  * Tipos de foto obligatorios para enviar: las 2 fotos diarias (lateral y placa)
  * más las que el recorrido pide dentro del checklist para este vehículo (hoy, la
- * de las llantas de la MOTO). Se deriva del mismo recorrido que
+ * de las llantas: 2 en MOTO, 4 en CARRO). Se deriva del mismo recorrido que
  * `getNextStepPath`, así "se pide" y "es obligatoria" no pueden divergir.
  */
 export function fotosRequeridasParaEnvio(
@@ -168,7 +177,7 @@ export function fotosRequeridasParaEnvio(
   const delRecorrido = pasosChecklistEnOrden(
     catalogoParaFlujo(catalogo, tipoVehiculo),
     CATEGORIA_SIN_PANTALLA_PROPIA,
-  ).flatMap((paso) => (paso.tipo === "foto" ? [TIPO_FOTO_POR_CLAVE[paso.clave]] : []));
+  ).flatMap((paso) => (paso.tipo === "foto" ? tiposDeFotoDelPaso(paso.clave, tipoVehiculo) : []));
   return [...FOTOS_DIARIAS_REQUERIDAS, ...delRecorrido];
 }
 
@@ -207,7 +216,7 @@ export async function getFollowingStepPath(inspectionId: string, pasoActual: str
 /**
  * Siguiente paso del checklist sin completar, en el orden del recorrido
  * (`pasosChecklistEnOrden`: documentos primero, luego los ítems por `orden`
- * global, con la foto de las llantas de la MOTO justo después de Llantas), como
+ * global, con las fotos de las llantas justo después del ítem de llantas), como
  * ruta relativa a `/inspecciones/[id]/`, o `null` si ya está todo completo. Se
  * usa para guiar al trabajador paso a paso por el checklist. Los documentos son
  * una sola pantalla (`checklist`): se pide mientras quede alguno sin responder.
@@ -231,7 +240,7 @@ async function getNextChecklistStep(inspectionId: string): Promise<string | null
       if (hayDocumentoPendiente) return "checklist";
     } else if (paso.tipo === "item") {
       if (!respondedIds.has(paso.id)) return `checklist/${paso.id}`;
-    } else if (!tiposConFoto.has(TIPO_FOTO_POR_CLAVE[paso.clave])) {
+    } else if (!tiposDeFotoDelPaso(paso.clave, tipoVehiculo).every((tipo) => tiposConFoto.has(tipo))) {
       return `foto-${paso.clave}`;
     }
   }
@@ -368,12 +377,20 @@ export async function getFirmasInspeccion(inspectionId: string) {
  * como potencialmente por el Supervisor más adelante.
  */
 export async function getFotosInspeccion(inspectionId: string) {
-  const fotos = await prisma.fotoInspeccion.findMany({ where: { inspectionId } });
+  const [fotos, tipoVehiculo] = await Promise.all([
+    prisma.fotoInspeccion.findMany({ where: { inspectionId } }),
+    getTipoVehiculoDeInspeccion(inspectionId),
+  ]);
   return {
     lateral: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.LATERAL) ?? null,
     placa: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.PLACA) ?? null,
-    // Solo MOTO: se toma en su propio paso (`/foto-llantas`), no en `/fotos`.
-    llantas: fotos.find((foto) => foto.tipo === TipoFotoInspeccion.LLANTAS) ?? null,
+    // Una por llanta del vehículo (2 en MOTO, 4 en CARRO), en orden de posición:
+    // se toman en su propio paso (`/foto-llantas`), no en `/fotos`.
+    llantas: llantasDeVehiculo(tipoVehiculo).map((tipo) => ({
+      tipo,
+      etiqueta: etiquetaFotoLlanta(tipo),
+      foto: fotos.find((foto) => foto.tipo === tipo) ?? null,
+    })),
   };
 }
 

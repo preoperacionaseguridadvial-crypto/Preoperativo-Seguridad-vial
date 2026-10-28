@@ -245,10 +245,10 @@ describe("enviarInspeccion — fotos diarias obligatorias", () => {
   });
 });
 
-// Foto de las llantas (feature checklist-bueno-malo): en MOTO es obligatoria
-// cuando el catálogo incluye el ítem Llantas (mismo criterio que el paso del
-// recorrido); en CARRO no se exige.
-describe("enviarInspeccion — foto de las llantas (MOTO)", () => {
+// Fotos de las llantas (feature fotos-llantas-por-posicion): una por llanta
+// (MOTO 2, CARRO 4) cuando el catálogo incluye el ítem de llantas (mismo
+// criterio que el paso del recorrido).
+describe("enviarInspeccion — fotos de las llantas", () => {
   async function prepararInspeccion(tipoVehiculo: TipoVehiculo) {
     const categoria = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
     await crearChecklistItem(categoria.id, {
@@ -278,23 +278,58 @@ describe("enviarInspeccion — foto de las llantas (MOTO)", () => {
     return inspection;
   }
 
-  it("MOTO: rechaza el envío sin la foto de las llantas", async () => {
+  async function subirLlantas(inspectionId: string, tipos: TipoFotoInspeccion[]) {
+    await prisma.fotoInspeccion.createMany({
+      data: tipos.map((tipo) => ({ inspectionId, tipo, s3Key: `${tipo}.jpg` })),
+    });
+  }
+
+  it("MOTO: rechaza el envío sin las fotos de las llantas, nombrando las que faltan", async () => {
     const inspection = await prepararInspeccion(TipoVehiculo.MOTO);
 
-    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos obligatorias: LLANTAS/i);
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(
+      /faltan fotos obligatorias: LLANTA_DELANTERA, LLANTA_TRASERA\./i,
+    );
   });
 
-  it("MOTO: acepta el envío con la foto de las llantas", async () => {
+  it("MOTO: rechaza el envío si falta una de las 2 llantas", async () => {
     const inspection = await prepararInspeccion(TipoVehiculo.MOTO);
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "c.jpg" },
-    });
+    await subirLlantas(inspection.id, [TipoFotoInspeccion.LLANTA_DELANTERA]);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos obligatorias: LLANTA_TRASERA\./i);
+  });
+
+  it("MOTO: la foto legado LLANTAS ya no basta", async () => {
+    const inspection = await prepararInspeccion(TipoVehiculo.MOTO);
+    await subirLlantas(inspection.id, [TipoFotoInspeccion.LLANTAS]);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(/faltan fotos obligatorias: LLANTA_DELANTERA/i);
+  });
+
+  it("MOTO: acepta el envío con las 2 fotos de las llantas", async () => {
+    const inspection = await prepararInspeccion(TipoVehiculo.MOTO);
+    await subirLlantas(inspection.id, [TipoFotoInspeccion.LLANTA_DELANTERA, TipoFotoInspeccion.LLANTA_TRASERA]);
 
     await expect(enviarInspeccion(inspection.id)).resolves.not.toThrow();
   });
 
-  it("CARRO: no exige la foto de las llantas", async () => {
+  it("CARRO: rechaza el envío sin las 4 fotos de las llantas", async () => {
     const inspection = await prepararInspeccion(TipoVehiculo.CARRO);
+    await subirLlantas(inspection.id, [TipoFotoInspeccion.LLANTA_DELANTERA_IZQUIERDA]);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow(
+      /faltan fotos obligatorias: LLANTA_DELANTERA_DERECHA, LLANTA_TRASERA_IZQUIERDA, LLANTA_TRASERA_DERECHA\./i,
+    );
+  });
+
+  it("CARRO: acepta el envío con las 4 fotos de las llantas", async () => {
+    const inspection = await prepararInspeccion(TipoVehiculo.CARRO);
+    await subirLlantas(inspection.id, [
+      TipoFotoInspeccion.LLANTA_DELANTERA_IZQUIERDA,
+      TipoFotoInspeccion.LLANTA_DELANTERA_DERECHA,
+      TipoFotoInspeccion.LLANTA_TRASERA_IZQUIERDA,
+      TipoFotoInspeccion.LLANTA_TRASERA_DERECHA,
+    ]);
 
     await expect(enviarInspeccion(inspection.id)).resolves.not.toThrow();
   });

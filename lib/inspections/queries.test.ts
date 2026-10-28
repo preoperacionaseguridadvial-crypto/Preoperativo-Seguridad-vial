@@ -10,7 +10,9 @@ import {
   getPreviousStepPath,
   getFollowingStepPath,
   categoriasParaLista,
+  fotosRequeridasParaEnvio,
 } from "@/lib/inspections/queries";
+import { llantasDeVehiculo } from "@/lib/inspections/fotos-flujo";
 import { CHECKLIST } from "@/prisma/catalogo-checklist";
 import {
   crearCatalogoMinimo,
@@ -159,7 +161,10 @@ describe("getFotosInspeccion", () => {
 
     expect(fotos.lateral).toBeNull();
     expect(fotos.placa).toBeNull();
-    expect(fotos.llantas).toBeNull();
+    expect(fotos.llantas.map((l) => [l.tipo, l.foto])).toEqual([
+      ["LLANTA_DELANTERA", null],
+      ["LLANTA_TRASERA", null],
+    ]);
   });
 
   it("devuelve cada foto en su slot correspondiente por tipo", async () => {
@@ -177,17 +182,40 @@ describe("getFotosInspeccion", () => {
     expect(fotos.placa?.s3Key).toBe("x-placa.jpg");
   });
 
-  it("devuelve la foto de las llantas en su propio slot, sin contarla como lateral ni placa", async () => {
+  it("devuelve las fotos de las llantas de la MOTO en su propio slot, sin contarlas como lateral ni placa", async () => {
     const inspection = await crearInspeccionEnProceso();
     await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "x-llantas.jpg" },
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTA_TRASERA, s3Key: "x-trasera.jpg" },
     });
 
     const fotos = await getFotosInspeccion(inspection.id);
 
-    expect(fotos.llantas?.s3Key).toBe("x-llantas.jpg");
+    expect(fotos.llantas.map((l) => [l.tipo, l.foto?.s3Key ?? null])).toEqual([
+      ["LLANTA_DELANTERA", null],
+      ["LLANTA_TRASERA", "x-trasera.jpg"],
+    ]);
     expect(fotos.lateral).toBeNull();
     expect(fotos.placa).toBeNull();
+  });
+
+  it("CARRO: devuelve los 4 slots de llantas en orden de posición", async () => {
+    const worker = await crearUsuario(Role.TRABAJADOR, { tipoVehiculo: TipoVehiculo.CARRO });
+    const vehicle = await crearVehiculo({ tipoVehiculo: TipoVehiculo.CARRO });
+    const inspection = await prisma.inspection.create({
+      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+    });
+    await prisma.fotoInspeccion.create({
+      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTA_DELANTERA_DERECHA, s3Key: "dd.jpg" },
+    });
+
+    const fotos = await getFotosInspeccion(inspection.id);
+
+    expect(fotos.llantas.map((l) => [l.tipo, l.foto?.s3Key ?? null])).toEqual([
+      ["LLANTA_DELANTERA_IZQUIERDA", null],
+      ["LLANTA_DELANTERA_DERECHA", "dd.jpg"],
+      ["LLANTA_TRASERA_IZQUIERDA", null],
+      ["LLANTA_TRASERA_DERECHA", null],
+    ]);
   });
 });
 
@@ -409,8 +437,12 @@ describe("getNextStepPath — recorrido completo con el catálogo sembrado", () 
       }
       if (path === `${base}/foto-llantas`) {
         vistos.push("Foto de las llantas");
-        await prisma.fotoInspeccion.create({
-          data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "llantas.jpg" },
+        await prisma.fotoInspeccion.createMany({
+          data: llantasDeVehiculo(tipoVehiculo).map((tipo) => ({
+            inspectionId: inspection.id,
+            tipo,
+            s3Key: `${tipo}.jpg`,
+          })),
         });
         continue;
       }
@@ -450,6 +482,7 @@ describe("getNextStepPath — recorrido completo con el catálogo sembrado", () 
       "Documentos",
       "Luces altas, bajas, reversa e internas con direccionales",
       "Llantas, incluye repuesto",
+      "Foto de las llantas",
       "Nivel de aceite",
       "Nivel líquido de frenos",
       "Frenos",
@@ -463,9 +496,10 @@ describe("getNextStepPath — recorrido completo con el catálogo sembrado", () 
   });
 });
 
-// Foto de las llantas (feature checklist-bueno-malo): solo MOTO, paso propio
-// (`/foto-llantas`) entre el ítem Llantas y el siguiente del recorrido.
-describe("getNextStepPath — foto de las llantas (MOTO)", () => {
+// Fotos de las llantas (feature fotos-llantas-por-posicion): paso propio
+// (`/foto-llantas`) entre el ítem de llantas y el siguiente del recorrido; MOTO
+// pide 2 fotos, CARRO 4, y el paso sigue hasta que estén todas.
+describe("getNextStepPath — fotos de las llantas", () => {
   async function crearCatalogoConLlantas() {
     const visual = await prisma.checklistCategory.create({ data: { nombre: "Inspección Visual", orden: 1 } });
     const fluidos = await prisma.checklistCategory.create({ data: { nombre: "Fluidos", orden: 2 } });
@@ -500,15 +534,36 @@ describe("getNextStepPath — foto de las llantas (MOTO)", () => {
     expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/foto-llantas`);
   });
 
-  it("MOTO: con la foto ya subida sigue al siguiente ítem", async () => {
+  async function subirFoto(inspectionId: string, tipo: TipoFotoInspeccion) {
+    await prisma.fotoInspeccion.create({ data: { inspectionId, tipo, s3Key: `${tipo}.jpg` } });
+  }
+
+  it("MOTO: con solo una de las 2 fotos sigue en /foto-llantas", async () => {
     const items = await crearCatalogoConLlantas();
     const inspection = await inspeccionDe(TipoVehiculo.MOTO);
     await responder(inspection.id, items.llantasMoto.id);
-    await prisma.fotoInspeccion.create({
-      data: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS, s3Key: "llantas.jpg" },
-    });
+    await subirFoto(inspection.id, TipoFotoInspeccion.LLANTA_DELANTERA);
+
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/foto-llantas`);
+  });
+
+  it("MOTO: con las 2 fotos sigue al siguiente ítem", async () => {
+    const items = await crearCatalogoConLlantas();
+    const inspection = await inspeccionDe(TipoVehiculo.MOTO);
+    await responder(inspection.id, items.llantasMoto.id);
+    await subirFoto(inspection.id, TipoFotoInspeccion.LLANTA_DELANTERA);
+    await subirFoto(inspection.id, TipoFotoInspeccion.LLANTA_TRASERA);
 
     expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/checklist/${items.aceite.id}`);
+  });
+
+  it("MOTO: la foto legado LLANTAS ya no cuenta", async () => {
+    const items = await crearCatalogoConLlantas();
+    const inspection = await inspeccionDe(TipoVehiculo.MOTO);
+    await responder(inspection.id, items.llantasMoto.id);
+    await subirFoto(inspection.id, TipoFotoInspeccion.LLANTAS);
+
+    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/foto-llantas`);
   });
 
   it("MOTO: sin responder Llantas todavía no pide la foto", async () => {
@@ -518,12 +573,36 @@ describe("getNextStepPath — foto de las llantas (MOTO)", () => {
     expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/checklist/${items.llantasMoto.id}`);
   });
 
-  it("CARRO: nunca pide la foto de las llantas", async () => {
+  it("CARRO: tras responder Llantas manda a /foto-llantas hasta tener las 4 fotos", async () => {
     const items = await crearCatalogoConLlantas();
     const inspection = await inspeccionDe(TipoVehiculo.CARRO);
     await responder(inspection.id, items.llantasCarro.id);
+    const base = `/inspecciones/${inspection.id}`;
 
-    expect(await getNextStepPath(inspection.id)).toBe(`/inspecciones/${inspection.id}/checklist/${items.aceite.id}`);
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/foto-llantas`);
+    for (const tipo of llantasDeVehiculo("CARRO").slice(0, 3)) {
+      await subirFoto(inspection.id, tipo);
+      expect(await getNextStepPath(inspection.id)).toBe(`${base}/foto-llantas`);
+    }
+    await subirFoto(inspection.id, TipoFotoInspeccion.LLANTA_TRASERA_DERECHA);
+
+    expect(await getNextStepPath(inspection.id)).toBe(`${base}/checklist/${items.aceite.id}`);
+  });
+
+  it("fotosRequeridasParaEnvio: lateral y placa más 2 llantas en MOTO o 4 en CARRO", async () => {
+    await crearCatalogoConLlantas();
+    const moto = fotosRequeridasParaEnvio(await getChecklistCatalog(TipoVehiculo.MOTO), TipoVehiculo.MOTO);
+    const carro = fotosRequeridasParaEnvio(await getChecklistCatalog(TipoVehiculo.CARRO), TipoVehiculo.CARRO);
+
+    expect(moto).toEqual(["LATERAL", "PLACA", "LLANTA_DELANTERA", "LLANTA_TRASERA"]);
+    expect(carro).toEqual([
+      "LATERAL",
+      "PLACA",
+      "LLANTA_DELANTERA_IZQUIERDA",
+      "LLANTA_DELANTERA_DERECHA",
+      "LLANTA_TRASERA_IZQUIERDA",
+      "LLANTA_TRASERA_DERECHA",
+    ]);
   });
 
   it("Atrás / Siguiente la incluyen en el orden del flujo", async () => {

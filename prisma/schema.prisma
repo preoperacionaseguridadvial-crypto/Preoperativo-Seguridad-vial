@@ -99,10 +99,20 @@ enum TipoRespuestaItem {
 // Desde la feature checklist-bueno-malo se suma LLANTAS: foto de las llantas de
 // la MOTO, que se toma justo después del ítem Llantas (paso propio del
 // recorrido, no de /fotos) — ver lib/inspections/fotos-flujo.ts.
+// Desde la feature fotos-llantas-por-posicion se pide una foto POR llanta:
+// MOTO delantera/trasera, CARRO las cuatro posiciones. LLANTAS (una foto de
+// ambas llantas) queda solo como legado: ya no se pide ni se puede subir, pero
+// las inspecciones anteriores la conservan.
 enum TipoFotoInspeccion {
   LATERAL
   PLACA
   LLANTAS
+  LLANTA_DELANTERA
+  LLANTA_TRASERA
+  LLANTA_DELANTERA_IZQUIERDA
+  LLANTA_DELANTERA_DERECHA
+  LLANTA_TRASERA_IZQUIERDA
+  LLANTA_TRASERA_DERECHA
 }
 
 // Fase C: tipo de novedad, alineado a las convenciones de dibujo del

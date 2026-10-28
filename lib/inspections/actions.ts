@@ -684,8 +684,9 @@ export async function enviarInspeccion(inspectionId: string) {
 
   // Fase soporte-moto-carro (Slice 3, spec daily-vehicle-photos): las 2
   // fotos diarias (LATERAL/PLACA) son obligatorias, independiente del
-  // resultado del checklist; en MOTO también la foto de las llantas (feature
-  // checklist-bueno-malo, la misma regla que el paso del recorrido). Mismo
+  // resultado del checklist; más una foto por llanta (2 en MOTO, 4 en CARRO,
+  // feature fotos-llantas-por-posicion, la misma regla que el paso del
+  // recorrido). Mismo
   // criterio de diferencia de conjuntos que arriba (por tipo, no por cantidad).
   const fotosRequeridas = fotosRequeridasParaEnvio(catalog, vehicle?.tipoVehiculo ?? TipoVehiculo.MOTO);
   const fotos = await prisma.fotoInspeccion.findMany({

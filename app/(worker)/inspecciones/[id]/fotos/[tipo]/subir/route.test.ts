@@ -74,24 +74,39 @@ describe("POST /inspecciones/[id]/fotos/[tipo]/subir", () => {
     expect(mockUploadObject).toHaveBeenCalledOnce();
   });
 
-  it("llantas en una MOTO: guarda la foto de las llantas", async () => {
+  it("llanta_delantera en una MOTO: guarda la foto de esa llanta", async () => {
     const { worker, inspection } = await inspeccionDe();
     mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
-    const res = await llamar(inspection.id, "llantas");
+    const res = await llamar(inspection.id, "llanta_delantera");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     const fila = await prisma.fotoInspeccion.findUnique({
-      where: { inspectionId_tipo: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS } },
+      where: { inspectionId_tipo: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTA_DELANTERA } },
     });
-    expect(fila?.s3Key).toBe(`fotos-inspeccion/${inspection.id}/LLANTAS.jpg`);
+    expect(fila?.s3Key).toBe(`fotos-inspeccion/${inspection.id}/LLANTA_DELANTERA.jpg`);
   });
 
-  it("llantas en un CARRO: 400, la foto solo aplica a motos", async () => {
+  it("llanta_trasera_derecha en un CARRO: guarda la foto de esa llanta", async () => {
     const { worker, inspection } = await inspeccionDe(Role.TRABAJADOR, InspectionStatus.EN_PROCESO, TipoVehiculo.CARRO);
     mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
-    const res = await llamar(inspection.id, "llantas");
+    const res = await llamar(inspection.id, "llanta_trasera_derecha");
+    expect(res.status).toBe(200);
+  });
+
+  it("llanta de moto en un CARRO: 400, no corresponde al vehículo", async () => {
+    const { worker, inspection } = await inspeccionDe(Role.TRABAJADOR, InspectionStatus.EN_PROCESO, TipoVehiculo.CARRO);
+    mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
+    const res = await llamar(inspection.id, "llanta_delantera");
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/solo aplica a motos/i);
+    expect((await res.json()).error).toMatch(/no corresponde a este vehículo/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("llantas (legado): 404, ya no se puede subir", async () => {
+    const { worker, inspection } = await inspeccionDe();
+    mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
+    const res = await llamar(inspection.id, "llantas");
+    expect(res.status).toBe(404);
     expect(mockUploadObject).not.toHaveBeenCalled();
   });
 

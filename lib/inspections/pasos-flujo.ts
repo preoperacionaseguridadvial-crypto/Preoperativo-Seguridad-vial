@@ -100,7 +100,7 @@ export function pasosChecklistEnOrden(catalogo: CatalogoFlujo, categoriaLista: s
  * (lib/inspections/queries.ts) y sirve para el botón "Atrás": kilometraje →
  * documentos (una sola pantalla de lista, `/checklist`) → ítems del checklist
  * uno por uno en orden global (`pasosChecklistEnOrden`, con la foto de las
- * llantas de la MOTO justo después de Llantas) → declaración del
+ * llantas justo después del ítem de llantas) → declaración del
  * conductor (una entrada por pregunta) → fotos → resultado → confirmar.
  * Pura (recibe el catálogo ya filtrado por tipo de vehículo) para poder
  * probarla sin base.

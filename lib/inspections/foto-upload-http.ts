@@ -1,5 +1,6 @@
 import { Prisma, TipoFotoInspeccion } from "@/generated/prisma/client";
 import { ForbiddenError, UnauthenticatedError } from "@/lib/auth/requireRole";
+import { todasLasFotosDeLlanta } from "@/lib/inspections/fotos-flujo";
 
 // Traducción HTTP de la subida de fotos diarias (route handler
 // app/(worker)/inspecciones/[id]/fotos/[tipo]/subir/route.ts). Sin
@@ -7,14 +8,21 @@ import { ForbiddenError, UnauthenticatedError } from "@/lib/auth/requireRole";
 
 export const MENSAJE_ERROR_GENERICO_FOTO = "No se pudo guardar la foto. Intentá de nuevo.";
 
-/** `lateral`/`placa`/`llantas` (cualquier caja) -> enum; cualquier otra cosa -> `null`. */
+// Tipos que se pueden subir por HTTP. `LLANTAS` (legado) queda fuera a propósito.
+const TIPOS_SUBIBLES: readonly TipoFotoInspeccion[] = [
+  TipoFotoInspeccion.LATERAL,
+  TipoFotoInspeccion.PLACA,
+  ...todasLasFotosDeLlanta(),
+];
+
+/**
+ * `lateral`/`placa`/`llanta_*` (cualquier caja) -> enum; cualquier otra cosa
+ * (incluido el `llantas` legado) -> `null`. Que la llanta corresponda al
+ * vehículo lo valida `subirFotoInspeccion`.
+ */
 export function parseTipoFoto(raw: string): TipoFotoInspeccion | null {
   const valor = raw.toUpperCase();
-  return valor === TipoFotoInspeccion.LATERAL ||
-    valor === TipoFotoInspeccion.PLACA ||
-    valor === TipoFotoInspeccion.LLANTAS
-    ? valor
-    : null;
+  return TIPOS_SUBIBLES.find((tipo) => tipo === valor) ?? null;
 }
 
 function esErrorDeInfraestructura(err: unknown): boolean {

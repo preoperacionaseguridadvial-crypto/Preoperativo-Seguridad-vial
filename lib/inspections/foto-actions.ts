@@ -3,7 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { requireRole, ForbiddenError } from "@/lib/auth/requireRole";
-import { Role, InspectionStatus, Prisma, TipoFotoInspeccion, TipoVehiculo } from "@/generated/prisma/client";
+import { Role, InspectionStatus, Prisma, TipoFotoInspeccion } from "@/generated/prisma/client";
+import { esFotoLlantaDeVehiculo } from "@/lib/inspections/fotos-flujo";
 import { deleteObject, uploadObject } from "@/lib/storage/s3";
 import { invalidarFirmaConductor } from "@/lib/inspections/firma-invalidacion";
 import { exigirHorarioParaContinuar } from "@/lib/horarios/habilitaciones";
@@ -26,7 +27,7 @@ function esErrorFotoDuplicada(err: unknown): boolean {
 // no una respuesta de checklist.
 
 /**
- * Sube una foto diaria obligatoria (LATERAL, PLACA o, solo en MOTO, LLANTAS) y crea el
+ * Sube una foto obligatoria (LATERAL, PLACA o la de una llanta del vehículo) y crea el
  * registro `FotoInspeccion` (o reemplaza la existente del mismo tipo). Solo el TRABAJADOR dueño de la inspección,
  * mientras siga EN_PROCESO — mismo criterio de pertenencia y de estado que
  * el resto de las mutaciones del flujo del trabajador (ver
@@ -48,14 +49,16 @@ export async function subirFotoInspeccion(
   }
   await exigirHorarioParaContinuar(inspection, "subirFotoInspeccion", new Date());
 
-  // La foto de las llantas es solo de MOTO (un vehículo legacy sin tipo es MOTO).
-  if (tipo === TipoFotoInspeccion.LLANTAS) {
+  // Cada vehículo solo sube las fotos de llanta de sus propias posiciones (MOTO
+  // 2, CARRO 4; un vehículo legacy sin tipo es MOTO). El `LLANTAS` legado ya no
+  // se sube. Lateral y placa aplican a todos.
+  if (tipo !== TipoFotoInspeccion.LATERAL && tipo !== TipoFotoInspeccion.PLACA) {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: inspection.vehicleId },
       select: { tipoVehiculo: true },
     });
-    if (vehicle?.tipoVehiculo === TipoVehiculo.CARRO) {
-      throw new Error("La foto de las llantas solo aplica a motos.");
+    if (!esFotoLlantaDeVehiculo(vehicle?.tipoVehiculo, tipo)) {
+      throw new Error("Este tipo de foto no corresponde a este vehículo.");
     }
   }
 
