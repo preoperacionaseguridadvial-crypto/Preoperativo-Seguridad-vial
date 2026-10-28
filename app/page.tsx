@@ -11,6 +11,7 @@ import { ordenarPendientesPorAtencion } from "@/lib/inspections/partir-pendiente
 import { AppHeader } from "@/app/_components/AppHeader";
 import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
 import { ActivarNotificaciones } from "@/app/_components/ActivarNotificaciones";
+import { clavePublicaPush } from "@/lib/notificaciones/push";
 import { SaludoInicio } from "@/app/_components/inicio/SaludoInicio";
 import { AtajosInicio } from "@/app/_components/inicio/AtajosInicio";
 import { EncabezadoAprobador } from "@/app/_components/inicio/EncabezadoAprobador";
@@ -67,6 +68,7 @@ export default async function Home({
     tienePermisosSst(rol) ? getVehiculosConDocumentosPorVencer(ahora) : null,
     rolAprobador ? habilitacionAprobacionHasta(user.id, ahora) : null,
   ]);
+  const clavePublica = clavePublicaPush();
 
   if (pendientes) {
     return (
@@ -76,6 +78,7 @@ export default async function Home({
           <EncabezadoAprobador nombre={user.name} rol={rol} ahora={ahora} />
           {avisoDecision && <AvisoDecision aviso={avisoDecision} />}
           <PendientesPorRevisar pendientes={pendientes} ahora={ahora} habilitacionHasta={habilitacionHasta} />
+          <ActivarNotificaciones clavePublica={clavePublica} />
           <AccesosRapidosAprobador atajos={atajosPorRol(rol)} />
         </main>
       </div>
@@ -93,7 +96,7 @@ export default async function Home({
           </div>
           {resumenDia && <ResumenDelDia resumen={resumenDia} />}
           <AccesosRapidosSst atajos={atajosPorRol(rol)} />
-          <ActivarNotificaciones />
+          <ActivarNotificaciones clavePublica={clavePublica} />
           {vencimientos && <EstadoDocumentosVehiculos vehiculos={vencimientos} />}
         </main>
       </div>
@@ -107,7 +110,6 @@ export default async function Home({
         <SaludoInicio nombre={user.name} rol={rol} ahora={ahora} />
         {resumenDia && <ResumenDelDia resumen={resumenDia} />}
         <AtajosInicio atajos={atajosPorRol(rol)} />
-        {rolAprobador && <ActivarNotificaciones />}
         {vencimientos && <VencimientosVehiculos vehiculos={vencimientos} />}
       </main>
     </div>

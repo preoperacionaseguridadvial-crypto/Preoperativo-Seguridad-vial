@@ -11,7 +11,7 @@ vi.mock("web-push", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/generated/prisma/client";
-import { enviarAUsuarios, pushConfigurado } from "@/lib/notificaciones/push";
+import { clavePublicaPush, enviarAUsuarios, pushConfigurado } from "@/lib/notificaciones/push";
 import { crearUsuario, limpiarBaseDeTest } from "@/test/helpers/db";
 
 const PAYLOAD = { titulo: "Nueva inspección", cuerpo: "ABC123 espera su revisión", url: "/aprobaciones/x" };
@@ -66,6 +66,12 @@ describe("lib/notificaciones/push", () => {
     expect(mockSendNotification).not.toHaveBeenCalled();
     expect(mockSetVapidDetails).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("clavePublicaPush: la entrega en tiempo de ejecución solo si el envío está configurado", () => {
+    expect(clavePublicaPush()).toBe("clave-publica");
+    delete process.env.VAPID_PRIVATE_KEY;
+    expect(clavePublicaPush()).toBeNull();
   });
 
   it("deja rastro en el log cuando los destinatarios no tienen dispositivos suscritos", async () => {

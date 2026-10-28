@@ -21,6 +21,7 @@ import { estadoLegible } from "@/lib/inspections/reportes-queries";
 import { formatFechaHoraMedia } from "@/lib/fechas/formato";
 import { CerrarSesionForm } from "@/app/_components/CerrarSesionForm";
 import { ActivarNotificaciones } from "@/app/_components/ActivarNotificaciones";
+import { clavePublicaPush } from "@/lib/notificaciones/push";
 import { alertasDocumentosVehiculo, chipsDocumentosVehiculo } from "@/lib/inicio/vencimientos-vehiculo";
 import {
   IconoDePaso,
@@ -282,7 +283,7 @@ export default async function InspeccionesPage({
           </section>
         )}
 
-        <ActivarNotificaciones />
+        <ActivarNotificaciones clavePublica={clavePublicaPush()} />
 
         {enProceso.length > 0 && (
           <section className="flex flex-col gap-3">
