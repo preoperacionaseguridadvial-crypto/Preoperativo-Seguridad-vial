@@ -18,6 +18,11 @@ vi.mock("@/lib/storage/s3", () => ({
   uploadObject: (...args: unknown[]) => mockUploadObject(...args),
 }));
 
+const mockNotificar = vi.fn();
+vi.mock("@/lib/notificaciones/notificar-inspeccion", () => ({
+  notificarInspeccion: (...args: unknown[]) => mockNotificar(...args),
+}));
+
 import { prisma } from "@/lib/prisma";
 import {
   Prisma,
@@ -119,6 +124,7 @@ beforeEach(async () => {
   await limpiarBaseDeTest();
   await crearCatalogoMinimo();
   mockAuth.mockReset();
+  mockNotificar.mockReset();
   mockUploadObject.mockReset();
   mockUploadObject.mockResolvedValue(undefined);
 });
@@ -197,6 +203,24 @@ describe("enviarInspeccion", () => {
 
     const resultado = await enviarInspeccion(inspection.id);
     expect(resultado.status).toBe(InspectionStatus.NO_APTA_PARA_OPERAR);
+  });
+
+  it("avisa ENVIADA tras un envío exitoso, y no avisa si el envío falla", async () => {
+    const { worker, inspection } = await crearInspeccionEnProceso();
+    const item = await prisma.checklistItem.findFirstOrThrow();
+    loginComo(worker);
+
+    await expect(enviarInspeccion(inspection.id)).rejects.toThrow();
+    expect(mockNotificar).not.toHaveBeenCalled();
+
+    await responderTodoElChecklist(inspection.id, item.id);
+    await registrarResultado(inspection.id, true);
+    await firmarComoConductor(inspection.id, worker.id);
+    await completarFotosYDeclaracion(inspection.id);
+    await enviarInspeccion(inspection.id);
+
+    expect(mockNotificar).toHaveBeenCalledTimes(1);
+    expect(mockNotificar).toHaveBeenCalledWith("ENVIADA", inspection.id, worker.id);
   });
 });
 

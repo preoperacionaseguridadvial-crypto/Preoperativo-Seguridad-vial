@@ -12,6 +12,11 @@ vi.mock("@/lib/storage/s3", () => ({
   uploadObject: (...args: unknown[]) => mockUploadObject(...args),
 }));
 
+const mockNotificar = vi.fn();
+vi.mock("@/lib/notificaciones/notificar-inspeccion", () => ({
+  notificarInspeccion: (...args: unknown[]) => mockNotificar(...args),
+}));
+
 import { prisma } from "@/lib/prisma";
 import { InspectionStatus, Role, Sede, TipoFirma } from "@/generated/prisma/client";
 import { guardarFirmaConductor, guardarFirmaSupervisor } from "@/lib/inspections/firma-actions";
@@ -42,6 +47,7 @@ beforeEach(async () => {
   fijarHoraEnVentana();
   await limpiarBaseDeTest();
   mockAuth.mockReset();
+  mockNotificar.mockReset();
   mockUploadObject.mockReset();
   mockUploadObject.mockResolvedValue(undefined);
 });
@@ -184,6 +190,56 @@ describe("guardarFirmaSupervisor — dos etapas", () => {
     mockAuth.mockResolvedValue({ user: { id: director.id, role: director.role } });
 
     await expect(guardarFirmaSupervisor(inspection.id, png())).rejects.toThrow(/todavía no fue decidida/);
+  });
+
+  // Avisos push: el Director solo ve la inspección en su cola cuando el
+  // Supervisor Oleariari firmó, así que ESE es el momento de avisarle.
+  it("la firma de la primera etapa aprobada avisa al Director (PENDIENTE_DIRECTOR)", async () => {
+    const { supOleariari, inspection } = await crearOleariariAprobadaEtapa1();
+    mockAuth.mockResolvedValue({ user: { id: supOleariari.id, role: supOleariari.role } });
+
+    await guardarFirmaSupervisor(inspection.id, png());
+
+    expect(mockNotificar).toHaveBeenCalledTimes(1);
+    expect(mockNotificar).toHaveBeenCalledWith("PENDIENTE_DIRECTOR", inspection.id, supOleariari.id);
+  });
+
+  it("la firma de un rechazo de primera etapa no avisa al Director", async () => {
+    const { supOleariari, inspection } = await crearOleariariAprobadaEtapa1();
+    await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: { status: InspectionStatus.RECHAZADA, reviewedAt: new Date() },
+    });
+    mockAuth.mockResolvedValue({ user: { id: supOleariari.id, role: supOleariari.role } });
+
+    await guardarFirmaSupervisor(inspection.id, png());
+
+    expect(mockNotificar).not.toHaveBeenCalled();
+  });
+
+  it("una firma que falla (duplicada) no vuelve a avisar", async () => {
+    const { supOleariari, inspection } = await crearOleariariAprobadaEtapa1();
+    mockAuth.mockResolvedValue({ user: { id: supOleariari.id, role: supOleariari.role } });
+    await guardarFirmaSupervisor(inspection.id, png());
+    mockNotificar.mockClear();
+
+    await expect(guardarFirmaSupervisor(inspection.id, png())).rejects.toThrow(/Ya existe una firma/);
+
+    expect(mockNotificar).not.toHaveBeenCalled();
+  });
+
+  it("la firma del conductor y la del Director no avisan nada", async () => {
+    const { inspection } = await crearOleariariAprobadaEtapa1();
+    const director = await crearUsuario(Role.SUPERVISOR);
+    await prisma.inspection.update({
+      where: { id: inspection.id },
+      data: { status: InspectionStatus.APROBADA, reviewedAt: new Date(), supervisorId: director.id },
+    });
+    mockAuth.mockResolvedValue({ user: { id: director.id, role: director.role } });
+
+    await guardarFirmaSupervisor(inspection.id, png());
+
+    expect(mockNotificar).not.toHaveBeenCalled();
   });
 
   it("el Director firma su decisión con el tipo SUPERVISOR, como siempre", async () => {
