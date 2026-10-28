@@ -8,7 +8,6 @@ import {
   type EstadoNotificaciones,
 } from "@/lib/notificaciones/cliente";
 
-const CLAVE_PUBLICA = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const ENDPOINT = "/api/notificaciones/suscripcion";
 
 type Lectura = Pick<Parameters<typeof derivarEstado>[0], "soportado" | "esIos" | "standalone" | "permiso" | "suscrito">;
@@ -45,17 +44,18 @@ async function enviar(method: "POST" | "DELETE", cuerpo: unknown) {
 /**
  * Tarjeta "Notificaciones" del inicio: permite activar o desactivar los avisos
  * push en este dispositivo. El permiso hay que pedirlo con un toque del usuario
- * (lo exige iOS), por eso no se activa sola. Sin clave VAPID pública no se muestra.
+ * (lo exige iOS), por eso no se activa sola. Sin clave VAPID pública no se muestra;
+ * la clave llega del servidor (`clavePublicaPush`), leída en tiempo de ejecución.
  */
-export function ActivarNotificaciones() {
+export function ActivarNotificaciones({ clavePublica }: { clavePublica: string | null }) {
   const [estado, setEstado] = useState<EstadoNotificaciones | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refrescar = useCallback(async () => {
     const lectura = await leerDispositivo();
-    setEstado(derivarEstado({ clavePublica: CLAVE_PUBLICA, ...lectura }));
-  }, []);
+    setEstado(derivarEstado({ clavePublica: clavePublica ?? undefined, ...lectura }));
+  }, [clavePublica]);
 
   useEffect(() => {
     // Lee el navegador (no existe en el servidor); el estado inicial es null.
@@ -64,7 +64,7 @@ export function ActivarNotificaciones() {
   }, [refrescar]);
 
   async function activar() {
-    if (!CLAVE_PUBLICA) return;
+    if (!clavePublica) return;
     setOcupado(true);
     setError(null);
     try {
@@ -76,7 +76,7 @@ export function ActivarNotificaciones() {
           (await registro.pushManager.getSubscription()) ??
           (await registro.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(CLAVE_PUBLICA),
+            applicationServerKey: urlBase64ToUint8Array(clavePublica),
           }));
         await enviar("POST", suscripcion.toJSON());
       }

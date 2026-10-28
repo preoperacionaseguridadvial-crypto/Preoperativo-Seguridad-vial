@@ -32,6 +32,16 @@ export function pushConfigurado(): boolean {
 }
 
 /**
+ * Clave pública VAPID leída en tiempo de ejecución, para pasarla a la tarjeta
+ * de activación desde el servidor: así no depende de que la variable existiera
+ * al compilar (NEXT_PUBLIC_* se incrusta en el bundle del cliente en el build).
+ * `null` si el envío no está configurado: no tiene sentido suscribirse.
+ */
+export function clavePublicaPush(): string | null {
+  return configuracion()?.publica ?? null;
+}
+
+/**
  * Envía `payload` a todos los dispositivos suscritos de `userIds`. Borra las
  * suscripciones que el servicio push da por muertas (404/410); cualquier otro
  * error se registra y se descarta.
