@@ -19,7 +19,7 @@ async function sesionPermitida() {
   if (!ROLES_CON_NOTIFICACIONES.includes(session.user.role)) {
     return { error: NextResponse.json({ error: "Su rol no recibe notificaciones." }, { status: 403 }) };
   }
-  return { userId: session.user.id };
+  return { userId: session.user.id, role: session.user.role };
 }
 
 async function leerJson(request: Request): Promise<unknown> {
@@ -41,6 +41,10 @@ export async function POST(request: Request) {
   }
 
   await guardarSuscripcion(sesion.userId, suscripcion);
+  // Rastro para diagnóstico: solo el host del servicio push; el endpoint completo identifica al dispositivo.
+  console.info(
+    `[push] Dispositivo activado: usuario ${sesion.userId} (${sesion.role}) vía ${new URL(suscripcion.endpoint).hostname}`,
+  );
   return NextResponse.json({ ok: true });
 }
 

@@ -64,6 +64,17 @@ describe("/api/notificaciones/suscripcion", () => {
     },
   );
 
+  it("deja en el log el alta del dispositivo con el rol y el servicio push (sin el endpoint completo)", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const user = await crearUsuario(Role.SUPERVISOR);
+    loginComo(user);
+
+    await POST(req("POST", SUB));
+
+    expect(info).toHaveBeenCalledWith(`[push] Dispositivo activado: usuario ${user.id} (SUPERVISOR) vía fcm.googleapis.com`);
+    info.mockRestore();
+  });
+
   it("upsert por endpoint: reasigna al usuario actual y actualiza claves, sin duplicar", async () => {
     const a = await crearUsuario(Role.TRABAJADOR);
     const b = await crearUsuario(Role.SST);
