@@ -207,6 +207,7 @@ model User {
   autorizacionDatos               AutorizacionDatos?
   habilitacionesRecibidas         HabilitacionHorario[] @relation("HabilitacionBeneficiario")
   habilitacionesOtorgadas         HabilitacionHorario[] @relation("HabilitacionOtorgante")
+  suscripcionesPush               SuscripcionPush[]
 
   @@index([role])
 }
@@ -604,4 +605,20 @@ model AuditLog {
 
   @@index([userId])
   @@index([entityType, entityId])
+}
+
+// notificaciones-push: dispositivo (navegador/PWA instalada) de un usuario que
+// aceptó recibir notificaciones push. Un usuario puede tener varios. El
+// `endpoint` identifica el dispositivo en el servicio push del navegador; se
+// borra la fila cuando ese servicio responde 404/410 (suscripción vencida).
+model SuscripcionPush {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
