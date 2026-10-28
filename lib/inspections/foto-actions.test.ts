@@ -68,40 +68,91 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// Foto de las llantas (feature checklist-bueno-malo, solo MOTO): mismo mecanismo
-// que lateral/placa (reemplazable mientras EN_PROCESO, invalida la firma del
-// conductor al cambiarla).
-describe("subirFotoInspeccion — foto de las llantas", () => {
-  it("MOTO: guarda la foto LLANTAS y reemplazarla invalida la firma del conductor", async () => {
-    const { worker, inspection } = await crearInspeccionEnProcesoDeTrabajador();
+async function crearInspeccionDeCarro() {
+  const worker = await crearUsuario(Role.TRABAJADOR);
+  const vehicle = await crearVehiculo({ tipoVehiculo: "CARRO" });
+  const inspection = await prisma.inspection.create({
+    data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
+  });
+  mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
+  return { worker, inspection };
+}
 
-    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto());
-    expect(
-      await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS } }),
-    ).toBe(1);
+// Fotos de las llantas por posición (feature fotos-llantas-por-posicion): mismo
+// mecanismo que lateral/placa (reemplazable mientras EN_PROCESO, invalida la
+// firma del conductor al cambiarla); cada tipo de vehículo solo acepta sus
+// propias posiciones y la foto legado LLANTAS ya no se puede subir.
+describe("subirFotoInspeccion — fotos de las llantas", () => {
+  it("MOTO: guarda LLANTA_DELANTERA y reemplazarla invalida la firma del conductor", async () => {
+    const { worker, inspection } = await crearInspeccionEnProcesoDeTrabajador();
+    const tipo = TipoFotoInspeccion.LLANTA_DELANTERA;
+
+    await subirFotoInspeccion(inspection.id, tipo, crearFormDataConFoto());
+    expect(await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id, tipo } })).toBe(1);
 
     await prisma.firma.create({
       data: { inspectionId: inspection.id, userId: worker.id, tipo: TipoFirma.CONDUCTOR, s3Key: "firmas/test.png" },
     });
-    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto());
+    await subirFotoInspeccion(inspection.id, tipo, crearFormDataConFoto());
 
-    expect(
-      await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id, tipo: TipoFotoInspeccion.LLANTAS } }),
-    ).toBe(1);
+    expect(await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id, tipo } })).toBe(1);
     expect(await prisma.firma.count({ where: { inspectionId: inspection.id, tipo: TipoFirma.CONDUCTOR } })).toBe(0);
   });
 
-  it("CARRO: rechaza la foto de las llantas sin subir nada a S3", async () => {
-    const worker = await crearUsuario(Role.TRABAJADOR);
-    const vehicle = await crearVehiculo({ tipoVehiculo: "CARRO" });
-    const inspection = await prisma.inspection.create({
-      data: { workerId: worker.id, conductorId: worker.id, vehicleId: vehicle.id },
-    });
-    mockAuth.mockResolvedValue({ user: { id: worker.id, role: worker.role } });
+  it("MOTO: guarda LLANTA_TRASERA con su key por tipo", async () => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
+
+    await subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTA_TRASERA, crearFormDataConFoto());
+
+    expect(mockUploadObject).toHaveBeenCalledWith(
+      expect.objectContaining({ key: `fotos-inspeccion/${inspection.id}/LLANTA_TRASERA.jpg` }),
+    );
+  });
+
+  it("MOTO: rechaza una posición de carro sin subir nada a S3", async () => {
+    const { inspection } = await crearInspeccionEnProcesoDeTrabajador();
 
     await expect(
-      subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto()),
-    ).rejects.toThrow(/solo aplica a motos/i);
+      subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTA_DELANTERA_IZQUIERDA, crearFormDataConFoto()),
+    ).rejects.toThrow(/no corresponde a este vehículo/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("CARRO: guarda cada una de las 4 posiciones", async () => {
+    const { inspection } = await crearInspeccionDeCarro();
+    const tipos = [
+      TipoFotoInspeccion.LLANTA_DELANTERA_IZQUIERDA,
+      TipoFotoInspeccion.LLANTA_DELANTERA_DERECHA,
+      TipoFotoInspeccion.LLANTA_TRASERA_IZQUIERDA,
+      TipoFotoInspeccion.LLANTA_TRASERA_DERECHA,
+    ];
+
+    for (const tipo of tipos) {
+      await subirFotoInspeccion(inspection.id, tipo, crearFormDataConFoto());
+    }
+
+    expect(await prisma.fotoInspeccion.count({ where: { inspectionId: inspection.id, tipo: { in: tipos } } })).toBe(4);
+  });
+
+  it("CARRO: rechaza una posición de moto sin subir nada a S3", async () => {
+    const { inspection } = await crearInspeccionDeCarro();
+
+    await expect(
+      subirFotoInspeccion(inspection.id, TipoFotoInspeccion.LLANTA_DELANTERA, crearFormDataConFoto()),
+    ).rejects.toThrow(/no corresponde a este vehículo/i);
+    expect(mockUploadObject).not.toHaveBeenCalled();
+  });
+
+  it("la foto legado LLANTAS ya no se puede subir, ni en moto ni en carro", async () => {
+    const moto = await crearInspeccionEnProcesoDeTrabajador();
+    await expect(
+      subirFotoInspeccion(moto.inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto()),
+    ).rejects.toThrow(/no corresponde a este vehículo/i);
+
+    const carro = await crearInspeccionDeCarro();
+    await expect(
+      subirFotoInspeccion(carro.inspection.id, TipoFotoInspeccion.LLANTAS, crearFormDataConFoto()),
+    ).rejects.toThrow(/no corresponde a este vehículo/i);
     expect(mockUploadObject).not.toHaveBeenCalled();
   });
 });

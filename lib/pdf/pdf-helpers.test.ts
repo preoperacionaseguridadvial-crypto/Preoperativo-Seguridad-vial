@@ -7,6 +7,7 @@ import {
   clasificarInspeccionVisual,
   fotoPorTipo,
   bloquesFotosDiariasPdf,
+  filasDeFotosPdf,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
   formatSiNoPdf,
@@ -196,11 +197,56 @@ describe("bloquesFotosDiariasPdf", () => {
     ]);
   });
 
-  it("agrega Llantas solo si la foto existe (inspecciones de carro o anteriores no la tienen)", () => {
+  it("agrega cada llanta con su etiqueta, en orden de posición, solo si la foto existe", () => {
+    const bloques = bloquesFotosDiariasPdf([
+      foto("LLANTA_TRASERA"),
+      foto("PLACA"),
+      foto("LLANTA_DELANTERA"),
+      foto("LATERAL"),
+    ]);
+
+    expect(bloques.map((b) => b.label)).toEqual(["Lateral", "Placa", "Llanta delantera", "Llanta trasera"]);
+    expect(bloques[2].foto).toEqual(foto("LLANTA_DELANTERA"));
+  });
+
+  it("CARRO: las 4 posiciones en orden delantera izq/der, trasera izq/der", () => {
+    const bloques = bloquesFotosDiariasPdf([
+      foto("LLANTA_TRASERA_DERECHA"),
+      foto("LLANTA_DELANTERA_DERECHA"),
+      foto("LLANTA_TRASERA_IZQUIERDA"),
+      foto("LLANTA_DELANTERA_IZQUIERDA"),
+    ]);
+
+    expect(bloques.map((b) => b.label)).toEqual([
+      "Lateral",
+      "Placa",
+      "Llanta delantera izquierda",
+      "Llanta delantera derecha",
+      "Llanta trasera izquierda",
+      "Llanta trasera derecha",
+    ]);
+  });
+
+  it("sigue mostrando la foto legado LLANTAS (inspecciones anteriores) como 'Llantas'", () => {
     const bloques = bloquesFotosDiariasPdf([foto("LATERAL"), foto("PLACA"), foto("LLANTAS")]);
 
     expect(bloques.map((b) => b.label)).toEqual(["Lateral", "Placa", "Llantas"]);
     expect(bloques[2].foto).toEqual(foto("LLANTAS"));
+  });
+
+  it("filasDeFotosPdf: parte los bloques en filas de 3 para que 6 fotos no queden diminutas", () => {
+    const bloques = ["a", "b", "c", "d", "e", "f"].map((label) => ({ label, foto: null }));
+
+    expect(filasDeFotosPdf(bloques).map((fila) => fila.map((b) => b.label))).toEqual([
+      ["a", "b", "c"],
+      ["d", "e", "f"],
+    ]);
+    expect(filasDeFotosPdf(bloques.slice(0, 4)).map((fila) => fila.length)).toEqual([3, 1]);
+    expect(filasDeFotosPdf([])).toEqual([]);
+  });
+
+  it("sin fotos de llanta no agrega bloques vacíos", () => {
+    expect(bloquesFotosDiariasPdf([foto("LATERAL")]).map((b) => b.label)).toEqual(["Lateral", "Placa"]);
   });
 });
 

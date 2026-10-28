@@ -12,6 +12,7 @@ import {
   Sede,
   TipoFirma,
 } from "@/generated/prisma/client";
+import { llantasDeVehiculo } from "@/lib/inspections/fotos-flujo";
 import { getInspeccionParaPdf } from "@/lib/inspections/pdf-queries";
 import { InspeccionPdfDocument } from "@/lib/pdf/InspeccionPdfDocument";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
@@ -164,16 +165,15 @@ describe("InspeccionPdfDocument — render real (regresión permanente)", () => 
         s3Key: `fotos-inspeccion/${inspection.id}/PLACA.jpg`,
       },
     });
-    // Foto de las llantas: solo MOTO (feature checklist-bueno-malo).
-    if (tipoVehiculo === TipoVehiculo.MOTO) {
-      await prisma.fotoInspeccion.create({
-        data: {
-          inspectionId: inspection.id,
-          tipo: TipoFotoInspeccion.LLANTAS,
-          s3Key: `fotos-inspeccion/${inspection.id}/LLANTAS.jpg`,
-        },
-      });
-    }
+    // Una foto por llanta (feature fotos-llantas-por-posicion): 2 en MOTO, 4 en
+    // CARRO, con lo que el PDF dibuja hasta 6 fotos diarias.
+    await prisma.fotoInspeccion.createMany({
+      data: llantasDeVehiculo(tipoVehiculo).map((tipo) => ({
+        inspectionId: inspection.id,
+        tipo,
+        s3Key: `fotos-inspeccion/${inspection.id}/${tipo}.jpg`,
+      })),
+    });
 
     // Sin firmas a propósito: ejercita la rama "Sin firma registrada" de
     // `FirmaCaja` (InspeccionPdfDocument.tsx), que no depende de ningún

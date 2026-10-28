@@ -4,6 +4,7 @@ import { Role, Sede, TipoFirma } from "@/generated/prisma/enums";
 import { etiquetaRol } from "@/lib/auth/etiquetas-rol";
 import { PLACEHOLDER_FECHA_VIGENCIA } from "@/lib/settings/queries";
 import { etiquetaRespuesta } from "@/lib/inspections/etiquetas-respuesta";
+import { etiquetaFotoLlanta, todasLasFotosDeLlanta } from "@/lib/inspections/fotos-flujo";
 
 // Lógica pura (sin JSX, sin Prisma) que extrae del componente del PDF
 // (InspeccionPdfDocument.tsx) las dos reglas que la corrección de Slice 2
@@ -111,9 +112,10 @@ export function fotoPorTipo<T extends { tipo: string }>(fotos: T[], tipo: string
 /**
  * Bloques de la sección "FOTOS DIARIAS DEL VEHÍCULO" del PDF: lateral y placa
  * siempre (el componente dibuja "Sin foto registrada" si faltan) y, solo si
- * existe, la foto de las llantas (solo MOTO, desde la feature
- * checklist-bueno-malo): los carros y las inspecciones anteriores no la tienen
- * y no deben mostrar un bloque vacío.
+ * existen, una por llanta con su etiqueta en orden de posición (feature
+ * fotos-llantas-por-posicion) y la foto legado `LLANTAS` (una sola de ambas
+ * llantas, de inspecciones anteriores). Las inspecciones que no tienen esas
+ * fotos no deben mostrar un bloque vacío.
  */
 export function bloquesFotosDiariasPdf<T extends { tipo: string }>(
   fotos: T[],
@@ -122,8 +124,23 @@ export function bloquesFotosDiariasPdf<T extends { tipo: string }>(
     { label: "Lateral", foto: fotoPorTipo(fotos, "LATERAL") },
     { label: "Placa", foto: fotoPorTipo(fotos, "PLACA") },
   ];
-  const llantas = fotoPorTipo(fotos, "LLANTAS");
-  return llantas ? [...bloques, { label: "Llantas", foto: llantas }] : bloques;
+  for (const tipo of todasLasFotosDeLlanta()) {
+    const foto = fotoPorTipo(fotos, tipo);
+    if (foto) bloques.push({ label: etiquetaFotoLlanta(tipo), foto });
+  }
+  const legado = fotoPorTipo(fotos, "LLANTAS");
+  if (legado) bloques.push({ label: "Llantas", foto: legado });
+  return bloques;
+}
+
+/**
+ * Parte los bloques en filas (de a 3 por defecto) para que hasta 6 fotos
+ * (lateral, placa y 4 llantas) no queden diminutas en una sola fila del PDF.
+ */
+export function filasDeFotosPdf<T>(bloques: T[], porFila = 3): T[][] {
+  const filas: T[][] = [];
+  for (let i = 0; i < bloques.length; i += porFila) filas.push(bloques.slice(i, i + porFila));
+  return filas;
 }
 
 /**

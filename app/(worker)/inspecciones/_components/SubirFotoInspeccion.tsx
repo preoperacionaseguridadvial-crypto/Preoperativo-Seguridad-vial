@@ -3,6 +3,7 @@
 import { useEffect, useReducer, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { comprimirFotoEnNavegador } from "@/lib/imagenes/adaptador-navegador";
+import type { TipoFotoGuia } from "@/lib/inspections/guia-foto";
 import {
   ESTADO_INICIAL_SUBIDA,
   MENSAJE_ERROR_SUBIDA,
@@ -14,7 +15,8 @@ import {
 
 type Props = {
   inspectionId: string;
-  tipo: "lateral" | "placa" | "llantas";
+  /** Segmento de la URL de subida: el tipo de foto en minúscula (`lateral`, `llanta_trasera`…). */
+  tipo: TipoFotoGuia;
   titulo: string;
   /** Ya existe una foto de este tipo guardada en el servidor. */
   existe: boolean;

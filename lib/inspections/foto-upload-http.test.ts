@@ -12,9 +12,17 @@ describe("parseTipoFoto", () => {
     expect(parseTipoFoto("lateral")).toBe(TipoFotoInspeccion.LATERAL);
     expect(parseTipoFoto("PLACA")).toBe(TipoFotoInspeccion.PLACA);
   });
-  it("acepta llantas (foto de las llantas de la moto)", () => {
-    expect(parseTipoFoto("llantas")).toBe(TipoFotoInspeccion.LLANTAS);
-    expect(parseTipoFoto("LLANTAS")).toBe(TipoFotoInspeccion.LLANTAS);
+  it("acepta las 6 posiciones de llanta en minúscula o mayúscula", () => {
+    expect(parseTipoFoto("llanta_delantera")).toBe(TipoFotoInspeccion.LLANTA_DELANTERA);
+    expect(parseTipoFoto("LLANTA_TRASERA")).toBe(TipoFotoInspeccion.LLANTA_TRASERA);
+    expect(parseTipoFoto("llanta_delantera_izquierda")).toBe(TipoFotoInspeccion.LLANTA_DELANTERA_IZQUIERDA);
+    expect(parseTipoFoto("llanta_delantera_derecha")).toBe(TipoFotoInspeccion.LLANTA_DELANTERA_DERECHA);
+    expect(parseTipoFoto("llanta_trasera_izquierda")).toBe(TipoFotoInspeccion.LLANTA_TRASERA_IZQUIERDA);
+    expect(parseTipoFoto("llanta_trasera_derecha")).toBe(TipoFotoInspeccion.LLANTA_TRASERA_DERECHA);
+  });
+  it("rechaza llantas (foto legado de ambas llantas)", () => {
+    expect(parseTipoFoto("llantas")).toBeNull();
+    expect(parseTipoFoto("LLANTAS")).toBeNull();
   });
   it("rechaza cualquier otro valor", () => {
     expect(parseTipoFoto("frontal")).toBeNull();

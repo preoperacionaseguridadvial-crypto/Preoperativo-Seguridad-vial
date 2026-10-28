@@ -10,6 +10,7 @@ import {
   categoriasGenericasPdf,
   clasificarInspeccionVisual,
   bloquesFotosDiariasPdf,
+  filasDeFotosPdf,
   formatFechaVigenciaPdf,
   formatoValorItemPdf,
   formatSiNoPdf,
@@ -217,8 +218,9 @@ const styles = StyleSheet.create({
   // Fotos diarias (Slice 5, A7)
   fotosSeccion: { borderWidth: 1, borderColor: "#111111", marginBottom: 4, padding: 4 },
   fotosTitulo: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, marginBottom: 4 },
-  fotosRow: { flexDirection: "row", gap: 8 },
-  fotoDiariaBloque: { flexGrow: 1, flexBasis: 0, alignItems: "center" },
+  fotosRow: { flexDirection: "row", gap: 8, marginBottom: 4 },
+  // Ancho fijo (un tercio) para que una fila incompleta no estire sus fotos.
+  fotoDiariaBloque: { width: "32%", alignItems: "center" },
   fotoDiariaLabel: { fontSize: 11, fontFamily: FONT_FAMILY_BOLD, marginBottom: 2 },
   fotoDiariaImagen: { width: "100%", height: 130, objectFit: "contain" },
   fotoDiariaVacia: { fontSize: 11, color: "#888888", marginTop: 20 },
@@ -604,15 +606,19 @@ export function InspeccionPdfDocument({ data }: { data: InspeccionParaPdf }) {
           </View>
         </View>
 
-        {/* FOTOS DIARIAS (Slice 5, A7) — lateral + placa (+ llantas en MOTO),
-            obligatorias por inspección, independientes del resultado del checklist. */}
+        {/* FOTOS DIARIAS (Slice 5, A7) — lateral + placa + una por llanta (2 en
+            MOTO, 4 en CARRO), obligatorias por inspección, independientes del
+            resultado del checklist. Filas de 3 para que las 6 fotos no queden
+            diminutas. */}
         <View style={styles.fotosSeccion} wrap={false}>
           <Text style={styles.fotosTitulo}>{TXT.fotosDiariasTitulo}</Text>
-          <View style={styles.fotosRow}>
-            {bloquesFotosDiarias.map(({ label, foto }) => (
-              <FotoDiariaBloque key={label} label={label} foto={foto} />
-            ))}
-          </View>
+          {filasDeFotosPdf(bloquesFotosDiarias).map((fila) => (
+            <View key={fila[0].label} style={styles.fotosRow}>
+              {fila.map(({ label, foto }) => (
+                <FotoDiariaBloque key={label} label={label} foto={foto} />
+              ))}
+            </View>
+          ))}
         </View>
 
         {/* DECLARACIÓN DE ESTADO DEL CONDUCTOR (Slice 5, A6) — informativo:
