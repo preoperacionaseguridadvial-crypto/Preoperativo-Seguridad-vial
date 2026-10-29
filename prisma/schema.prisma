@@ -49,9 +49,10 @@ enum InspectionStatus {
   RECHAZADA
   NO_APTA_PARA_OPERAR
   // Trabajador descarta una inspección EN_PROCESO que no va a terminar (ver
-  // cancelarInspeccion, lib/inspections/actions.ts). No es un borrado: la
-  // regla de inmutabilidad del proyecto sigue intacta, el registro queda en
-  // la base — solo deja de aparecer como "En proceso".
+  // cancelarInspeccion, lib/inspections/actions.ts). No es un borrado: el
+  // registro queda en la base — solo deja de aparecer como "En proceso". El
+  // único borrado real es el del ADMINISTRADOR (eliminarInspeccion,
+  // lib/inspections/eliminar-actions.ts).
   CANCELADA
 }
 
@@ -268,8 +269,11 @@ model Vehicle {
   conductor   User?        @relation("VehiculoAsignado")
 }
 
-// Registro inmutable: no se agrega deletedAt ni mutation de borrado. Los
-// errores se corrigen con nuevos estados/observaciones, nunca eliminando.
+// Registro inmutable: no se agrega deletedAt. Los errores se corrigen con
+// nuevos estados/observaciones, no eliminando. Única excepción: solo el
+// ADMINISTRADOR puede borrar definitivamente una inspección (cualquier estado,
+// para depurar pruebas) con `eliminarInspeccion`, que deja AuditLog
+// (ELIMINAR_INSPECCION, sin FK, por eso sobrevive al borrado).
 // OJO: además de los índices de abajo existe un índice ÚNICO PARCIAL solo en
 // SQL (Prisma no puede expresar `WHERE` en schema.prisma):
 // "Inspection_workerId_vehicleId_en_proceso_key" ON ("workerId", "vehicleId")

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { getInspeccionDetalleForOversight } from "@/lib/inspections/supervisor-queries";
@@ -10,7 +11,9 @@ import { Role, Sede } from "@/generated/prisma/enums";
 import { etiquetaRol, etiquetaSede } from "@/lib/auth/etiquetas-rol";
 import { esperandoA, estadoEtapaOleariari } from "@/lib/inspections/cola-aprobacion";
 import { formatFecha, formatFechaHora } from "@/lib/fechas/formato";
-import { tienePermisosSst } from "@/lib/auth/permisos";
+import { puedeEliminarInspecciones, tienePermisosSst } from "@/lib/auth/permisos";
+import { eliminarInspeccion } from "@/lib/inspections/eliminar-actions";
+import { BotonEliminarInspeccion } from "./_components/BotonEliminarInspeccion";
 
 // Pantalla de detalle de la consulta de oversight (DIRECTOR/SST): toda la
 // información que el trabajador cargó (medidas, checklist agrupado por
@@ -68,6 +71,13 @@ export default async function ConsultaInspeccionDetallePage({
     categoria.items.sort((a, b) => a.checklistItem.orden - b.checklistItem.orden);
   }
 
+  async function eliminarAction(inspectionId: string) {
+    "use server";
+    await eliminarInspeccion(inspectionId);
+    revalidatePath("/consulta-inspecciones");
+    redirect("/consulta-inspecciones");
+  }
+
   const noApta = inspection.status === "NO_APTA_PARA_OPERAR";
 
   const ahora = new Date();
@@ -88,16 +98,21 @@ export default async function ConsultaInspeccionDetallePage({
             <span className="ml-2 text-base font-normal text-gray-500">{inspection.vehicle.tipo}</span>
           </h1>
         </div>
-        {tienePermisosSst(session.user.role) &&
-          inspection.status !== "EN_PROCESO" &&
-          inspection.status !== "CANCELADA" && (
-            <a
-              href={`/api/inspecciones/${id}/pdf`}
-              className="shrink-0 rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
-            >
-              Descargar PDF
-            </a>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {tienePermisosSst(session.user.role) &&
+            inspection.status !== "EN_PROCESO" &&
+            inspection.status !== "CANCELADA" && (
+              <a
+                href={`/api/inspecciones/${id}/pdf`}
+                className="shrink-0 rounded-md border border-[#0B3B60] px-3 py-2 text-sm font-medium text-[#0B3B60] hover:bg-[#0B3B60]/10"
+              >
+                Descargar PDF
+              </a>
+            )}
+          {puedeEliminarInspecciones(session.user.role) && (
+            <BotonEliminarInspeccion action={eliminarAction.bind(null, id)} placa={inspection.vehicle.placa} />
           )}
+        </div>
       </div>
 
       <section className="rounded-md border border-gray-200 p-4 text-sm">
