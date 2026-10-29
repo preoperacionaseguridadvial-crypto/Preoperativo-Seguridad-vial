@@ -15,3 +15,11 @@ export function tienePermisosSst(rol: string): boolean {
 export function puedeGestionarAdministradores(rol: string): boolean {
   return rol === "ADMINISTRADOR";
 }
+
+/**
+ * Solo un ADMINISTRADOR elimina definitivamente una inspección (cualquier
+ * estado). Ni SST ni los aprobadores: el borrado es irreversible.
+ */
+export function puedeEliminarInspecciones(rol: string): boolean {
+  return rol === "ADMINISTRADOR";
+}
