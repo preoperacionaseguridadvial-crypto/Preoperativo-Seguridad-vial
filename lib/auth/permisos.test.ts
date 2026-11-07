@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Role } from "@/generated/prisma/client";
-import { puedeEliminarInspecciones, puedeGestionarAdministradores, tienePermisosSst } from "@/lib/auth/permisos";
+import { puedeEliminarInspecciones, puedeEliminarUsuarios, puedeGestionarAdministradores, tienePermisosSst } from "@/lib/auth/permisos";
 
 describe("tienePermisosSst", () => {
   it("SST y ADMINISTRADOR tienen los permisos de SST", () => {
@@ -27,6 +27,14 @@ describe("puedeEliminarInspecciones", () => {
   it("solo ADMINISTRADOR puede eliminar inspecciones", () => {
     for (const rol of Object.values(Role)) {
       expect(puedeEliminarInspecciones(rol)).toBe(rol === Role.ADMINISTRADOR);
+    }
+  });
+});
+
+describe("puedeEliminarUsuarios", () => {
+  it("solo ADMINISTRADOR puede eliminar usuarios", () => {
+    for (const rol of Object.values(Role)) {
+      expect(puedeEliminarUsuarios(rol)).toBe(rol === Role.ADMINISTRADOR);
     }
   });
 });
