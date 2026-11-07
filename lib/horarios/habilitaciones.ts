@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { TipoHabilitacion } from "@/generated/prisma/client";
 import { ventanaActual, type Ventana } from "@/lib/horarios/ventanas";
-import { fueraDeVentanaAprobacion, type DatosPlazo } from "@/lib/horarios/plazo-aprobacion";
+import { enVentanaAprobacion } from "@/lib/horarios/plazo-aprobacion";
 
 // Control de horario del recorredor en el servidor (regla de producto
 // 2026-10-20): iniciar exige ventana abierta; continuar y enviar exigen haber
@@ -160,21 +160,20 @@ export async function exigirHorarioParaContinuar(
 }
 
 /**
- * Exige que el aprobador esté dentro de la ventana de aprobación de la etapa
- * pendiente (5:45 a 8:00 a. m. o p. m.; ni antes de que abra ni después de que
- * cierre) o que tenga una habilitación APROBACION vigente (aplica a todas sus
- * inspecciones fuera de ventana). Devuelve el id de la habilitación solo cuando
- * fue ella la que permitió la decisión. Una inspección sin `completedAt` no
- * tiene horario y se deja pasar (no debería ser revisable sin envío).
+ * Exige que haya una ventana de aprobación abierta (5:45 a 8:00 a. m. o p. m.;
+ * cualquiera sirve mientras la inspección siga pendiente) o que el aprobador
+ * tenga una habilitación APROBACION vigente (aplica a todas sus inspecciones
+ * fuera de ventana). Devuelve el id de la habilitación solo cuando fue ella la
+ * que permitió la decisión.
  */
 export async function exigirPlazoParaDecidir(
-  inspection: DatosPlazo & { id: string },
+  inspection: { id: string },
   etapa: string,
   aprobadorId: string,
   accion: "APROBAR" | "RECHAZAR",
   ahora: Date,
 ): Promise<{ habilitacionId: string | null }> {
-  if (!fueraDeVentanaAprobacion(inspection, ahora)) return { habilitacionId: null };
+  if (enVentanaAprobacion(ahora)) return { habilitacionId: null };
   const habilitacion = await habilitacionVigente(aprobadorId, TipoHabilitacion.APROBACION, ahora);
   if (habilitacion) return { habilitacionId: habilitacion.id };
   await logAudit({

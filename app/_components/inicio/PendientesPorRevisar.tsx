@@ -4,7 +4,7 @@ import { requiereAtencionPendiente } from "@/lib/inspections/estado-conductor";
 import { tiempoTranscurrido } from "@/lib/inspections/tiempo-transcurrido";
 import { estadoPlazoParaAprobador } from "@/lib/horarios/estado-plazo-aprobador";
 import { formatFechaHora } from "@/lib/fechas/formato";
-import { estadoVencimiento, resumirPendientes, textoPlazoAprobador } from "@/lib/inicio/pendientes-aprobador";
+import { resumirPendientes, textoPlazoAprobador } from "@/lib/inicio/pendientes-aprobador";
 import { IconoCarro, IconoFlecha, IconoMoto, IconoReloj } from "./Iconos";
 import { IconoAlerta, IconoBandera, IconoDocumento, IconoEnviado } from "./IconosAprobador";
 import { MiniaturaVehiculo } from "./MiniaturaVehiculo";
@@ -40,7 +40,6 @@ function FilaPendiente({
   const novedades = inspection._count.novedades;
   const espera = tiempoTranscurrido(inspection.completedAt, ahora);
   const plazo = textoPlazoAprobador(estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta }));
-  const vencimiento = estadoVencimiento(inspection, ahora);
   const prioridadAlta = requiereAtencionPendiente(inspection);
   const href = `/aprobaciones/${inspection.id}`;
 
@@ -67,28 +66,12 @@ function FilaPendiente({
               </span>
             </p>
           )}
-          {plazo && (
-            <p
-              className={`flex items-center gap-1.5 text-sm ${
-                plazo.vencido ? "font-semibold text-status-crit-ink" : "text-ink-muted"
-              }`}
-            >
-              <IconoReloj className="size-4 shrink-0" />
-              <span>{plazo.texto}</span>
-            </p>
-          )}
-          {(vencimiento || novedades > 0 || prioridadAlta) && (
+          <p className="flex items-center gap-1.5 text-sm text-ink-muted">
+            <IconoReloj className="size-4 shrink-0" />
+            <span>{plazo}</span>
+          </p>
+          {(novedades > 0 || prioridadAlta) && (
             <div className="mt-1 flex flex-wrap gap-2">
-              {vencimiento === "vencida" && (
-                <Chip className="bg-status-crit-soft text-status-crit-ink" icono={<IconoReloj className="size-4" />}>
-                  Vencida
-                </Chip>
-              )}
-              {vencimiento === "por_vencer" && (
-                <Chip className="bg-status-warn-soft text-status-warn-ink" icono={<IconoReloj className="size-4" />}>
-                  Por vencer
-                </Chip>
-              )}
               {novedades > 0 && (
                 <Chip className="bg-status-warn-soft text-status-warn-ink" icono={<IconoAlerta />}>
                   {novedades} {novedades === 1 ? "novedad" : "novedades"}
@@ -134,7 +117,7 @@ export function PendientesPorRevisar({
   ahora: Date;
   habilitacionHasta?: Date | null;
 }) {
-  const resumen = resumirPendientes(pendientes, ahora);
+  const resumen = resumirPendientes(pendientes);
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -150,9 +133,6 @@ export function PendientesPorRevisar({
           </Contador>
           <Contador className="bg-status-warn-soft text-status-warn-ink" icono={<IconoAlerta />}>
             {resumen.conNovedades} con novedades
-          </Contador>
-          <Contador className="bg-status-crit-soft text-status-crit-ink" icono={<IconoReloj className="size-4" />}>
-            {resumen.vencidas} {resumen.vencidas === 1 ? "vencida" : "vencidas"}
           </Contador>
         </div>
       </div>

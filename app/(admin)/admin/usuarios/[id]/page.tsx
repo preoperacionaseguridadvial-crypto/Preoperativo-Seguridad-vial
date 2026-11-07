@@ -1,14 +1,18 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/config";
 import { getUsuarioPorId } from "@/lib/admin/queries";
 import { actualizarUsuario, restablecerPassword } from "@/lib/admin/user-actions";
 import { leerVehiculoDeFormulario } from "@/lib/admin/hoja-de-vida";
 import { getSignedReadUrl } from "@/lib/storage/s3";
 import { Role, Sede, TipoVehiculo } from "@/generated/prisma/client";
-import { puedeGestionarAdministradores } from "@/lib/auth/permisos";
+import { puedeEliminarUsuarios, puedeGestionarAdministradores } from "@/lib/auth/permisos";
+import { eliminarUsuario } from "@/lib/admin/eliminar-usuario-actions";
+import { esErrorDeUsuario } from "@/lib/admin/error-de-usuario";
 import { etiquetaUsuario } from "@/lib/auth/etiquetas-rol";
 import { EditarUsuarioForm } from "./_components/EditarUsuarioForm";
+import { BotonEliminarUsuario } from "./_components/BotonEliminarUsuario";
 import { CampoPassword, ResumenError } from "../_components/ui-formulario";
 
 function toDateInputValue(date: Date | null): string {
@@ -108,6 +112,19 @@ export default async function EditarUsuarioPage({
     redirect(`/admin/usuarios/${id}?passwordOk=1`);
   }
 
+  async function eliminarAction() {
+    "use server";
+    try {
+      await eliminarUsuario(id);
+    } catch (err) {
+      // Solo los mensajes de dominio (historial, cuenta propia) se muestran tal cual.
+      const message = esErrorDeUsuario(err) ? err.message : "No se pudo eliminar el usuario.";
+      redirect(`/admin/usuarios/${id}?error=${encodeURIComponent(message)}`);
+    }
+    revalidatePath("/admin/usuarios");
+    redirect("/admin/usuarios");
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 px-4 py-8">
       <div>
@@ -186,6 +203,19 @@ export default async function EditarUsuarioPage({
           </button>
         </form>
       </section>
+
+      {puedeEliminarUsuarios(session.user.role) && usuario.id !== session.user.id && (
+        <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div>
+            <h2 className="text-base font-semibold text-ink">Eliminar usuario</h2>
+            <p className="text-sm text-ink-muted">
+              Elimina al usuario y sus propios registros (sesiones y auditoría, habilitaciones y autorización de datos).
+              Nunca elimina inspecciones: si tiene inspecciones o firmas no se podrá eliminar; desactívalo con el interruptor «Usuario activo».
+            </p>
+          </div>
+          <BotonEliminarUsuario action={eliminarAction} nombre={usuario.name} />
+        </section>
+      )}
         </>
       )}
     </main>

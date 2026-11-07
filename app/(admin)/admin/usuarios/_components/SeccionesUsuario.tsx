@@ -181,7 +181,7 @@ export function SeccionesUsuario({
           <Interruptor
             nombre="activo"
             titulo="Usuario activo"
-            ayuda="Apagado, no puede iniciar sesión. El usuario nunca se borra."
+            ayuda="Apagado, no puede iniciar sesión. Para quitar a un usuario con historial, desactívalo en vez de eliminarlo."
             defaultChecked={edicion.usuarioActivo}
           />
         )}

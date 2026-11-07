@@ -10,11 +10,12 @@ import { InspectionStatus, Role, Sede, TipoFirma, TipoHabilitacion } from "@/gen
 import { aprobarInspeccion, rechazarInspeccion } from "@/lib/inspections/supervisor-actions";
 import { crearUsuario, crearVehiculo, limpiarBaseDeTest } from "@/test/helpers/db";
 
-// Horario de aprobación por etapa (regla 2026-10-28): 5:45-8:00 a. m. y
-// 5:45-8:00 p. m. de Bogotá. Se congela solo `Date`; `completedAt` /
+// Horario de aprobación (regla 2026-11-07): cualquier ventana abierta, 5:45-8:00
+// a. m. y 5:45-8:00 p. m. de Bogotá, mientras la inspección siga pendiente; fuera
+// de ellas solo con habilitación de SST. Se congela solo `Date`; `completedAt` /
 // `revisadaSupervisorOleariariAt` se fijan explícitos.
 
-// 6:00 a. m. de Bogotá: la ventana de su etapa es 5:45-8:00 a. m. del mismo día.
+// 6:00 a. m. de Bogotá, dentro de la ventana de la mañana.
 const ENVIADA = new Date("2026-01-15T06:00:00-05:00");
 const MIN = 60_000;
 const en = (base: Date, minutos: number) => new Date(base.getTime() + minutos * MIN);
@@ -129,14 +130,39 @@ describe("horario de aprobación — Bogotá (una etapa)", () => {
     expect(log.metadata).toEqual({ accion: "RECHAZAR", etapa: "DIRECTOR" });
   });
 
-  it("no revive en la ventana de la tarde: a las 6:00 p. m. sigue bloqueada", async () => {
+  it("enviada en la mañana, a las 6:00 p. m. del mismo día se puede decidir (otra ventana abierta)", async () => {
     const director = await crearUsuario(Role.SUPERVISOR);
     const inspection = await crearInspeccion({ sede: Sede.BOGOTA });
     loginComo(director);
     ahora(en(ENVIADA, 12 * 60));
 
+    const resultado = await aprobarInspeccion(inspection.id);
+    expect(resultado.status).toBe(InspectionStatus.APROBADA);
+    expect(await bloqueos(inspection.id)).toHaveLength(0);
+  });
+
+  it("enviada a las 6:10 p. m., a las 6:00 a. m. del día siguiente se puede rechazar", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion({ sede: Sede.BOGOTA, completedAt: en(ENVIADA, 12 * 60 + 10) });
+    loginComo(director);
+    ahora(en(ENVIADA, 24 * 60));
+
+    const resultado = await rechazarInspeccion(inspection.id, "Motivo");
+    expect(resultado.status).toBe(InspectionStatus.RECHAZADA);
+  });
+
+  it("enviada a las 9:00 a. m.: bloquea a las 10:00 a. m. y deja decidir a las 7:00 a. m. del día siguiente", async () => {
+    const director = await crearUsuario(Role.SUPERVISOR);
+    const inspection = await crearInspeccion({ sede: Sede.BOGOTA, completedAt: en(ENVIADA, 3 * 60) });
+    loginComo(director);
+
+    ahora(en(ENVIADA, 4 * 60)); // 10:00 a. m.
     await expect(aprobarInspeccion(inspection.id)).rejects.toThrow(MENSAJE);
     await sinDecidir(inspection.id);
+
+    ahora(en(ENVIADA, 25 * 60)); // 7:00 a. m. del día siguiente
+    const resultado = await aprobarInspeccion(inspection.id);
+    expect(resultado.status).toBe(InspectionStatus.APROBADA);
   });
 
   it("enviada a las 10:00 a. m.: bloquea a las 3:00 p. m. (aún no abre) y deja decidir a las 5:45 p. m.", async () => {
@@ -156,7 +182,7 @@ describe("horario de aprobación — Bogotá (una etapa)", () => {
     expect(resultado.status).toBe(InspectionStatus.APROBADA);
   });
 
-  it("enviada a las 9:00 p. m.: la ventana es la de la mañana siguiente", async () => {
+  it("enviada a las 9:00 p. m.: bloquea esa noche y deja decidir en la mañana siguiente", async () => {
     const director = await crearUsuario(Role.SUPERVISOR);
     const inspection = await crearInspeccion({ sede: Sede.BOGOTA, completedAt: en(ENVIADA, 15 * 60) });
     loginComo(director);
@@ -188,19 +214,19 @@ describe("horario de aprobación — Oleariari", () => {
     expect(log.metadata).toEqual({ accion: "RECHAZAR", etapa: "OLEARIARI" });
   });
 
-  it("etapa 2 usa la ventana de la revisión del Supervisor Oleariari, no la del envío", async () => {
+  it("etapa 2 se puede decidir en cualquier ventana abierta, aunque la del envío ya cerró", async () => {
     const director = await crearUsuario(Role.SUPERVISOR);
     const revisada = en(ENVIADA, 11 * 60 + 50); // 5:50 p. m.
     const inspection = await crearInspeccion({ sede: Sede.OLEARIARI, revisadaAt: revisada, firma: true });
     loginComo(director);
 
-    // La ventana del envío (hasta las 8:00 a. m.) ya cerró, pero la de la etapa 2 va hasta las 8:00 p. m.
+    // 7:00 p. m.: la ventana de la mañana ya cerró, pero la de la tarde sigue abierta hasta las 8:00 p. m.
     ahora(en(ENVIADA, 13 * 60));
     const resultado = await aprobarInspeccion(inspection.id);
     expect(resultado.status).toBe(InspectionStatus.APROBADA);
   });
 
-  it("etapa 2 bloquea a las 8:00 p. m., cuando cierra la ventana de la revisión", async () => {
+  it("etapa 2 bloquea a las 8:00 p. m., cuando cierra la ventana de la tarde", async () => {
     const director = await crearUsuario(Role.SUPERVISOR);
     const revisada = en(ENVIADA, 11 * 60 + 50); // 5:50 p. m.
     const inspection = await crearInspeccion({ sede: Sede.OLEARIARI, revisadaAt: revisada, firma: true });
@@ -256,11 +282,11 @@ describe("habilitación de aprobación", () => {
     });
   });
 
-  it("una habilitación vigente permite decidir antes de que abra la ventana", async () => {
+  it("una habilitación vigente permite decidir entre ventanas", async () => {
     const director = await crearUsuario(Role.SUPERVISOR);
     const inspection = await crearInspeccion({ sede: Sede.BOGOTA, completedAt: en(ENVIADA, 4 * 60) });
     loginComo(director);
-    ahora(en(ENVIADA, 9 * 60)); // 3:00 p. m.; su ventana abre a las 5:45 p. m.
+    ahora(en(ENVIADA, 9 * 60)); // 3:00 p. m.; la próxima ventana abre a las 5:45 p. m.
     const habilitacion = await habilitar(director.id, en(ENVIADA, 8 * 60), en(ENVIADA, 10 * 60));
 
     const resultado = await aprobarInspeccion(inspection.id);
@@ -285,7 +311,7 @@ describe("habilitación de aprobación", () => {
     expect(log.metadata).toEqual({ observacion: null });
   });
 
-  it("permite decidir varias inspecciones vencidas del mismo aprobador", async () => {
+  it("permite decidir varias inspecciones fuera de ventana del mismo aprobador", async () => {
     const director = await crearUsuario(Role.SUPERVISOR);
     const a = await crearInspeccion({ sede: Sede.BOGOTA });
     const b = await crearInspeccion({ sede: Sede.BOGOTA });

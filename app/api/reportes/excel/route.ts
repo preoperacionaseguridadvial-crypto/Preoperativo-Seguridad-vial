@@ -129,13 +129,9 @@ function agregarHojasHorarios(workbook: ExcelJS.Workbook, h: ReporteHorarios) {
     h.respuestaPorAprobador.map((f) => [f.nombre, ETIQUETA_ETAPA[f.etapa], f.decisiones, f.promedioMinutos]),
   );
   hoja(
-    "Aprobaciones vencidas",
-    [["Aprobador", 28], ["Decididas fuera de plazo", 24], ["Intentos bloqueados", 20]],
-    [
-      ...h.vencidasPorAprobador.map((f) => [f.nombre, f.decididasFueraDePlazo, f.intentosBloqueados]),
-      [`Pendientes vencidos ahora — ${ETIQUETA_ETAPA.SUPERVISOR_OLEARIARI}`, h.pendientesVencidas.SUPERVISOR_OLEARIARI, ""],
-      [`Pendientes vencidos ahora — ${ETIQUETA_ETAPA.SUPERVISOR}`, h.pendientesVencidas.SUPERVISOR, ""],
-    ],
+    "Aprobaciones fuera de horario",
+    [["Aprobador", 28], ["Decididas fuera de horario", 24], ["Intentos bloqueados", 20]],
+    h.vencidasPorAprobador.map((f) => [f.nombre, f.decididasFueraDePlazo, f.intentosBloqueados]),
   );
   hoja(
     "Habilitaciones SST",

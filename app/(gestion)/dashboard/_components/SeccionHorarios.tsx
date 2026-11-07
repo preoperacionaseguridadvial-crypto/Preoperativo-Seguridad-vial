@@ -7,13 +7,12 @@ const fmtMin = (m: number) => `${m.toLocaleString("es-CO", { maximumFractionDigi
 
 /**
  * "Cumplimiento de horarios": envíos fuera de horario, duración de las
- * inspecciones, tiempos de respuesta de los aprobadores, aprobaciones vencidas y
+ * inspecciones, tiempos de respuesta de los aprobadores, aprobaciones fuera de horario y
  * habilitaciones SST. Mismos filtros de fecha y sede que el resto del dashboard;
  * ver la cabecera de lib/horarios/reportes-horario.ts para la fecha que usa cada
  * métrica.
  */
 export function SeccionHorarios({ datos }: { datos: ReporteHorarios }) {
-  const p = datos.pendientesVencidas;
   return (
     <>
       <h2 className="mt-2 text-lg font-semibold text-ink">Cumplimiento de horarios</h2>
@@ -56,17 +55,10 @@ export function SeccionHorarios({ datos }: { datos: ReporteHorarios }) {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Aprobaciones vencidas" subtitulo="Fuera del horario de aprobación (5:45 a 8:00 a. m. y p. m.)">
-          <p className="text-sm text-ink">
-            Pendientes con plazo vencido ahora: <strong>{p.SUPERVISOR_OLEARIARI + p.SUPERVISOR}</strong>
-            <span className="text-ink-muted">
-              {" "}
-              ({ETIQUETA_ETAPA.SUPERVISOR_OLEARIARI}: {p.SUPERVISOR_OLEARIARI} · {ETIQUETA_ETAPA.SUPERVISOR}: {p.SUPERVISOR})
-            </span>
-          </p>
+        <Tarjeta titulo="Aprobaciones fuera de horario" subtitulo="Fuera del horario de aprobación (5:45 a 8:00 a. m. y p. m.)">
           <Tabla
-            vacio="Sin decisiones fuera de plazo ni intentos bloqueados en el período."
-            columnas={["Aprobador", "Decididas fuera de plazo", "Intentos bloqueados"]}
+            vacio="Sin decisiones fuera de horario ni intentos bloqueados en el período."
+            columnas={["Aprobador", "Decididas fuera de horario", "Intentos bloqueados"]}
             filas={datos.vencidasPorAprobador.map((f) => [f.nombre, f.decididasFueraDePlazo, f.intentosBloqueados])}
           />
         </Tarjeta>

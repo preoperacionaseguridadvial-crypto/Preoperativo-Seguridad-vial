@@ -23,3 +23,11 @@ export function puedeGestionarAdministradores(rol: string): boolean {
 export function puedeEliminarInspecciones(rol: string): boolean {
   return rol === "ADMINISTRADOR";
 }
+
+/**
+ * Solo un ADMINISTRADOR elimina definitivamente un usuario, y solo si no
+ * tiene historial (la regla la aplica la server action).
+ */
+export function puedeEliminarUsuarios(rol: string): boolean {
+  return rol === "ADMINISTRADOR";
+}
