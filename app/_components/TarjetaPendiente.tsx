@@ -28,7 +28,7 @@ export function TarjetaPendiente({
   const espera = tiempoTranscurrido(inspection.completedAt, ahora);
   const plazo = estadoPlazoParaAprobador({ inspection, ahora, habilitacionHasta });
   const textoPlazo = textoPlazoAprobador(plazo);
-  const sinPlazo = plazo.fueraDeVentana && !plazo.puedeDecidir;
+  const sinPlazo = !plazo.puedeDecidir;
 
   return (
     <li>
@@ -69,11 +69,7 @@ export function TarjetaPendiente({
             </span>
           )}
 
-          {textoPlazo && (
-            <span className={`text-xs ${sinPlazo && plazo.vencido ? "font-semibold text-status-crit-ink" : "text-ink-muted"}`}>
-              {textoPlazo.texto}
-            </span>
-          )}
+          <span className="text-xs text-ink-muted">{textoPlazo}</span>
 
           {plazo.fueraDeHorario && (
             <p className="mt-1 rounded-md border-l-4 border-status-warn bg-status-warn-soft px-2 py-1.5 text-xs font-medium text-status-warn-ink">
@@ -85,7 +81,7 @@ export function TarjetaPendiente({
             <div className="mt-1 flex flex-wrap gap-1.5">
               {sinPlazo && (
                 <Chip className="bg-status-crit text-white">
-                  {plazo.vencido ? "Plazo vencido: requiere habilitación SST" : "Fuera de horario: requiere habilitación SST"}
+                  Fuera del horario de aprobación: requiere habilitación SST
                 </Chip>
               )}
               {noApta && (

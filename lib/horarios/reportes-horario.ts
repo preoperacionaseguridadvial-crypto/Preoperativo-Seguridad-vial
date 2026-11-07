@@ -1,8 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { InspectionStatus, type Sede, type TipoHabilitacion } from "@/generated/prisma/client";
+import { type Sede, type TipoHabilitacion } from "@/generated/prisma/client";
 import { normalizarRango, type FiltrosReporte } from "@/lib/inspections/reportes-queries";
-import { plazoVencido } from "@/lib/horarios/plazo-aprobacion";
 import {
   decisionesDeInspeccion,
   minutosEntre,
@@ -21,8 +20,6 @@ import {
 //   cuenta en el período en que se ENVIÓ la inspección, no en el que se decidió.
 // - Intentos bloqueados (AuditLog): `createdAt` del registro.
 // - Habilitaciones SST: `createdAt` (fecha en que se otorgó, no el rango desde/hasta).
-// - Pendientes con plazo vencido: estado ACTUAL; ignora el rango de fechas (solo
-//   aplica la sede), porque describe lo que está pendiente ahora.
 //
 // Sede: inspecciones por su `sede` (snapshot). Intentos bloqueados de recorredor
 // y habilitaciones por la sede actual del usuario; intentos bloqueados de
@@ -69,7 +66,6 @@ export type ReporteHorarios = {
   respuestaPorAprobador: FilaRespuestaAprobador[];
   respuestaPorEtapa: FilaRespuestaEtapa[];
   vencidasPorAprobador: FilaVencidas[];
-  pendientesVencidas: Record<EtapaAprobacion, number>;
   habilitaciones: FilaHabilitacion[];
 };
 
@@ -79,11 +75,10 @@ const ACCION_APROBACION_BLOQUEADA = "APROBACION_FUERA_DE_PLAZO_BLOQUEADA";
 export async function getReporteHorarios(filtros: FiltrosHorarios): Promise<ReporteHorarios> {
   const rango = normalizarRango(filtros);
   const sede: Sede | undefined = filtros.sede;
-  const ahora = new Date();
   const rangoCompletado = { gte: rango.desde, lte: rango.hasta };
   const rangoCreado = { gte: rango.desde, lte: rango.hasta };
 
-  const [inspecciones, pendientes, auditorias, habilitacionesDb] = await Promise.all([
+  const [inspecciones, auditorias, habilitacionesDb] = await Promise.all([
     prisma.inspection.findMany({
       where: { completedAt: rangoCompletado, ...(sede && { sede }) },
       select: {
@@ -101,17 +96,6 @@ export async function getReporteHorarios(filtros: FiltrosHorarios): Promise<Repo
         supervisorOleariari: { select: { name: true } },
         enviadaFueraDeHorario: true,
       },
-    }),
-    prisma.inspection.findMany({
-      where: {
-        status: { in: [InspectionStatus.PENDIENTE_APROBACION, InspectionStatus.NO_APTA_PARA_OPERAR] },
-        reviewedAt: null,
-        // El vencimiento depende de la ventana de cada etapa: acá solo las
-        // enviadas, y `plazoVencido` filtra en memoria.
-        completedAt: { not: null },
-        ...(sede && { sede }),
-      },
-      select: { sede: true, completedAt: true, revisadaSupervisorOleariariAt: true },
     }),
     prisma.auditLog.findMany({
       where: {
@@ -192,15 +176,6 @@ export async function getReporteHorarios(filtros: FiltrosHorarios): Promise<Repo
     filaVencidas(a.userId, a.user.name).intentosBloqueados += 1;
   }
 
-  // Pendientes con plazo vencido ahora, por etapa.
-  const pendientesVencidas: Record<EtapaAprobacion, number> = { SUPERVISOR_OLEARIARI: 0, SUPERVISOR: 0 };
-  for (const p of pendientes) {
-    if (!plazoVencido(p, ahora)) continue;
-    const etapa: EtapaAprobacion =
-      p.sede === "OLEARIARI" && p.revisadaSupervisorOleariariAt === null ? "SUPERVISOR_OLEARIARI" : "SUPERVISOR";
-    pendientesVencidas[etapa] += 1;
-  }
-
   // 5. Habilitaciones (filtro de sede por la sede actual del beneficiario).
   const habilitaciones: FilaHabilitacion[] = habilitacionesDb
     .filter((h) => !sede || h.usuario.sede === sede)
@@ -244,7 +219,6 @@ export async function getReporteHorarios(filtros: FiltrosHorarios): Promise<Repo
     vencidasPorAprobador: [...vencidas.values()].sort(
       (a, b) => b.decididasFueraDePlazo + b.intentosBloqueados - (a.decididasFueraDePlazo + a.intentosBloqueados),
     ),
-    pendientesVencidas,
     habilitaciones,
   };
 }

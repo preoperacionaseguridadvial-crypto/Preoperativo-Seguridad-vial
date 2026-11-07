@@ -129,7 +129,7 @@ export default async function AprobacionDetallePage({
   const motivosNoConformes = motivosConfirmacionAprobacion(inspection);
 
   const ahora = new Date();
-  // Horario de aprobación por etapa (5:45 a 8:00 a. m./p. m.): una sola consulta de habilitación, y solo si
+  // Horario de aprobación (cualquier ventana abierta, 5:45 a 8:00 a. m./p. m.): una sola consulta de habilitación, y solo si
   // este aprobador puede decidir ahora (el servidor vuelve a validarlo).
   const habilitacionHasta =
     puedeDecidir && !decidida ? await habilitacionAprobacionHasta(session.user.id, ahora) : null;
@@ -412,8 +412,8 @@ export default async function AprobacionDetallePage({
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
 
-          {plazo.vence && !plazo.vencido && (
-            <p className="text-sm text-gray-600">Plazo para decidir: hasta las {formatHora(plazo.vence)}</p>
+          {plazo.cierra && (
+            <p className="text-sm text-gray-600">Ventana de aprobación abierta hasta las {formatHora(plazo.cierra)}</p>
           )}
 
           {plazo.habilitadoHasta && (

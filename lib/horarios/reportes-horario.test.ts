@@ -83,7 +83,7 @@ describe("getReporteHorarios", () => {
     expect((await getReporteHorarios({ ...RANGO, sede: Sede.OLEARIARI })).duracionPorRecorredor).toEqual([]);
   });
 
-  it("3 y 4. respuesta por etapa/aprobador y vencidas por aprobador", async () => {
+  it("3 y 4. respuesta por etapa/aprobador y decididas fuera de horario por aprobador", async () => {
     const w = await crearUsuario(Role.TRABAJADOR, { sede: Sede.BOGOTA });
     const dir = await crearUsuario(Role.SUPERVISOR, { name: "Dir" });
     const so = await crearUsuario(Role.SUPERVISOR_OLEARIARI, { name: "SO", sede: Sede.OLEARIARI });
@@ -166,35 +166,6 @@ describe("getReporteHorarios", () => {
     expect(ole.vencidasPorAprobador).toEqual([]);
     const bog = await getReporteHorarios({ ...RANGO, sede: Sede.BOGOTA });
     expect(bog.vencidasPorAprobador[0]).toMatchObject({ aprobadorId: dir.id, intentosBloqueados: 2 });
-  });
-
-  it("4b. pendientes con plazo vencido ahora, por etapa (ignora el rango de fechas)", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(t("20", "23:00")); // 6:00 p. m. de Bogotá: ventana 5:45-8:00 p. m. abierta
-    const w = await crearUsuario(Role.TRABAJADOR, { sede: Sede.BOGOTA });
-    const v = await crearVehiculo();
-    // Bogotá vencida (ventana de las 8:00 a. m. ya cerró) y vigente (enviada 5:50 p. m.)
-    await inspeccion(w.id, v.id, { sede: Sede.BOGOTA, completedAt: t("20", "12:00") });
-    await inspeccion(w.id, v.id, { sede: Sede.BOGOTA, completedAt: t("20", "22:50") });
-    // Oleariari etapa 1 vencida
-    await inspeccion(w.id, v.id, { sede: Sede.OLEARIARI, completedAt: t("20", "12:30") });
-    // Oleariari etapa 2: revisión a las 5:30 p. m. (ventana de la tarde, vigente) aunque se envió en la mañana
-    await inspeccion(w.id, v.id, {
-      sede: Sede.OLEARIARI,
-      completedAt: t("20", "11:00"),
-      revisadaSupervisorOleariariAt: t("20", "22:30"),
-    });
-    // Oleariari etapa 2 vencida (revisada a las 7:00 a. m.)
-    await inspeccion(w.id, v.id, {
-      sede: Sede.OLEARIARI,
-      completedAt: t("20", "11:00"),
-      revisadaSupervisorOleariariAt: t("20", "12:00"),
-    });
-
-    const r = await getReporteHorarios(RANGO);
-    expect(r.pendientesVencidas).toEqual({ SUPERVISOR_OLEARIARI: 1, SUPERVISOR: 2 });
-    const ole = await getReporteHorarios({ ...RANGO, sede: Sede.OLEARIARI });
-    expect(ole.pendientesVencidas).toEqual({ SUPERVISOR_OLEARIARI: 1, SUPERVISOR: 1 });
   });
 
   it("5. lista de habilitaciones por createdAt, con filtro de sede por beneficiario", async () => {
