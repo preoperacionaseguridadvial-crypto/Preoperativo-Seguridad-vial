@@ -42,8 +42,9 @@ export function BotonEliminarUsuario({ action, nombre }: { action: () => Promise
   return (
     <form action={action} className="flex flex-col gap-2 rounded-lg bg-status-crit-soft p-3">
       <p className="text-sm font-medium text-status-crit-ink">
-        Esta acción elimina el usuario de forma permanente y no se puede deshacer. Solo es posible si no tiene historial;
-        de lo contrario, desactívalo.
+        Esta acción elimina de forma permanente al usuario y sus propios registros: sesiones y auditoría, habilitaciones y
+        autorización de datos. No se puede deshacer. Nunca elimina inspecciones: si el usuario tiene inspecciones o firmas,
+        no se eliminará; desactívalo en su lugar.
       </p>
       <div className="flex gap-2">
         <BotonConfirmarEliminacion />

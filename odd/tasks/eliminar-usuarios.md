@@ -26,7 +26,7 @@ Branch `feat/eliminar-usuarios` stacked on `feat/eliminar-inspecciones` @ 558594
 ## Progress / evidence
 - T1 (delegated writer): `puedeEliminarUsuarios`, `lib/admin/eliminar-usuario-actions.ts` (history check + delete in one transaction, P2003 mapped to refusal, audit `ELIMINAR_USUARIO`), two-step button in `admin/usuarios/[id]`. RED observed (missing helper/module). Writer: `npm test` 93 files / 1275 passed, tsc + lint clean.
 - T2 (parent): re-ran permisos + eliminar-usuario tests, 21 passed; `prisma/` untouched.
-- Open: user asked about test users with habilitaciones/LOGIN history (strict rule blocks them); relaxed variant proposed, awaiting decision. `SeccionesUsuario.tsx` text "El usuario nunca se borra" is now stale.
+- Rule relaxed (user decision 2026-11-07): delete user + own audit, received habilitaciones, autorizacion; AppSetting author nulled. Blocks on inspections, firmas, habilitacion linked to an inspection, or habilitaciones granted to other users (parent added this last guard to honor "do not touch other users data"; RED observed, then GREEN 16/16).
 
 ## Next step
-Await user decision on relaxed rule for test users.
+Single PR to main with all session work (eliminar-inspecciones + eliminar-usuarios + aprobacion-cualquier-franja), then Railway deploy.

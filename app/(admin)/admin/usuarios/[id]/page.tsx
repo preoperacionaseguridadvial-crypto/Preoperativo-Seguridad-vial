@@ -209,8 +209,8 @@ export default async function EditarUsuarioPage({
           <div>
             <h2 className="text-base font-semibold text-ink">Eliminar usuario</h2>
             <p className="text-sm text-ink-muted">
-              Solo se puede eliminar un usuario sin historial (por ejemplo, creado por error). Si ya tiene actividad,
-              desactívalo con el interruptor «Usuario activo».
+              Elimina al usuario y sus propios registros (sesiones y auditoría, habilitaciones y autorización de datos).
+              Nunca elimina inspecciones: si tiene inspecciones o firmas no se podrá eliminar; desactívalo con el interruptor «Usuario activo».
             </p>
           </div>
           <BotonEliminarUsuario action={eliminarAction} nombre={usuario.name} />
