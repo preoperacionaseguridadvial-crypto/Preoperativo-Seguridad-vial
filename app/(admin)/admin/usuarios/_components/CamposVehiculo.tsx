@@ -61,7 +61,12 @@ export function CamposVehiculo({
       return;
     }
 
+    // Mientras se comprime, el input queda inválido: el navegador bloquea el
+    // envío y así nunca viaja la foto original pesada (igual que en
+    // CampoFotoNovedad). Un envío sin comprimir puede superar el límite del
+    // cuerpo de la petición y romper la página.
     setProcesando(true);
+    input.setCustomValidity("Espera a que termine de optimizarse la foto.");
     let archivo = original;
     try {
       const comprimido = await comprimirFotoEnNavegador(original);
@@ -76,6 +81,7 @@ export function CamposVehiculo({
         }
       }
     } finally {
+      input.setCustomValidity("");
       setProcesando(false);
     }
 
